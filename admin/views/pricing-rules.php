@@ -12,18 +12,22 @@ $rules[]              = array(
 	'value'        => 0,
 	'category_ids' => array(),
 );
+$rwgc_nav_current = isset( $rwgc_nav_current ) ? $rwgc_nav_current : 'rwgcm-pricing';
 ?>
-<div class="wrap">
+<div class="wrap rwgc-wrap">
 	<h1><?php esc_html_e( 'Geo Commerce — pricing rules', 'reactwoo-geo-commerce' ); ?></h1>
+	<p class="description">
+		<?php esc_html_e( 'Rules are evaluated in list order: the first row that matches visitor country and (if set) product categories wins. Put specific category rules above broad “all products” rows (leave categories empty to match all products in that country).', 'reactwoo-geo-commerce' ); ?>
+	</p>
+	<?php if ( class_exists( 'RWGC_Admin', false ) ) : ?>
+		<?php RWGC_Admin::render_inner_nav( $rwgc_nav_current ); ?>
+	<?php endif; ?>
 
 	<?php if ( ! empty( $_GET['updated'] ) ) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>
 		<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Pricing rules saved.', 'reactwoo-geo-commerce' ); ?></p></div>
 	<?php endif; ?>
 
-	<p class="description">
-		<?php esc_html_e( 'Rules are evaluated in list order: the first row that matches visitor country and (if set) product categories wins. Put specific category rules above broad “all products” rows (leave categories empty to match all products in that country).', 'reactwoo-geo-commerce' ); ?>
-	</p>
-
+	<div class="rwgc-card rwgc-card--full">
 	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 		<?php wp_nonce_field( 'rwgcm_save_pricing' ); ?>
 		<input type="hidden" name="action" value="rwgcm_save_pricing" />
@@ -35,7 +39,7 @@ $rules[]              = array(
 			</label>
 		</p>
 
-		<table class="widefat striped" style="max-width: 1100px;">
+		<table class="widefat striped">
 			<thead>
 				<tr>
 					<th scope="col"><?php esc_html_e( 'Country', 'reactwoo-geo-commerce' ); ?></th>
@@ -96,4 +100,5 @@ $rules[]              = array(
 	<p class="description">
 		<?php esc_html_e( 'Developers: filter rwgcm_adjusted_unit_price; action rwgcm_before_cart_totals runs before adjustments.', 'reactwoo-geo-commerce' ); ?>
 	</p>
+	</div>
 </div>

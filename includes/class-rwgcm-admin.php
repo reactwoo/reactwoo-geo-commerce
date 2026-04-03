@@ -18,6 +18,27 @@ class RWGCM_Admin {
 	public static function init() {
 		add_action( 'admin_menu', array( __CLASS__, 'register_menu' ), 30 );
 		add_action( 'admin_post_rwgcm_save_dashboard', array( __CLASS__, 'handle_save_dashboard' ) );
+		add_filter( 'rwgc_inner_nav_items', array( __CLASS__, 'filter_inner_nav_items' ), 12, 1 );
+	}
+
+	/**
+	 * Add Geo Commerce screens to the shared Geo Core inner nav.
+	 *
+	 * @param array $items Page slug => label.
+	 * @return array
+	 */
+	public static function filter_inner_nav_items( $items ) {
+		if ( ! is_array( $items ) ) {
+			return $items;
+		}
+		return array_merge(
+			$items,
+			array(
+				'rwgcm-dashboard' => __( 'Geo Commerce', 'reactwoo-geo-commerce' ),
+				'rwgcm-pricing'   => __( 'Commerce pricing', 'reactwoo-geo-commerce' ),
+				'rwgcm-fees'      => __( 'Commerce fees', 'reactwoo-geo-commerce' ),
+			)
+		);
 	}
 
 	/**
@@ -77,6 +98,7 @@ class RWGCM_Admin {
 			$rwgcm_fee_status['enabled']    = ! empty( $f['enabled'] );
 			$rwgcm_fee_status['rule_count'] = isset( $f['rules'] ) && is_array( $f['rules'] ) ? count( $f['rules'] ) : 0;
 		}
+		$rwgc_nav_current = 'rwgcm-dashboard';
 		include RWGCM_PATH . 'admin/views/dashboard.php';
 	}
 }

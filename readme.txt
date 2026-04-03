@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.2.15.0
+Stable tag: 0.2.16.0
 
 WooCommerce overlays and pricing rules on ReactWoo Geo Core.
 

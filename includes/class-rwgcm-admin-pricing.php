@@ -98,6 +98,7 @@ class RWGCM_Admin_Pricing {
 		if ( is_wp_error( $product_categories ) || ! is_array( $product_categories ) ) {
 			$product_categories = array();
 		}
+		$rwgc_nav_current = 'rwgcm-pricing';
 		include RWGCM_PATH . 'admin/views/pricing-rules.php';
 	}
 }

@@ -87,6 +87,7 @@ class RWGCM_Admin_Fees {
 			$wc_countries = WC()->countries->get_countries();
 		}
 		$tax_class_options = function_exists( 'wc_get_product_tax_class_options' ) ? wc_get_product_tax_class_options() : array( '' => __( 'Standard', 'woocommerce' ) );
+		$rwgc_nav_current = 'rwgcm-fees';
 		include RWGCM_PATH . 'admin/views/fee-rules.php';
 	}
 }
