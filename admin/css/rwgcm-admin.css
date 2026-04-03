@@ -1,0 +1,72 @@
+/**
+ * Geo Commerce admin — complements Geo Core .rwgc-* styles when both are loaded.
+ */
+
+.rwgcm-wrap .rwgcm-hero {
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 45%, #f8fafc 100%);
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  padding: 20px 22px;
+  margin-bottom: 20px;
+}
+
+.rwgcm-wrap .rwgcm-hero h2 {
+  margin-top: 0;
+  font-size: 18px;
+}
+
+.rwgcm-wrap .rwgcm-steps {
+  margin: 0 0 12px;
+  padding-left: 22px;
+}
+
+.rwgcm-wrap .rwgcm-steps li {
+  margin-bottom: 8px;
+}
+
+.rwgcm-wrap .rwgcm-dev-details {
+  margin-top: 16px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 0 16px 12px;
+  background: #f8fafc;
+}
+
+.rwgcm-wrap .rwgcm-dev-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 12px 0 8px;
+  color: #475569;
+}
+
+.rwgcm-wrap .rwgcm-dev-details[open] summary {
+  margin-bottom: 8px;
+}
+
+.rwgcm-wrap .rwgcm-dev-details pre {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 12px;
+  max-height: 280px;
+  overflow: auto;
+}
+
+.rwgcm-wrap .rwgcm-link-muted {
+  color: #64748b;
+  text-decoration: none;
+}
+
+.rwgcm-wrap .rwgcm-link-muted:hover {
+  color: #0a4f8a;
+}
+
+.rwgcm-wrap .widefat th,
+.rwgcm-wrap .widefat td {
+  vertical-align: middle;
+}
+
+.rwgcm-wrap .rwgc-card--full table.widefat {
+  margin-top: 8px;
+}

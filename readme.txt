@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.2.16.0
+Stable tag: 0.2.18.0
 
 WooCommerce overlays and pricing rules on ReactWoo Geo Core.
 
@@ -18,6 +18,11 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 2. Activate this plugin.
 
 == Changelog ==
+
+= 0.2.18.0 =
+* **Admin:** **Top-level Geo Commerce menu** (cart icon) — own Overview, Pricing rules, Cart fees, and **Help** (MaxMind vs product keys, merchant glossary). No longer nested under Geo Core’s sidebar.
+* **Geo Core dashboard:** When Geo Commerce is active, a **Geo Commerce** summary card links into this plugin.
+* **UX:** Merchant-first overview (steps, status), developer JSON/hooks under **Technical details**; enqueue **rwgcm-admin.css** plus Geo Core admin styles.
 
 = 0.2.16.0 =
 * **Admin UI:** **Geo Commerce** dashboard, **Commerce pricing**, and **Commerce fees** screens use **`rwgc-wrap`**, shared inner nav, **`rwgc-card`**, and a **grid** for pricing/fee status cards (aligned with Geo Core / Geo Elementor-style admin).

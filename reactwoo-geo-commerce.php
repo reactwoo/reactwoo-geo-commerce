@@ -2,7 +2,7 @@
 /**
  * Plugin Name: ReactWoo Geo Commerce
  * Description: WooCommerce personalization overlays on ReactWoo Geo Core. Requires Geo Core and WooCommerce.
- * Version: 0.2.17.0
+ * Version: 0.2.18.0
  * Author: ReactWoo
  * License: GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! defined( 'RWGCM_VERSION' ) ) {
-	define( 'RWGCM_VERSION', '0.2.17.0' );
+	define( 'RWGCM_VERSION', '0.2.18.0' );
 }
 if ( ! defined( 'RWGCM_FILE' ) ) {
 	define( 'RWGCM_FILE', __FILE__ );

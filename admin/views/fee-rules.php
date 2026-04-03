@@ -15,14 +15,12 @@ $rules[]            = array(
 $tax_class_options = isset( $tax_class_options ) && is_array( $tax_class_options ) ? $tax_class_options : array( '' => __( 'Standard', 'woocommerce' ) );
 $rwgc_nav_current = isset( $rwgc_nav_current ) ? $rwgc_nav_current : 'rwgcm-fees';
 ?>
-<div class="wrap rwgc-wrap">
+<div class="wrap rwgc-wrap rwgcm-wrap">
 	<h1><?php esc_html_e( 'Geo Commerce — cart fees', 'reactwoo-geo-commerce' ); ?></h1>
 	<p class="description">
 		<?php esc_html_e( 'Adds WooCommerce cart fees when the visitor’s country (Geo Core) matches a row. All matching rows for that country are applied. Use negative amounts for credits if your tax settings allow. For taxable fees, pick the WooCommerce tax class so fee tax matches your rates.', 'reactwoo-geo-commerce' ); ?>
 	</p>
-	<?php if ( class_exists( 'RWGC_Admin', false ) ) : ?>
-		<?php RWGC_Admin::render_inner_nav( $rwgc_nav_current ); ?>
-	<?php endif; ?>
+	<?php RWGCM_Admin::render_inner_nav( $rwgc_nav_current ); ?>
 
 	<?php if ( ! empty( $_GET['updated'] ) ) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>
 		<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Fee rules saved.', 'reactwoo-geo-commerce' ); ?></p></div>

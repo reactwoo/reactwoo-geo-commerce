@@ -16,22 +16,7 @@ class RWGCM_Admin_Fees {
 	 * @return void
 	 */
 	public static function init() {
-		add_action( 'admin_menu', array( __CLASS__, 'register_menu' ), 32 );
 		add_action( 'admin_post_rwgcm_save_fees', array( __CLASS__, 'handle_save' ) );
-	}
-
-	/**
-	 * @return void
-	 */
-	public static function register_menu() {
-		add_submenu_page(
-			'rwgc-dashboard',
-			__( 'Geo Commerce fees', 'reactwoo-geo-commerce' ),
-			__( 'Commerce fees', 'reactwoo-geo-commerce' ),
-			'manage_options',
-			'rwgcm-fees',
-			array( __CLASS__, 'render' )
-		);
 	}
 
 	/**

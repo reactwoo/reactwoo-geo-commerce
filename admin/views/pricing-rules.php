@@ -14,14 +14,12 @@ $rules[]              = array(
 );
 $rwgc_nav_current = isset( $rwgc_nav_current ) ? $rwgc_nav_current : 'rwgcm-pricing';
 ?>
-<div class="wrap rwgc-wrap">
+<div class="wrap rwgc-wrap rwgcm-wrap">
 	<h1><?php esc_html_e( 'Geo Commerce — pricing rules', 'reactwoo-geo-commerce' ); ?></h1>
 	<p class="description">
 		<?php esc_html_e( 'Rules are evaluated in list order: the first row that matches visitor country and (if set) product categories wins. Put specific category rules above broad “all products” rows (leave categories empty to match all products in that country).', 'reactwoo-geo-commerce' ); ?>
 	</p>
-	<?php if ( class_exists( 'RWGC_Admin', false ) ) : ?>
-		<?php RWGC_Admin::render_inner_nav( $rwgc_nav_current ); ?>
-	<?php endif; ?>
+	<?php RWGCM_Admin::render_inner_nav( $rwgc_nav_current ); ?>
 
 	<?php if ( ! empty( $_GET['updated'] ) ) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>
 		<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Pricing rules saved.', 'reactwoo-geo-commerce' ); ?></p></div>
