@@ -70,3 +70,109 @@
 .rwgcm-wrap .rwgc-card--full table.widefat {
   margin-top: 8px;
 }
+
+.rwgcm-builder-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .rwgcm-builder-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rwgcm-rule-card,
+.rwgcm-fee-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+
+.rwgcm-rule-card__head,
+.rwgcm-fee-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.rwgcm-rule-card__order,
+.rwgcm-fee-card__order {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #0f766e;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rwgcm-rule-card__title {
+  flex: 1;
+  min-width: 160px;
+}
+
+.rwgcm-rule-card__body,
+.rwgcm-fee-card .rwgcm-rule-card__body {
+  padding: 14px 16px 16px;
+}
+
+.rwgcm-rule-card__field {
+  margin-bottom: 12px;
+}
+
+.rwgcm-rule-card__field--inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+}
+
+.rwgcm-rule-card__summary {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #334155;
+}
+
+.rwgcm-precedence-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  color: #1e3a5f;
+  max-width: 900px;
+}
+
+.rwgcm-sim-panel .rwgcm-sim-result {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.rwgcm-fee-sim-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.rwgcm-table-comfortable th,
+.rwgcm-table-comfortable td {
+  padding: 10px 12px;
+}

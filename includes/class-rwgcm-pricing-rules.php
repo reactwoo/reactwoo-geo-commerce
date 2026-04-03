@@ -37,12 +37,19 @@ class RWGCM_Pricing_Rules {
 			if ( ! is_array( $row ) ) {
 				continue;
 			}
-			$cc = isset( $row['country'] ) ? strtoupper( substr( sanitize_text_field( (string) $row['country'] ), 0, 2 ) ) : '';
+			$active = ! isset( $row['active'] ) || ! empty( $row['active'] );
+			$cc     = isset( $row['country'] ) ? strtoupper( substr( sanitize_text_field( (string) $row['country'] ), 0, 2 ) ) : '';
 			if ( '' === $cc || strlen( $cc ) !== 2 ) {
 				continue;
 			}
 			if ( ! self::is_allowed_country( $cc ) ) {
 				continue;
+			}
+			$label = isset( $row['label'] ) ? sanitize_text_field( (string) $row['label'] ) : '';
+			if ( function_exists( 'mb_substr' ) ) {
+				$label = mb_substr( $label, 0, 80 );
+			} else {
+				$label = substr( $label, 0, 80 );
 			}
 			$type = isset( $row['type'] ) ? (string) $row['type'] : 'percent';
 			if ( ! in_array( $type, array( 'percent', 'fixed_line' ), true ) ) {
@@ -56,10 +63,12 @@ class RWGCM_Pricing_Rules {
 			}
 			$cat_ids = self::sanitize_category_ids( isset( $row['category_ids'] ) ? $row['category_ids'] : array() );
 			$out[]   = array(
-				'country'      => $cc,
-				'type'         => $type,
-				'value'        => $value,
-				'category_ids' => $cat_ids,
+				'country'        => $cc,
+				'type'           => $type,
+				'value'          => $value,
+				'category_ids'   => $cat_ids,
+				'label'          => $label,
+				'active'         => $active,
 			);
 			if ( count( $out ) >= 50 ) {
 				break;
@@ -137,6 +146,9 @@ class RWGCM_Pricing_Rules {
 			return null;
 		}
 		foreach ( $all['rules'] as $rule ) {
+			if ( isset( $rule['active'] ) && ! $rule['active'] ) {
+				continue;
+			}
 			if ( ! isset( $rule['country'] ) || $rule['country'] !== $country_iso2 ) {
 				continue;
 			}
@@ -161,5 +173,41 @@ class RWGCM_Pricing_Rules {
 		$have = $product->get_category_ids();
 		$have = array_map( 'intval', $have );
 		return count( array_intersect( $want, $have ) ) > 0;
+	}
+
+	/**
+	 * First matching rule for simulator (category term IDs instead of a product).
+	 *
+	 * @param string       $country_iso2 Uppercase ISO2.
+	 * @param array<int>   $category_ids Product_cat term IDs (may be empty = “all products”).
+	 * @return array<string, mixed>|null
+	 */
+	public static function find_matching_rule_for_categories( $country_iso2, $category_ids ) {
+		$country_iso2 = strtoupper( substr( sanitize_text_field( (string) $country_iso2 ), 0, 2 ) );
+		if ( strlen( $country_iso2 ) !== 2 ) {
+			return null;
+		}
+		$cats = is_array( $category_ids ) ? array_map( 'intval', $category_ids ) : array();
+		$cats = array_values( array_unique( array_filter( $cats ) ) );
+		$all  = self::get_all();
+		if ( empty( $all['enabled'] ) || empty( $all['rules'] ) ) {
+			return null;
+		}
+		foreach ( $all['rules'] as $rule ) {
+			if ( isset( $rule['active'] ) && ! $rule['active'] ) {
+				continue;
+			}
+			if ( ! isset( $rule['country'] ) || $rule['country'] !== $country_iso2 ) {
+				continue;
+			}
+			$rule_cats = isset( $rule['category_ids'] ) && is_array( $rule['category_ids'] ) ? array_map( 'intval', $rule['category_ids'] ) : array();
+			if ( ! empty( $rule_cats ) ) {
+				if ( count( array_intersect( $cats, $rule_cats ) ) === 0 ) {
+					continue;
+				}
+			}
+			return $rule;
+		}
+		return null;
 	}
 }

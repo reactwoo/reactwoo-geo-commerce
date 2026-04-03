@@ -34,6 +34,7 @@ class RWGCM_Admin_Fees {
 		$amounts    = isset( $_POST['rwgcm_fee_amount'] ) && is_array( $_POST['rwgcm_fee_amount'] ) ? wp_unslash( $_POST['rwgcm_fee_amount'] ) : array();
 		$tax_matrix = isset( $_POST['rwgcm_fee_taxable'] ) && is_array( $_POST['rwgcm_fee_taxable'] ) ? wp_unslash( $_POST['rwgcm_fee_taxable'] ) : array();
 		$tax_class_in = isset( $_POST['rwgcm_fee_tax_class'] ) && is_array( $_POST['rwgcm_fee_tax_class'] ) ? wp_unslash( $_POST['rwgcm_fee_tax_class'] ) : array();
+		$fee_active = isset( $_POST['rwgcm_fee_active'] ) && is_array( $_POST['rwgcm_fee_active'] ) ? wp_unslash( $_POST['rwgcm_fee_active'] ) : array();
 
 		$rules = array();
 		$max   = max( count( $countries ), count( $names ), count( $amounts ) );
@@ -44,6 +45,7 @@ class RWGCM_Admin_Fees {
 				'amount'    => isset( $amounts[ $i ] ) ? (string) $amounts[ $i ] : '0',
 				'taxable'   => ! empty( $tax_matrix[ $i ] ),
 				'tax_class' => isset( $tax_class_in[ $i ] ) ? (string) $tax_class_in[ $i ] : '',
+				'active'    => isset( $fee_active[ $i ] ) && '1' === (string) $fee_active[ $i ],
 			);
 		}
 

@@ -33,6 +33,8 @@ class RWGCM_Admin_Pricing {
 		$types     = isset( $_POST['rwgcm_rule_type'] ) && is_array( $_POST['rwgcm_rule_type'] ) ? wp_unslash( $_POST['rwgcm_rule_type'] ) : array();
 		$values    = isset( $_POST['rwgcm_rule_value'] ) && is_array( $_POST['rwgcm_rule_value'] ) ? wp_unslash( $_POST['rwgcm_rule_value'] ) : array();
 		$cat_matrix = isset( $_POST['rwgcm_rule_category_ids'] ) && is_array( $_POST['rwgcm_rule_category_ids'] ) ? wp_unslash( $_POST['rwgcm_rule_category_ids'] ) : array();
+		$labels  = isset( $_POST['rwgcm_rule_label'] ) && is_array( $_POST['rwgcm_rule_label'] ) ? wp_unslash( $_POST['rwgcm_rule_label'] ) : array();
+		$actives = isset( $_POST['rwgcm_rule_active'] ) && is_array( $_POST['rwgcm_rule_active'] ) ? wp_unslash( $_POST['rwgcm_rule_active'] ) : array();
 
 		$rules = array();
 		$max   = max( count( $countries ), count( $types ), count( $values ) );
@@ -46,6 +48,8 @@ class RWGCM_Admin_Pricing {
 				'type'         => isset( $types[ $i ] ) ? (string) $types[ $i ] : 'percent',
 				'value'        => isset( $values[ $i ] ) ? (string) $values[ $i ] : '0',
 				'category_ids' => $cats,
+				'label'        => isset( $labels[ $i ] ) ? (string) $labels[ $i ] : '',
+				'active'       => isset( $actives[ $i ] ) && '1' === (string) $actives[ $i ],
 			);
 		}
 

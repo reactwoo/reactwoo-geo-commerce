@@ -65,12 +65,12 @@ class RWGCM_Admin {
 				<li>
 					<strong><?php esc_html_e( 'Pricing rules', 'reactwoo-geo-commerce' ); ?>:</strong>
 					<?php echo $ps['enabled'] ? esc_html__( 'On', 'reactwoo-geo-commerce' ) : esc_html__( 'Off', 'reactwoo-geo-commerce' ); ?>
-					— <?php echo esc_html( (string) (int) $ps['rule_count'] ); ?> <?php esc_html_e( 'rows', 'reactwoo-geo-commerce' ); ?>
+					— <?php echo esc_html( (string) (int) $ps['rule_count'] ); ?> <?php esc_html_e( 'rules', 'reactwoo-geo-commerce' ); ?>
 				</li>
 				<li>
 					<strong><?php esc_html_e( 'Fee rules', 'reactwoo-geo-commerce' ); ?>:</strong>
 					<?php echo $fs['enabled'] ? esc_html__( 'On', 'reactwoo-geo-commerce' ) : esc_html__( 'Off', 'reactwoo-geo-commerce' ); ?>
-					— <?php echo esc_html( (string) (int) $fs['rule_count'] ); ?> <?php esc_html_e( 'rows', 'reactwoo-geo-commerce' ); ?>
+					— <?php echo esc_html( (string) (int) $fs['rule_count'] ); ?> <?php esc_html_e( 'rules', 'reactwoo-geo-commerce' ); ?>
 				</li>
 			</ul>
 			<p>
@@ -89,10 +89,11 @@ class RWGCM_Admin {
 	 */
 	public static function render_inner_nav( $current ) {
 		$items = array(
-			self::MENU_PARENT => __( 'Overview', 'reactwoo-geo-commerce' ),
-			'rwgcm-pricing'   => __( 'Pricing rules', 'reactwoo-geo-commerce' ),
-			'rwgcm-fees'      => __( 'Cart fees', 'reactwoo-geo-commerce' ),
-			'rwgcm-help'      => __( 'Help', 'reactwoo-geo-commerce' ),
+			self::MENU_PARENT   => __( 'Overview', 'reactwoo-geo-commerce' ),
+			'rwgcm-pricing'    => __( 'Pricing rules', 'reactwoo-geo-commerce' ),
+			'rwgcm-fees'       => __( 'Cart fees', 'reactwoo-geo-commerce' ),
+			'rwgcm-attribution' => __( 'Attribution', 'reactwoo-geo-commerce' ),
+			'rwgcm-help'       => __( 'Help', 'reactwoo-geo-commerce' ),
 		);
 		echo '<nav class="rwgc-inner-nav" aria-label="' . esc_attr__( 'Geo Commerce section navigation', 'reactwoo-geo-commerce' ) . '">';
 		foreach ( $items as $slug => $label ) {
@@ -112,7 +113,12 @@ class RWGCM_Admin {
 		check_admin_referer( 'rwgcm_save_dashboard' );
 		$store = isset( $_POST['rwgcm_store_utm'] ) ? 'yes' : 'no';
 		update_option( RWGCM_Attribution::OPTION_STORE_UTM, $store, false );
-		wp_safe_redirect( admin_url( 'admin.php?page=' . self::MENU_PARENT . '&updated=1' ) );
+		$return = isset( $_POST['rwgcm_return'] ) ? sanitize_key( wp_unslash( $_POST['rwgcm_return'] ) ) : '';
+		if ( 'attribution' === $return ) {
+			wp_safe_redirect( admin_url( 'admin.php?page=rwgcm-attribution&updated=1' ) );
+		} else {
+			wp_safe_redirect( admin_url( 'admin.php?page=' . self::MENU_PARENT . '&updated=1' ) );
+		}
 		exit;
 	}
 
@@ -126,6 +132,7 @@ class RWGCM_Admin {
 		if ( strpos( $hook, 'rwgcm-' ) === false && strpos( $hook, self::MENU_PARENT ) === false ) {
 			return;
 		}
+		$deps = array();
 		if ( defined( 'RWGC_URL' ) && defined( 'RWGC_VERSION' ) ) {
 			wp_enqueue_style(
 				'rwgc-admin',
@@ -133,13 +140,30 @@ class RWGCM_Admin {
 				array(),
 				RWGC_VERSION
 			);
+			$deps[] = 'rwgc-admin';
+			wp_enqueue_style(
+				'rwgc-suite',
+				RWGC_URL . 'admin/css/rwgc-suite.css',
+				array( 'rwgc-admin' ),
+				RWGC_VERSION
+			);
+			$deps[] = 'rwgc-suite';
 		}
 		wp_enqueue_style(
 			'rwgcm-admin',
 			RWGCM_URL . 'admin/css/rwgcm-admin.css',
-			array(),
+			$deps,
 			RWGCM_VERSION
 		);
+		if ( false !== strpos( $hook, 'rwgcm-pricing' ) || false !== strpos( $hook, 'rwgcm-fees' ) ) {
+			wp_enqueue_script(
+				'rwgcm-rule-cards',
+				RWGCM_URL . 'admin/js/rwgcm-rule-cards.js',
+				array(),
+				RWGCM_VERSION,
+				true
+			);
+		}
 	}
 
 	/**
@@ -237,5 +261,34 @@ class RWGCM_Admin {
 		}
 		$rwgc_nav_current = 'rwgcm-help';
 		include RWGCM_PATH . 'admin/views/help.php';
+	}
+
+	/**
+	 * Attribution: UTM storage + recent orders with visitor country.
+	 *
+	 * @return void
+	 */
+	public static function render_attribution() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		$rwgcm_attr_orders = array();
+		if ( function_exists( 'wc_get_orders' ) && class_exists( 'RWGCM_Order_Geo', false ) ) {
+			$rwgcm_attr_orders = wc_get_orders(
+				array(
+					'limit'    => 12,
+					'orderby'  => 'date',
+					'order'    => 'DESC',
+					'meta_query' => array(
+						array(
+							'key'     => RWGCM_Order_Geo::META_COUNTRY,
+							'compare' => 'EXISTS',
+						),
+					),
+				)
+			);
+		}
+		$rwgc_nav_current = 'rwgcm-attribution';
+		include RWGCM_PATH . 'admin/views/attribution.php';
 	}
 }

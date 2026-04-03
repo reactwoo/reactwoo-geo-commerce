@@ -37,7 +37,8 @@ class RWGCM_Fee_Rules {
 			if ( ! is_array( $row ) ) {
 				continue;
 			}
-			$cc = isset( $row['country'] ) ? strtoupper( substr( sanitize_text_field( (string) $row['country'] ), 0, 2 ) ) : '';
+			$active = ! isset( $row['active'] ) || ! empty( $row['active'] );
+			$cc     = isset( $row['country'] ) ? strtoupper( substr( sanitize_text_field( (string) $row['country'] ), 0, 2 ) ) : '';
 			if ( '' === $cc || strlen( $cc ) !== 2 || ! self::is_allowed_country( $cc ) ) {
 				continue;
 			}
@@ -47,6 +48,25 @@ class RWGCM_Fee_Rules {
 			}
 			$amount = isset( $row['amount'] ) ? floatval( $row['amount'] ) : 0.0;
 			$amount = max( -999999.0, min( 999999.0, $amount ) );
+			if ( ! $active ) {
+				$taxable   = ! empty( $row['taxable'] );
+				$tax_class = '';
+				if ( $taxable ) {
+					$tax_class = self::sanitize_tax_class_slug( isset( $row['tax_class'] ) ? (string) $row['tax_class'] : '' );
+				}
+				$out[] = array(
+					'country'   => $cc,
+					'name'      => $name,
+					'amount'    => $amount,
+					'taxable'   => $taxable,
+					'tax_class' => $tax_class,
+					'active'    => false,
+				);
+				if ( count( $out ) >= 40 ) {
+					break;
+				}
+				continue;
+			}
 			if ( 0.0 === $amount ) {
 				continue;
 			}
@@ -61,6 +81,7 @@ class RWGCM_Fee_Rules {
 				'amount'    => $amount,
 				'taxable'   => $taxable,
 				'tax_class' => $tax_class,
+				'active'    => true,
 			);
 			if ( count( $out ) >= 40 ) {
 				break;
@@ -131,6 +152,9 @@ class RWGCM_Fee_Rules {
 		}
 		$rows = array();
 		foreach ( $all['rules'] as $rule ) {
+			if ( isset( $rule['active'] ) && ! $rule['active'] ) {
+				continue;
+			}
 			if ( ! isset( $rule['country'] ) || $rule['country'] !== $country_iso2 ) {
 				continue;
 			}

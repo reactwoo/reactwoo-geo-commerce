@@ -55,6 +55,7 @@ class RWGCM_Plugin {
 		require_once RWGCM_PATH . 'includes/class-rwgcm-geo.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-cart-bridge.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-fee-rules.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-simulator.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-fee-rules-apply.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-cart-fees.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-shipping.php';
