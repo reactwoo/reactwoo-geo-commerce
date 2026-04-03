@@ -1,6 +1,11 @@
 {
   "name": "reactwoo-geo-commerce-packaging",
   "private": true,
+  "reactwooBuild": {
+    "pluginFolder": "reactwoo-geo-commerce",
+    "zipFile": "reactwoo-geo-commerce.zip",
+    "geoCoreDependencySlug": "reactwoo-geocore"
+  },
   "scripts": {
     "package:zip": "python scripts/package_zip.py"
   }

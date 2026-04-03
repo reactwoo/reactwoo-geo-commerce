@@ -89,14 +89,22 @@ class RWGCM_Plugin {
 	 * @return bool
 	 */
 	private function is_geo_core_active() {
-		return function_exists( 'rwgc_is_geo_core_active' ) && rwgc_is_geo_core_active();
+		if ( function_exists( 'rwgc_is_geo_core_active' ) ) {
+			return (bool) rwgc_is_geo_core_active();
+		}
+		// Fallback when helpers are unavailable (load order, or Geo Core loaded without functions-rwgc.php).
+		return class_exists( 'RWGC_Plugin', false )
+			|| ( defined( 'RWGC_VERSION' ) && defined( 'RWGC_FILE' ) );
 	}
 
 	/**
 	 * @return bool
 	 */
 	private function is_woocommerce_active() {
-		return function_exists( 'rwgc_is_woocommerce_active' ) && rwgc_is_woocommerce_active();
+		if ( function_exists( 'rwgc_is_woocommerce_active' ) ) {
+			return (bool) rwgc_is_woocommerce_active();
+		}
+		return class_exists( 'WooCommerce', false );
 	}
 
 	/**
