@@ -19,6 +19,11 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 
 == Changelog ==
 
+= 0.2.16.0 =
+* **Admin UI:** **Geo Commerce** dashboard, **Commerce pricing**, and **Commerce fees** screens use **`rwgc-wrap`**, shared inner nav, **`rwgc-card`**, and a **grid** for pricing/fee status cards (aligned with Geo Core / Geo Elementor-style admin).
+* **Navigation:** Registers **Geo Commerce**, **Commerce pricing**, and **Commerce fees** on **`rwgc_inner_nav_items`**.
+* **Fees screen:** **Tax class** column header added to match fee rule rows (Woo tax class when taxable).
+
 = 0.2.15.0 =
 * **WooCommerce orders list:** **Visitor country** column is **sortable** (HPOS + legacy orders table) by **`_rwgcm_visitor_country_iso2`**.
 
