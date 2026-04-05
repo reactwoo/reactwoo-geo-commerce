@@ -25,7 +25,9 @@ class RWGCM_Pricing_Calc {
 	}
 
 	/**
-	 * Raw catalog base from product meta (regular, then price). No WC price filters.
+	 * Raw catalog base from product data (regular price, then stored price). Uses WC getters with
+	 * context `edit` so we do not call get_meta() on internal keys (WC 3.2+) and we avoid
+	 * re-entering `woocommerce_product_get_price` while that filter is running.
 	 *
 	 * @param \WC_Product $product Product or variation.
 	 * @return float
@@ -34,9 +36,9 @@ class RWGCM_Pricing_Calc {
 		if ( ! is_a( $product, 'WC_Product' ) ) {
 			return 0.0;
 		}
-		$regular = $product->get_meta( '_regular_price', true );
+		$regular = $product->get_regular_price( 'edit' );
 		if ( '' === $regular || null === $regular ) {
-			$regular = $product->get_meta( '_price', true );
+			$regular = $product->get_price( 'edit' );
 		}
 		$base = floatval( $regular );
 		return $base > 0 ? $base : 0.0;

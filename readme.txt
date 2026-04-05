@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.2.19.0
+Stable tag: 0.2.22.0
 
 WooCommerce overlays and pricing rules on ReactWoo Geo Core.
 
@@ -18,6 +18,15 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 2. Activate this plugin.
 
 == Changelog ==
+
+= 0.2.22.0 =
+* **Pricing:** `RWGCM_Pricing_Calc::get_base_unit_price()` uses `WC_Product::get_regular_price( 'edit' )` and `get_price( 'edit' )` instead of `get_meta( '_regular_price' )` / `_price`, fixing WooCommerce 3.2+ `is_internal_meta_key` notices and critical errors when storefront price filters run (e.g. after Elementor exit on product-related templates).
+
+= 0.2.21.0 =
+* **Updates:** Registers **`RWGC_Satellite_Updater`** (Geo Core 1.3.4+) — update checks use the ReactWoo API + license JWT; **`download_url`** is R2-signed.
+
+= 0.2.20.0 =
+* **License:** **Geo Commerce → License** screen to save a ReactWoo product key (`rwgcm_settings`); filters `rwgc_reactwoo_license_key` / `rwgc_reactwoo_api_base` (priority 16); migration from Geo AI, Geo Optimise, or Geo Core keys; **License** link on Geo Core dashboard card.
 
 = 0.2.19.0 =
 * **UX (Phase 3):** **Pricing** and **Cart fees** use **card-based rule builders** (name, enabled, move up/down, duplicate, remove, plain-English summary) plus **preview panels** (pricing simulator; fee list by country). **`rwgcm-rule-cards.js`** renumbers indices after reorder.

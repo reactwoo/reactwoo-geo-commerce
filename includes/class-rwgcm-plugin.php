@@ -45,6 +45,11 @@ class RWGCM_Plugin {
 			return;
 		}
 
+		require_once RWGCM_PATH . 'includes/class-rwgcm-settings.php';
+		RWGCM_Settings::register_platform_filters();
+		RWGCM_Settings::maybe_migrate_from_geo_core();
+		RWGCM_Settings::init();
+
 		require_once RWGCM_PATH . 'includes/class-rwgcm-pricing-rules.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-pricing-calc.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-pricing-apply.php';
@@ -79,6 +84,18 @@ class RWGCM_Plugin {
 		RWGCM_Admin::init();
 		RWGCM_Admin_Pricing::init();
 		RWGCM_Admin_Fees::init();
+
+		if ( class_exists( 'RWGC_Satellite_Updater', false ) ) {
+			RWGC_Satellite_Updater::register(
+				array(
+					'basename'     => plugin_basename( RWGCM_FILE ),
+					'version'      => RWGCM_VERSION,
+					'catalog_slug' => 'reactwoo-geo-commerce',
+					'name'         => __( 'ReactWoo Geo Commerce', 'reactwoo-geo-commerce' ),
+					'description'  => __( 'WooCommerce geo pricing, fees, and attribution on ReactWoo Geo Core.', 'reactwoo-geo-commerce' ),
+				)
+			);
+		}
 
 		/**
 		 * Fires when Geo Commerce is ready (Geo Core + WooCommerce active).

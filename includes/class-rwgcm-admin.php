@@ -23,6 +23,7 @@ class RWGCM_Admin {
 	public static function init() {
 		add_action( 'admin_menu', array( __CLASS__, 'register_menu' ), 26 );
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_assets' ) );
+		add_action( 'admin_init', array( __CLASS__, 'handle_license_actions' ) );
 		add_action( 'admin_post_rwgcm_save_dashboard', array( __CLASS__, 'handle_save_dashboard' ) );
 		add_action( 'rwgc_dashboard_satellite_panels', array( __CLASS__, 'render_geo_core_summary_card' ) );
 	}
@@ -56,27 +57,57 @@ class RWGCM_Admin {
 		}
 		$url = admin_url( 'admin.php?page=' . self::MENU_PARENT );
 		?>
-		<div class="rwgc-card rwgc-card--highlight">
-			<h2><?php esc_html_e( 'Geo Commerce (WooCommerce)', 'reactwoo-geo-commerce' ); ?></h2>
-			<p class="description">
-				<?php esc_html_e( 'Country-based catalog pricing, cart fees, and order attribution run here — not under Geo Core settings. Open Geo Commerce for setup.', 'reactwoo-geo-commerce' ); ?>
-			</p>
-			<ul>
-				<li>
-					<strong><?php esc_html_e( 'Pricing rules', 'reactwoo-geo-commerce' ); ?>:</strong>
-					<?php echo $ps['enabled'] ? esc_html__( 'On', 'reactwoo-geo-commerce' ) : esc_html__( 'Off', 'reactwoo-geo-commerce' ); ?>
-					— <?php echo esc_html( (string) (int) $ps['rule_count'] ); ?> <?php esc_html_e( 'rules', 'reactwoo-geo-commerce' ); ?>
-				</li>
-				<li>
-					<strong><?php esc_html_e( 'Fee rules', 'reactwoo-geo-commerce' ); ?>:</strong>
-					<?php echo $fs['enabled'] ? esc_html__( 'On', 'reactwoo-geo-commerce' ) : esc_html__( 'Off', 'reactwoo-geo-commerce' ); ?>
-					— <?php echo esc_html( (string) (int) $fs['rule_count'] ); ?> <?php esc_html_e( 'rules', 'reactwoo-geo-commerce' ); ?>
-				</li>
-			</ul>
-			<p>
+		<div class="rwgc-addon-card">
+			<div class="rwgc-addon-card__header">
+				<div class="rwgc-addon-card__icon" aria-hidden="true"><span class="dashicons dashicons-cart"></span></div>
+				<div class="rwgc-addon-card__heading">
+					<h3><?php esc_html_e( 'Geo Commerce (WooCommerce)', 'reactwoo-geo-commerce' ); ?></h3>
+					<p><?php esc_html_e( 'Manage country-based pricing, cart fees, and geo-attributed WooCommerce behaviour.', 'reactwoo-geo-commerce' ); ?></p>
+				</div>
+			</div>
+			<?php if ( class_exists( 'RWGC_Admin_UI', false ) ) : ?>
+			<div class="rwgc-addon-card__meta">
+				<?php
+				RWGC_Admin_UI::render_pill(
+					sprintf(
+						/* translators: %s: On or Off */
+						__( 'Pricing: %s', 'reactwoo-geo-commerce' ),
+						$ps['enabled'] ? __( 'On', 'reactwoo-geo-commerce' ) : __( 'Off', 'reactwoo-geo-commerce' )
+					),
+					$ps['enabled'] ? 'success' : 'danger'
+				);
+				RWGC_Admin_UI::render_pill(
+					sprintf(
+						/* translators: %d: rule count */
+						__( 'Rules: %d', 'reactwoo-geo-commerce' ),
+						(int) $ps['rule_count']
+					),
+					'neutral'
+				);
+				RWGC_Admin_UI::render_pill(
+					sprintf(
+						/* translators: %s: On or Off */
+						__( 'Fees: %s', 'reactwoo-geo-commerce' ),
+						$fs['enabled'] ? __( 'On', 'reactwoo-geo-commerce' ) : __( 'Off', 'reactwoo-geo-commerce' )
+					),
+					$fs['enabled'] ? 'success' : 'danger'
+				);
+				RWGC_Admin_UI::render_pill(
+					sprintf(
+						/* translators: %d: fee rule count */
+						__( 'Fee rules: %d', 'reactwoo-geo-commerce' ),
+						(int) $fs['rule_count']
+					),
+					'neutral'
+				);
+				?>
+			</div>
+			<?php endif; ?>
+			<div class="rwgc-addon-card__actions">
 				<a href="<?php echo esc_url( $url ); ?>" class="button button-primary"><?php esc_html_e( 'Open Geo Commerce', 'reactwoo-geo-commerce' ); ?></a>
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=rwgcm-license' ) ); ?>" class="button"><?php esc_html_e( 'License', 'reactwoo-geo-commerce' ); ?></a>
 				<a href="<?php echo esc_url( admin_url( 'admin.php?page=rwgcm-pricing' ) ); ?>" class="button"><?php esc_html_e( 'Commerce pricing', 'reactwoo-geo-commerce' ); ?></a>
-			</p>
+			</div>
 		</div>
 		<?php
 	}
@@ -90,6 +121,7 @@ class RWGCM_Admin {
 	public static function render_inner_nav( $current ) {
 		$items = array(
 			self::MENU_PARENT   => __( 'Overview', 'reactwoo-geo-commerce' ),
+			'rwgcm-license'     => __( 'License', 'reactwoo-geo-commerce' ),
 			'rwgcm-pricing'    => __( 'Pricing rules', 'reactwoo-geo-commerce' ),
 			'rwgcm-fees'       => __( 'Cart fees', 'reactwoo-geo-commerce' ),
 			'rwgcm-attribution' => __( 'Attribution', 'reactwoo-geo-commerce' ),
@@ -120,6 +152,42 @@ class RWGCM_Admin {
 			wp_safe_redirect( admin_url( 'admin.php?page=' . self::MENU_PARENT . '&updated=1' ) );
 		}
 		exit;
+	}
+
+	/**
+	 * License screen GET actions (disconnect).
+	 *
+	 * @return void
+	 */
+	public static function handle_license_actions() {
+		if ( ! is_admin() || ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		if ( empty( $_GET['page'] ) || 'rwgcm-license' !== $_GET['page'] ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			return;
+		}
+		if ( empty( $_GET['rwgcm_action'] ) || 'clear_license' !== $_GET['rwgcm_action'] ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			return;
+		}
+		if ( empty( $_GET['_wpnonce'] ) || ! wp_verify_nonce( wp_unslash( $_GET['_wpnonce'] ), 'rwgcm_clear_license' ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			return;
+		}
+		if ( class_exists( 'RWGCM_Settings', false ) ) {
+			RWGCM_Settings::clear_license_key();
+		}
+		wp_safe_redirect( admin_url( 'admin.php?page=rwgcm-license&rwgcm_disconnected=1' ) );
+		exit;
+	}
+
+	/**
+	 * @return void
+	 */
+	public static function render_license() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		$rwgc_nav_current = 'rwgcm-license';
+		include RWGCM_PATH . 'admin/views/license-settings.php';
 	}
 
 	/**
@@ -187,6 +255,15 @@ class RWGCM_Admin {
 			'manage_options',
 			self::MENU_PARENT,
 			array( __CLASS__, 'render_dashboard' )
+		);
+
+		add_submenu_page(
+			self::MENU_PARENT,
+			__( 'Geo Commerce — License', 'reactwoo-geo-commerce' ),
+			__( 'License', 'reactwoo-geo-commerce' ),
+			'manage_options',
+			'rwgcm-license',
+			array( __CLASS__, 'render_license' )
 		);
 
 		add_submenu_page(
