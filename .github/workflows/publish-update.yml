@@ -132,7 +132,9 @@ jobs:
           EOF
           )"
 
+          # Retry: transient 502/503 from proxy or brief Node restarts (curl retries 5xx by default).
           curl --fail-with-body -sS -X POST "${API_PUBLISH_URL}" \
+            --retry 8 --retry-delay 15 \
             -H "Authorization: Bearer ${{ secrets.UPDATES_PUBLISH_TOKEN }}" \
             -H "Content-Type: application/json" \
             --data "${PAYLOAD}"
