@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.2.22.0
+Stable tag: 0.3.3.0
 
 WooCommerce overlays and pricing rules on ReactWoo Geo Core.
 
@@ -18,6 +18,9 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 2. Activate this plugin.
 
 == Changelog ==
+
+= 0.3.3.0 =
+* **Independent licensing:** Geo Commerce now uses its own platform client, JWT cache, and update-auth callback. Automatic cross-plugin license migration and runtime fallback are removed; importing a key from another ReactWoo plugin is now an explicit one-time admin action.
 
 = 0.2.22.0 =
 * **Pricing:** `RWGCM_Pricing_Calc::get_base_unit_price()` uses `WC_Product::get_regular_price( 'edit' )` and `get_price( 'edit' )` instead of `get_meta( '_regular_price' )` / `_price`, fixing WooCommerce 3.2+ `is_internal_meta_key` notices and critical errors when storefront price filters run (e.g. after Elementor exit on product-related templates).

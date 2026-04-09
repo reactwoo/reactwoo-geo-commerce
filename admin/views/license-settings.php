@@ -13,6 +13,7 @@ $option_key       = RWGCM_Settings::OPTION_KEY;
 $settings         = RWGCM_Settings::get_settings();
 $rwgc_nav_current = isset( $rwgc_nav_current ) ? $rwgc_nav_current : 'rwgcm-license';
 $lic_ok           = ! empty( $settings['reactwoo_license_key'] );
+$import_sources   = class_exists( 'RWGCM_Settings', false ) ? RWGCM_Settings::get_manual_import_sources() : array();
 
 ?>
 <div class="wrap rwgc-wrap rwgcm-wrap rwgcm-wrap--license">
@@ -20,7 +21,7 @@ $lic_ok           = ! empty( $settings['reactwoo_license_key'] );
 		<?php
 		RWGC_Admin_UI::render_page_header(
 			__( 'License', 'reactwoo-geo-commerce' ),
-			__( 'Activate your ReactWoo Geo Commerce plan. The key is stored on this site and used with Geo Core’s platform client (JWT) when features require it.', 'reactwoo-geo-commerce' )
+			__( 'Activate your ReactWoo Geo Commerce plan. The key is stored on this site and used only by Geo Commerce when features require it.', 'reactwoo-geo-commerce' )
 		);
 		?>
 	<?php else : ?>
@@ -32,11 +33,17 @@ $lic_ok           = ! empty( $settings['reactwoo_license_key'] );
 	<?php if ( ! empty( $_GET['rwgcm_disconnected'] ) ) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>
 		<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'License key removed from this site.', 'reactwoo-geo-commerce' ); ?></p></div>
 	<?php endif; ?>
+	<?php if ( ! empty( $_GET['rwgcm_imported'] ) ) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>
+		<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'License key imported into Geo Commerce.', 'reactwoo-geo-commerce' ); ?></p></div>
+	<?php endif; ?>
+	<?php if ( ! empty( $_GET['rwgcm_import_err'] ) ) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>
+		<div class="notice notice-error is-dismissible"><p><?php echo esc_html( sanitize_text_field( wp_unslash( $_GET['rwgcm_import_err'] ) ) ); ?></p></div>
+	<?php endif; ?>
 
 	<div class="rwgc-grid" style="align-items: flex-start;">
 		<div class="rwgc-card" style="max-width: 520px;">
 			<h2><?php esc_html_e( 'Product license', 'reactwoo-geo-commerce' ); ?></h2>
-			<p class="description"><?php esc_html_e( 'If you already entered a key in Geo AI, Geo Optimise, or Geo Core, it may be copied here automatically until you save a key specific to Geo Commerce.', 'reactwoo-geo-commerce' ); ?></p>
+			<p class="description"><?php esc_html_e( 'Geo Commerce stores and uses its own license key on this site. Other ReactWoo plugins may report status, but they do not control this key.', 'reactwoo-geo-commerce' ); ?></p>
 
 			<p style="margin: 12px 0;">
 				<?php if ( class_exists( 'RWGC_Admin_UI', false ) ) : ?>
@@ -65,6 +72,15 @@ $lic_ok           = ! empty( $settings['reactwoo_license_key'] );
 				</table>
 				<?php submit_button( __( 'Save license', 'reactwoo-geo-commerce' ) ); ?>
 			</form>
+
+			<?php if ( ! empty( $import_sources ) ) : ?>
+				<p class="description"><?php esc_html_e( 'Optional: import a key once from another ReactWoo plugin. This does not create ongoing sharing between plugins.', 'reactwoo-geo-commerce' ); ?></p>
+				<p class="rwgcm-license-actions">
+					<?php foreach ( $import_sources as $source => $label ) : ?>
+						<a class="button" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=rwgcm-license&rwgcm_action=import_license&source=' . rawurlencode( $source ) ), 'rwgcm_import_license' ) ); ?>"><?php echo esc_html( sprintf( __( 'Import from %s', 'reactwoo-geo-commerce' ), $label ) ); ?></a>
+					<?php endforeach; ?>
+				</p>
+			<?php endif; ?>
 
 			<?php if ( $lic_ok ) : ?>
 				<p class="rwgcm-license-actions">

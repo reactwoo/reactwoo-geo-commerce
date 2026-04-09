@@ -106,7 +106,7 @@ class RWGCM_Admin {
 			<div class="rwgc-addon-card__actions">
 				<a href="<?php echo esc_url( $url ); ?>" class="button button-primary"><?php esc_html_e( 'Open Geo Commerce', 'reactwoo-geo-commerce' ); ?></a>
 				<a href="<?php echo esc_url( admin_url( 'admin.php?page=rwgcm-license' ) ); ?>" class="button"><?php esc_html_e( 'License', 'reactwoo-geo-commerce' ); ?></a>
-				<a href="<?php echo esc_url( admin_url( 'admin.php?page=rwgcm-pricing' ) ); ?>" class="button"><?php esc_html_e( 'Commerce pricing', 'reactwoo-geo-commerce' ); ?></a>
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=rwgcm-pricing' ) ); ?>" class="button"><?php esc_html_e( 'Rules', 'reactwoo-geo-commerce' ); ?></a>
 			</div>
 		</div>
 		<?php
@@ -120,12 +120,16 @@ class RWGCM_Admin {
 	 */
 	public static function render_inner_nav( $current ) {
 		$items = array(
-			self::MENU_PARENT   => __( 'Overview', 'reactwoo-geo-commerce' ),
-			'rwgcm-license'     => __( 'License', 'reactwoo-geo-commerce' ),
-			'rwgcm-pricing'    => __( 'Pricing rules', 'reactwoo-geo-commerce' ),
-			'rwgcm-fees'       => __( 'Cart fees', 'reactwoo-geo-commerce' ),
-			'rwgcm-attribution' => __( 'Attribution', 'reactwoo-geo-commerce' ),
-			'rwgcm-help'       => __( 'Help', 'reactwoo-geo-commerce' ),
+			self::MENU_PARENT        => __( 'Overview', 'reactwoo-geo-commerce' ),
+			'rwgcm-pricing'          => __( 'Rules', 'reactwoo-geo-commerce' ),
+			'rwgcm-legacy-pricing'   => __( 'Legacy country rows', 'reactwoo-geo-commerce' ),
+			'rwgcm-product-overlays' => __( 'Product overlays', 'reactwoo-geo-commerce' ),
+			'rwgcm-fees'             => __( 'Cart fees', 'reactwoo-geo-commerce' ),
+			'rwgcm-attribution'      => __( 'Marketing attribution', 'reactwoo-geo-commerce' ),
+			'rwgcm-diagnostics'      => __( 'Diagnostics', 'reactwoo-geo-commerce' ),
+			'rwgcm-settings'         => __( 'Settings', 'reactwoo-geo-commerce' ),
+			'rwgcm-license'          => __( 'License', 'reactwoo-geo-commerce' ),
+			'rwgcm-help'             => __( 'Help', 'reactwoo-geo-commerce' ),
 		);
 		echo '<nav class="rwgc-inner-nav" aria-label="' . esc_attr__( 'Geo Commerce section navigation', 'reactwoo-geo-commerce' ) . '">';
 		foreach ( $items as $slug => $label ) {
@@ -166,16 +170,41 @@ class RWGCM_Admin {
 		if ( empty( $_GET['page'] ) || 'rwgcm-license' !== $_GET['page'] ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 			return;
 		}
-		if ( empty( $_GET['rwgcm_action'] ) || 'clear_license' !== $_GET['rwgcm_action'] ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( empty( $_GET['rwgcm_action'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 			return;
 		}
-		if ( empty( $_GET['_wpnonce'] ) || ! wp_verify_nonce( wp_unslash( $_GET['_wpnonce'] ), 'rwgcm_clear_license' ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$action = sanitize_key( wp_unslash( $_GET['rwgcm_action'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( 'clear_license' === $action ) {
+			if ( empty( $_GET['_wpnonce'] ) || ! wp_verify_nonce( wp_unslash( $_GET['_wpnonce'] ), 'rwgcm_clear_license' ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+				return;
+			}
+			if ( class_exists( 'RWGCM_Settings', false ) ) {
+				RWGCM_Settings::clear_license_key();
+			}
+			wp_safe_redirect( admin_url( 'admin.php?page=rwgcm-license&rwgcm_disconnected=1' ) );
+			exit;
+		}
+		if ( 'import_license' !== $action ) {
 			return;
 		}
-		if ( class_exists( 'RWGCM_Settings', false ) ) {
-			RWGCM_Settings::clear_license_key();
+		if ( empty( $_GET['_wpnonce'] ) || ! wp_verify_nonce( wp_unslash( $_GET['_wpnonce'] ), 'rwgcm_import_license' ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			return;
 		}
-		wp_safe_redirect( admin_url( 'admin.php?page=rwgcm-license&rwgcm_disconnected=1' ) );
+		$source = isset( $_GET['source'] ) ? sanitize_key( wp_unslash( $_GET['source'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$result = class_exists( 'RWGCM_Settings', false ) ? RWGCM_Settings::import_license_from_source( $source ) : new WP_Error( 'rwgcm_missing_settings', __( 'Geo Commerce settings are not available.', 'reactwoo-geo-commerce' ) );
+		if ( is_wp_error( $result ) ) {
+			wp_safe_redirect(
+				add_query_arg(
+					array(
+						'page'             => 'rwgcm-license',
+						'rwgcm_import_err' => rawurlencode( $result->get_error_message() ),
+					),
+					admin_url( 'admin.php' )
+				)
+			);
+			exit;
+		}
+		wp_safe_redirect( admin_url( 'admin.php?page=rwgcm-license&rwgcm_imported=' . rawurlencode( $source ) ) );
 		exit;
 	}
 
@@ -223,7 +252,7 @@ class RWGCM_Admin {
 			$deps,
 			RWGCM_VERSION
 		);
-		if ( false !== strpos( $hook, 'rwgcm-pricing' ) || false !== strpos( $hook, 'rwgcm-fees' ) ) {
+		if ( false !== strpos( $hook, 'rwgcm-pricing' ) || false !== strpos( $hook, 'rwgcm-legacy-pricing' ) || false !== strpos( $hook, 'rwgcm-fees' ) ) {
 			wp_enqueue_script(
 				'rwgcm-rule-cards',
 				RWGCM_URL . 'admin/js/rwgcm-rule-cards.js',
@@ -268,11 +297,29 @@ class RWGCM_Admin {
 
 		add_submenu_page(
 			self::MENU_PARENT,
-			__( 'Commerce pricing', 'reactwoo-geo-commerce' ),
-			__( 'Pricing rules', 'reactwoo-geo-commerce' ),
+			__( 'Geo Commerce — Rules', 'reactwoo-geo-commerce' ),
+			__( 'Rules', 'reactwoo-geo-commerce' ),
 			'manage_options',
 			'rwgcm-pricing',
+			array( 'RWGCM_Admin_Rules', 'render' )
+		);
+
+		add_submenu_page(
+			self::MENU_PARENT,
+			__( 'Geo Commerce — Legacy country pricing', 'reactwoo-geo-commerce' ),
+			__( 'Legacy country rows', 'reactwoo-geo-commerce' ),
+			'manage_options',
+			'rwgcm-legacy-pricing',
 			array( 'RWGCM_Admin_Pricing', 'render' )
+		);
+
+		add_submenu_page(
+			self::MENU_PARENT,
+			__( 'Geo Commerce — Product overlays', 'reactwoo-geo-commerce' ),
+			__( 'Product overlays', 'reactwoo-geo-commerce' ),
+			'manage_options',
+			'rwgcm-product-overlays',
+			array( __CLASS__, 'render_product_overlays' )
 		);
 
 		add_submenu_page(
@@ -282,6 +329,33 @@ class RWGCM_Admin {
 			'manage_options',
 			'rwgcm-fees',
 			array( 'RWGCM_Admin_Fees', 'render' )
+		);
+
+		add_submenu_page(
+			self::MENU_PARENT,
+			__( 'Geo Commerce — Marketing attribution', 'reactwoo-geo-commerce' ),
+			__( 'Marketing attribution', 'reactwoo-geo-commerce' ),
+			'manage_options',
+			'rwgcm-attribution',
+			array( __CLASS__, 'render_attribution' )
+		);
+
+		add_submenu_page(
+			self::MENU_PARENT,
+			__( 'Geo Commerce — Diagnostics', 'reactwoo-geo-commerce' ),
+			__( 'Diagnostics', 'reactwoo-geo-commerce' ),
+			'manage_options',
+			'rwgcm-diagnostics',
+			array( __CLASS__, 'render_diagnostics' )
+		);
+
+		add_submenu_page(
+			self::MENU_PARENT,
+			__( 'Geo Commerce — Settings', 'reactwoo-geo-commerce' ),
+			__( 'Settings', 'reactwoo-geo-commerce' ),
+			'manage_options',
+			'rwgcm-settings',
+			array( __CLASS__, 'render_settings' )
 		);
 
 		add_submenu_page(
@@ -341,7 +415,46 @@ class RWGCM_Admin {
 	}
 
 	/**
-	 * Attribution: UTM storage + recent orders with visitor country.
+	 * Product overlays (contextual display on canonical products).
+	 *
+	 * @return void
+	 */
+	public static function render_product_overlays() {
+		if ( ! class_exists( 'RWGCM_Admin_Overlays', false ) ) {
+			return;
+		}
+		RWGCM_Admin_Overlays::render();
+	}
+
+	/**
+	 * Diagnostics: Geo Core context + rule evaluation notes.
+	 *
+	 * @return void
+	 */
+	public static function render_diagnostics() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		$rwgcm_diag = class_exists( 'RWGCM_Diagnostics', false ) ? RWGCM_Diagnostics::collect() : array();
+		$rwgc_nav_current = 'rwgcm-diagnostics';
+		include RWGCM_PATH . 'admin/views/diagnostics.php';
+	}
+
+	/**
+	 * Plugin settings hub (links to WooCommerce + Geo Core).
+	 *
+	 * @return void
+	 */
+	public static function render_settings() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		$rwgc_nav_current = 'rwgcm-settings';
+		include RWGCM_PATH . 'admin/views/settings-commerce.php';
+	}
+
+	/**
+	 * Marketing attribution: UTM storage + recent orders with visitor country.
 	 *
 	 * @return void
 	 */

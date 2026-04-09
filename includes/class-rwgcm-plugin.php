@@ -45,12 +45,31 @@ class RWGCM_Plugin {
 			return;
 		}
 
+		require_once RWGCM_PATH . 'includes/class-rwgcm-platform-client.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-settings.php';
-		RWGCM_Settings::register_platform_filters();
-		RWGCM_Settings::maybe_migrate_from_geo_core();
 		RWGCM_Settings::init();
 
+		require_once RWGCM_PATH . 'includes/class-rwgcm-db.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-action-resolver.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-rule-sanitizer.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-condition-evaluator.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-rule-evaluator.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-rule-store.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-rule-migration.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-pricing-resolution.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-diagnostics.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-overlay-sanitizer.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-product-overlay-store.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-product-overlay-resolver.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-product-display-apply.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-action-applier.php';
+
+		if ( get_option( RWGCM_DB::VERSION_OPTION, '' ) !== RWGCM_DB::SCHEMA_VERSION ) {
+			RWGCM_DB::install();
+		}
+
 		require_once RWGCM_PATH . 'includes/class-rwgcm-pricing-rules.php';
+		RWGCM_Rule_Migration::maybe_migrate_legacy_pricing();
 		require_once RWGCM_PATH . 'includes/class-rwgcm-pricing-calc.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-pricing-apply.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-catalog-price.php';
@@ -68,7 +87,9 @@ class RWGCM_Plugin {
 		require_once RWGCM_PATH . 'includes/class-rwgcm-attribution.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-admin.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-admin-pricing.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-admin-rules.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-admin-fees.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-admin-overlays.php';
 		RWGCM_Attribution::init();
 		RWGCM_Order_Geo::init();
 		RWGCM_Admin_Orders_List::init();
@@ -81,18 +102,24 @@ class RWGCM_Plugin {
 		RWGCM_Pricing_Apply::init();
 		RWGCM_Catalog_Price::init();
 		RWGCM_Catalog_Price_Variable::init();
+		RWGCM_Product_Display_Apply::init();
+		RWGCM_Action_Applier::init();
 		RWGCM_Admin::init();
 		RWGCM_Admin_Pricing::init();
+		RWGCM_Admin_Rules::init();
 		RWGCM_Admin_Fees::init();
+		RWGCM_Admin_Overlays::init();
 
 		if ( class_exists( 'RWGC_Satellite_Updater', false ) ) {
 			RWGC_Satellite_Updater::register(
 				array(
-					'basename'     => plugin_basename( RWGCM_FILE ),
-					'version'      => RWGCM_VERSION,
-					'catalog_slug' => 'reactwoo-geo-commerce',
-					'name'         => __( 'ReactWoo Geo Commerce', 'reactwoo-geo-commerce' ),
-					'description'  => __( 'WooCommerce geo pricing, fees, and attribution on ReactWoo Geo Core.', 'reactwoo-geo-commerce' ),
+					'basename'              => plugin_basename( RWGCM_FILE ),
+					'version'               => RWGCM_VERSION,
+					'catalog_slug'          => 'reactwoo-geo-commerce',
+					'name'                  => __( 'ReactWoo Geo Commerce', 'reactwoo-geo-commerce' ),
+					'description'           => __( 'WooCommerce geo pricing, fees, and attribution on ReactWoo Geo Core.', 'reactwoo-geo-commerce' ),
+					'get_bearer_callback'   => array( 'RWGCM_Platform_Client', 'get_bearer_for_updates' ),
+					'get_api_base_callback' => array( 'RWGCM_Platform_Client', 'get_api_base' ),
 				)
 			);
 		}
