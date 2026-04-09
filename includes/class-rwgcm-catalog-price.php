@@ -25,7 +25,7 @@ class RWGCM_Catalog_Price {
 	 * @return string
 	 */
 	public static function filter_product_price( $price, $product ) {
-		if ( ! RWGCM_Pricing_Rules::is_enabled() ) {
+		if ( ! class_exists( 'RWGCM_Pricing_Resolution', false ) || ! RWGCM_Pricing_Resolution::is_pricing_effective() ) {
 			return $price;
 		}
 		if ( is_admin() && ! wp_doing_ajax() ) {
@@ -48,12 +48,7 @@ class RWGCM_Catalog_Price {
 			return $price;
 		}
 
-		$country = RWGCM_Pricing_Calc::get_visitor_country();
-		if ( strlen( $country ) !== 2 ) {
-			return $price;
-		}
-
-		$rule = RWGCM_Pricing_Rules::find_matching_rule( $country, $product );
+		$rule = RWGCM_Pricing_Resolution::find_price_adjustment( $product );
 		if ( null === $rule ) {
 			return $price;
 		}

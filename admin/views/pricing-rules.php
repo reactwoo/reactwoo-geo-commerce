@@ -14,7 +14,7 @@ $rules[]            = array(
 	'label'          => '',
 	'active'         => true,
 );
-$rwgc_nav_current = isset( $rwgc_nav_current ) ? $rwgc_nav_current : 'rwgcm-pricing';
+$rwgc_nav_current = isset( $rwgc_nav_current ) ? $rwgc_nav_current : 'rwgcm-legacy-pricing';
 
 $sim_preview = null;
 if ( isset( $_GET['rwgcm_sim_pricing'] ) && '1' === $_GET['rwgcm_sim_pricing'] && class_exists( 'RWGCM_Simulator', false ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
@@ -28,8 +28,8 @@ if ( isset( $_GET['rwgcm_sim_pricing'] ) && '1' === $_GET['rwgcm_sim_pricing'] &
 	<?php if ( class_exists( 'RWGC_Admin_UI', false ) ) : ?>
 		<?php
 		RWGC_Admin_UI::render_page_header(
-			__( 'Pricing rules', 'reactwoo-geo-commerce' ),
-			__( 'Rules run in order from top to bottom — the first match for country (and categories, if set) wins. Put specific rules above broad ones.', 'reactwoo-geo-commerce' )
+			__( 'Rules', 'reactwoo-geo-commerce' ),
+			__( 'Legacy country rows are migrated into generic rules (Geo Core targets) on upgrade. Rules still evaluate in list order for equivalent country + category matching.', 'reactwoo-geo-commerce' )
 		);
 		?>
 	<?php else : ?>
@@ -94,7 +94,7 @@ if ( isset( $_GET['rwgcm_sim_pricing'] ) && '1' === $_GET['rwgcm_sim_pricing'] &
 				<h2><?php esc_html_e( 'Preview pricing outcome', 'reactwoo-geo-commerce' ); ?></h2>
 				<p class="description"><?php esc_html_e( 'Pick a country, optional categories, and a sample base price to see which rule wins.', 'reactwoo-geo-commerce' ); ?></p>
 				<form method="get" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>" class="rwgcm-sim-form">
-					<input type="hidden" name="page" value="rwgcm-pricing" />
+					<input type="hidden" name="page" value="rwgcm-legacy-pricing" />
 					<input type="hidden" name="rwgcm_sim_pricing" value="1" />
 					<p>
 						<label for="rwgcm_sim_country"><?php esc_html_e( 'Visitor country', 'reactwoo-geo-commerce' ); ?></label><br />

@@ -24,20 +24,13 @@ class RWGCM_Pricing_Apply {
 	 * @return void
 	 */
 	public static function apply_rules( $cart ) {
-		if ( ! RWGCM_Pricing_Rules::is_enabled() ) {
+		if ( ! class_exists( 'RWGCM_Pricing_Resolution', false ) || ! RWGCM_Pricing_Resolution::is_pricing_effective() ) {
 			return;
 		}
 		if ( ! is_object( $cart ) || ! method_exists( $cart, 'get_cart' ) || $cart->is_empty() ) {
 			return;
 		}
 		if ( is_admin() && ! wp_doing_ajax() ) {
-			return;
-		}
-		$country = '';
-		if ( function_exists( 'rwgc_get_visitor_country' ) ) {
-			$country = strtoupper( substr( (string) rwgc_get_visitor_country(), 0, 2 ) );
-		}
-		if ( '' === $country || strlen( $country ) !== 2 ) {
 			return;
 		}
 
@@ -65,7 +58,7 @@ class RWGCM_Pricing_Apply {
 				continue;
 			}
 
-			$rule = RWGCM_Pricing_Rules::find_matching_rule( $country, $product );
+			$rule = RWGCM_Pricing_Resolution::find_price_adjustment( $product );
 			if ( null === $rule ) {
 				continue;
 			}

@@ -32,7 +32,7 @@ class RWGCM_Catalog_Price_Variable {
 	 */
 	public static function filter_price_hash( $price_hash, $product, $for_display ) {
 		unset( $for_display );
-		if ( ! RWGCM_Pricing_Rules::is_enabled() ) {
+		if ( ! class_exists( 'RWGCM_Pricing_Resolution', false ) || ! RWGCM_Pricing_Resolution::is_pricing_effective() ) {
 			return $price_hash;
 		}
 		if ( ! is_array( $price_hash ) ) {
@@ -44,8 +44,13 @@ class RWGCM_Catalog_Price_Variable {
 		if ( is_admin() && ! wp_doing_ajax() ) {
 			return $price_hash;
 		}
-		$country = RWGCM_Pricing_Calc::get_visitor_country();
-		$price_hash['rwgcm_visitor_country'] = strlen( $country ) === 2 ? $country : '';
+		if ( class_exists( 'RWGCM_Diagnostics', false ) && RWGCM_Diagnostics::uses_generic_pricing_rules() && function_exists( 'rwgc_get_context_snapshot' ) ) {
+			$snap = rwgc_get_context_snapshot();
+			$price_hash['rwgcm_ctx'] = substr( md5( wp_json_encode( is_array( $snap ) ? $snap : array() ) ), 0, 16 );
+		} else {
+			$country = RWGCM_Pricing_Calc::get_visitor_country();
+			$price_hash['rwgcm_visitor_country'] = strlen( $country ) === 2 ? $country : '';
+		}
 		return $price_hash;
 	}
 
@@ -111,7 +116,7 @@ class RWGCM_Catalog_Price_Variable {
 	 * @return bool
 	 */
 	private static function guard( $variation ) {
-		if ( ! RWGCM_Pricing_Rules::is_enabled() ) {
+		if ( ! class_exists( 'RWGCM_Pricing_Resolution', false ) || ! RWGCM_Pricing_Resolution::is_pricing_effective() ) {
 			return false;
 		}
 		if ( is_admin() && ! wp_doing_ajax() ) {
@@ -123,12 +128,7 @@ class RWGCM_Catalog_Price_Variable {
 		if ( ! apply_filters( 'rwgcm_apply_catalog_price', true, $variation ) ) {
 			return false;
 		}
-		$country = RWGCM_Pricing_Calc::get_visitor_country();
-		if ( strlen( $country ) !== 2 ) {
-			return false;
-		}
-		$rule = RWGCM_Pricing_Rules::find_matching_rule( $country, $variation );
-		return null !== $rule;
+		return null !== RWGCM_Pricing_Resolution::find_price_adjustment( $variation );
 	}
 
 	/**
@@ -138,8 +138,7 @@ class RWGCM_Catalog_Price_Variable {
 	 * @return string
 	 */
 	private static function format_adjusted( $base, $variation, $product_for_filter ) {
-		$country = RWGCM_Pricing_Calc::get_visitor_country();
-		$rule    = RWGCM_Pricing_Rules::find_matching_rule( $country, $variation );
+		$rule = RWGCM_Pricing_Resolution::find_price_adjustment( $variation );
 		if ( null === $rule ) {
 			return wc_format_decimal( $base, wc_get_price_decimals() );
 		}

@@ -61,7 +61,7 @@ class RWGCM_Admin_Pricing {
 		);
 		update_option( RWGCM_Pricing_Rules::OPTION_KEY, $saved, false );
 
-		wp_safe_redirect( admin_url( 'admin.php?page=rwgcm-pricing&updated=1' ) );
+		wp_safe_redirect( admin_url( 'admin.php?page=rwgcm-legacy-pricing&updated=1' ) );
 		exit;
 	}
 
@@ -87,7 +87,7 @@ class RWGCM_Admin_Pricing {
 		if ( is_wp_error( $product_categories ) || ! is_array( $product_categories ) ) {
 			$product_categories = array();
 		}
-		$rwgc_nav_current = 'rwgcm-pricing';
+		$rwgc_nav_current = 'rwgcm-legacy-pricing';
 		include RWGCM_PATH . 'admin/views/pricing-rules.php';
 	}
 }

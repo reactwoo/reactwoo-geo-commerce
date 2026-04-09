@@ -42,6 +42,11 @@ if ( class_exists( 'RWGCM_Fee_Rules', false ) ) {
 }
 
 $attr_url = admin_url( 'admin.php?page=rwgcm-attribution' );
+
+$generic_active = 0;
+if ( class_exists( 'RWGCM_DB', false ) && RWGCM_DB::rules_table_exists() && class_exists( 'RWGCM_Rule_Store', false ) ) {
+	$generic_active = RWGCM_Rule_Store::count_by_status( 'active' );
+}
 ?>
 <div class="wrap rwgc-wrap rwgcm-wrap rwgcm-wrap--dashboard">
 	<?php if ( class_exists( 'RWGC_Admin_UI', false ) ) : ?>
@@ -66,11 +71,15 @@ $attr_url = admin_url( 'admin.php?page=rwgcm-attribution' );
 		<?php
 		RWGC_Admin_UI::render_stat_grid_open();
 		RWGC_Admin_UI::render_stat_card(
-			__( 'Pricing rules', 'reactwoo-geo-commerce' ),
-			(string) (int) $pricing_enabled_rows,
+			__( 'Rules (DB active)', 'reactwoo-geo-commerce' ),
+			(string) (int) $generic_active,
 			array(
-				'hint' => ! empty( $ps['enabled'] ) ? __( 'Master switch on', 'reactwoo-geo-commerce' ) : __( 'Master switch off', 'reactwoo-geo-commerce' ),
-				'tone' => ( $pricing_enabled_rows > 0 && ! empty( $ps['enabled'] ) ) ? 'success' : 'neutral',
+				'hint' => sprintf(
+					/* translators: %d: legacy row count */
+					__( 'Legacy country rows active: %d', 'reactwoo-geo-commerce' ),
+					(int) $pricing_enabled_rows
+				),
+				'tone' => $generic_active > 0 ? 'success' : 'neutral',
 			)
 		);
 		RWGC_Admin_UI::render_stat_card(
@@ -104,7 +113,7 @@ $attr_url = admin_url( 'admin.php?page=rwgcm-attribution' );
 	<div class="rwgcm-hero">
 		<h2><?php esc_html_e( 'Next steps', 'reactwoo-geo-commerce' ); ?></h2>
 		<ol class="rwgcm-steps">
-			<li><?php esc_html_e( 'Build pricing rules (card list — specific categories above broad rows).', 'reactwoo-geo-commerce' ); ?></li>
+			<li><?php esc_html_e( 'Add Rules (Geo Core targets) or edit Legacy country rows if you still rely on the old list.', 'reactwoo-geo-commerce' ); ?></li>
 			<li><?php esc_html_e( 'Add cart fees for countries that need surcharges or labels.', 'reactwoo-geo-commerce' ); ?></li>
 			<li><?php esc_html_e( 'Turn on attribution if you want UTM and click IDs stored on orders.', 'reactwoo-geo-commerce' ); ?></li>
 		</ol>
@@ -113,8 +122,8 @@ $attr_url = admin_url( 'admin.php?page=rwgcm-attribution' );
 			RWGC_Admin_UI::render_quick_actions(
 				array(
 					array(
-						'url'     => admin_url( 'admin.php?page=rwgcm-pricing' ),
-						'label'   => __( 'Add pricing rule', 'reactwoo-geo-commerce' ),
+						'url'     => admin_url( 'admin.php?page=rwgcm-pricing&rwgcm_edit=new' ),
+						'label'   => __( 'Add rule', 'reactwoo-geo-commerce' ),
 						'primary' => true,
 					),
 					array(
@@ -132,7 +141,7 @@ $attr_url = admin_url( 'admin.php?page=rwgcm-attribution' );
 				)
 			);
 		} else {
-			echo '<p><a class="button button-primary" href="' . esc_url( admin_url( 'admin.php?page=rwgcm-pricing' ) ) . '">' . esc_html__( 'Pricing rules', 'reactwoo-geo-commerce' ) . '</a></p>';
+			echo '<p><a class="button button-primary" href="' . esc_url( admin_url( 'admin.php?page=rwgcm-pricing&rwgcm_edit=new' ) ) . '">' . esc_html__( 'Add rule', 'reactwoo-geo-commerce' ) . '</a></p>';
 		}
 		?>
 	</div>

@@ -10,12 +10,12 @@ $utm_on           = class_exists( 'RWGCM_Attribution', false ) && RWGCM_Attribut
 	<?php if ( class_exists( 'RWGC_Admin_UI', false ) ) : ?>
 		<?php
 		RWGC_Admin_UI::render_page_header(
-			__( 'Attribution', 'reactwoo-geo-commerce' ),
+			__( 'Marketing attribution', 'reactwoo-geo-commerce' ),
 			__( 'Visitor country on orders and optional UTM / click-id capture for reporting.', 'reactwoo-geo-commerce' )
 		);
 		?>
 	<?php else : ?>
-		<h1><?php esc_html_e( 'Attribution', 'reactwoo-geo-commerce' ); ?></h1>
+		<h1><?php esc_html_e( 'Marketing attribution', 'reactwoo-geo-commerce' ); ?></h1>
 	<?php endif; ?>
 
 	<?php RWGCM_Admin::render_inner_nav( $rwgc_nav_current ); ?>
