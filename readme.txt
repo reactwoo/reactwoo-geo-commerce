@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.3.4.0
+Stable tag: 0.3.4.1
 
 WooCommerce overlays and pricing rules on ReactWoo Geo Core.
 
@@ -18,6 +18,9 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 2. Activate this plugin.
 
 == Changelog ==
+
+= 0.3.4.1 =
+* **License login:** `RWGCM_Platform_Client::get_access_token()` now applies `rwgc_auth_login_body`; `RWGCM_Settings::filter_auth_login_body` registers on init for parity with Geo Core / Geo AI / Geo Optimise.
 
 = 0.3.4.0 =
 * **Product overlays & rules:** Per-product overlay definitions with sanitization and storefront resolution; **generic rules** (list/edit) with condition evaluation, actions, and migration from legacy pricing options where applicable; **diagnostics** admin view; catalog/pricing apply path updates alongside existing commerce pricing.

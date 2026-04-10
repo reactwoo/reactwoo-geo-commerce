@@ -22,6 +22,31 @@ class RWGCM_Settings {
 	public static function init() {
 		add_action( 'admin_init', array( __CLASS__, 'register_settings' ) );
 		add_action( 'update_option_' . self::OPTION_KEY, array( __CLASS__, 'maybe_clear_jwt_on_change' ), 10, 2 );
+		add_filter( 'rwgc_auth_login_body', array( __CLASS__, 'filter_auth_login_body' ), 10, 3 );
+	}
+
+	/**
+	 * When logging in with Geo Commerce’s saved key, ensure product_slug/catalog_slug match this catalog (same contract as Geo Core).
+	 *
+	 * @param array<string, string> $body    Login JSON body.
+	 * @param string                $license Effective license key for this request.
+	 * @param string                $domain  Site host.
+	 * @return array<string, string>
+	 */
+	public static function filter_auth_login_body( $body, $license, $domain ) {
+		unset( $domain );
+		$s   = self::get_settings();
+		$our = is_array( $s ) && isset( $s['reactwoo_license_key'] ) ? trim( (string) $s['reactwoo_license_key'] ) : '';
+		if ( '' === $our || trim( (string) $license ) !== $our ) {
+			return is_array( $body ) ? $body : array();
+		}
+		if ( ! is_array( $body ) ) {
+			$body = array();
+		}
+		$catalog = class_exists( 'RWGCM_Platform_Client', false ) ? RWGCM_Platform_Client::PRODUCT_SLUG : 'reactwoo-geo-commerce';
+		$body['product_slug']  = $catalog;
+		$body['catalog_slug'] = $catalog;
+		return $body;
 	}
 
 	/**
