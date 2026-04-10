@@ -176,3 +176,9 @@
 .rwgcm-table-comfortable td {
   padding: 10px 12px;
 }
+
+/* Shared suite shell from Geo Core (.rwgc-suite) supplies nav/cards/buttons; keep green commerce accents above */
+.rwgcm-wrap.rwgc-suite {
+  /* Optional: tie neutral borders to suite tokens when loaded */
+  --rwgcm-suite-border: var(--rw-suite-border, #e5e7eb);
+}

@@ -16,7 +16,7 @@ $lic_ok           = ! empty( $settings['reactwoo_license_key'] );
 $import_sources   = class_exists( 'RWGCM_Settings', false ) ? RWGCM_Settings::get_manual_import_sources() : array();
 
 ?>
-<div class="wrap rwgc-wrap rwgcm-wrap rwgcm-wrap--license">
+<div class="wrap rwgc-wrap rwgc-suite rwgcm-wrap rwgcm-wrap--license">
 	<?php if ( class_exists( 'RWGC_Admin_UI', false ) ) : ?>
 		<?php
 		RWGC_Admin_UI::render_page_header(

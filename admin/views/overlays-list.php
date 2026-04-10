@@ -6,7 +6,7 @@ $overlays         = isset( $overlays ) && is_array( $overlays ) ? $overlays : ar
 $rwgc_nav_current = isset( $rwgc_nav_current ) ? $rwgc_nav_current : 'rwgcm-product-overlays';
 $new_url          = admin_url( 'admin.php?page=rwgcm-product-overlays&rwgcm_overlay_edit=new' );
 ?>
-<div class="wrap rwgc-wrap rwgcm-wrap rwgcm-wrap--overlays">
+<div class="wrap rwgc-wrap rwgc-suite rwgcm-wrap rwgcm-wrap--overlays">
 	<?php if ( class_exists( 'RWGC_Admin_UI', false ) ) : ?>
 		<?php
 		RWGC_Admin_UI::render_page_header(

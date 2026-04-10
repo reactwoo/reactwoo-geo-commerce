@@ -7,7 +7,7 @@ $rwgc_nav_current = isset( $rwgc_nav_current ) ? $rwgc_nav_current : 'rwgcm-pric
 $legacy_url       = admin_url( 'admin.php?page=rwgcm-legacy-pricing' );
 $new_url          = admin_url( 'admin.php?page=rwgcm-pricing&rwgcm_edit=new' );
 ?>
-<div class="wrap rwgc-wrap rwgcm-wrap rwgcm-wrap--rules-generic">
+<div class="wrap rwgc-wrap rwgc-suite rwgcm-wrap rwgcm-wrap--rules-generic">
 	<?php if ( class_exists( 'RWGC_Admin_UI', false ) ) : ?>
 		<?php
 		RWGC_Admin_UI::render_page_header(

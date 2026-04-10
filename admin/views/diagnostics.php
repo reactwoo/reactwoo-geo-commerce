@@ -5,7 +5,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 $rwgc_nav_current = isset( $rwgc_nav_current ) ? $rwgc_nav_current : 'rwgcm-diagnostics';
 $rwgcm_diag       = isset( $rwgcm_diag ) && is_array( $rwgcm_diag ) ? $rwgcm_diag : array();
 ?>
-<div class="wrap rwgc-wrap rwgcm-wrap">
+<div class="wrap rwgc-wrap rwgc-suite rwgcm-wrap">
 	<?php if ( class_exists( 'RWGC_Admin_UI', false ) ) : ?>
 		<?php
 		RWGC_Admin_UI::render_page_header(

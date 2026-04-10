@@ -48,7 +48,7 @@ if ( class_exists( 'RWGCM_DB', false ) && RWGCM_DB::rules_table_exists() && clas
 	$generic_active = RWGCM_Rule_Store::count_by_status( 'active' );
 }
 ?>
-<div class="wrap rwgc-wrap rwgcm-wrap rwgcm-wrap--dashboard">
+<div class="wrap rwgc-wrap rwgc-suite rwgcm-wrap rwgcm-wrap--dashboard">
 	<?php if ( class_exists( 'RWGC_Admin_UI', false ) ) : ?>
 		<?php
 		RWGC_Admin_UI::render_page_header(

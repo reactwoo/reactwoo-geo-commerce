@@ -6,7 +6,7 @@ $rwgc_nav_current = isset( $rwgc_nav_current ) ? $rwgc_nav_current : 'rwgcm-attr
 $orders           = isset( $rwgcm_attr_orders ) && is_array( $rwgcm_attr_orders ) ? $rwgcm_attr_orders : array();
 $utm_on           = class_exists( 'RWGCM_Attribution', false ) && RWGCM_Attribution::is_storage_enabled();
 ?>
-<div class="wrap rwgc-wrap rwgcm-wrap rwgcm-wrap--attribution">
+<div class="wrap rwgc-wrap rwgc-suite rwgcm-wrap rwgcm-wrap--attribution">
 	<?php if ( class_exists( 'RWGC_Admin_UI', false ) ) : ?>
 		<?php
 		RWGC_Admin_UI::render_page_header(

@@ -4,7 +4,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 $rwgc_nav_current = isset( $rwgc_nav_current ) ? $rwgc_nav_current : 'rwgcm-product-overlays';
 ?>
-<div class="wrap rwgc-wrap rwgcm-wrap">
+<div class="wrap rwgc-wrap rwgc-suite rwgcm-wrap">
 	<?php if ( class_exists( 'RWGC_Admin_UI', false ) ) : ?>
 		<?php
 		RWGC_Admin_UI::render_page_header(

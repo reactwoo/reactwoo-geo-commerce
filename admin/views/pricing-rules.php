@@ -24,7 +24,7 @@ if ( isset( $_GET['rwgcm_sim_pricing'] ) && '1' === $_GET['rwgcm_sim_pricing'] &
 	$sim_preview = RWGCM_Simulator::pricing_preview( $sc, $st, $sb );
 }
 ?>
-<div class="wrap rwgc-wrap rwgcm-wrap rwgcm-wrap--pricing">
+<div class="wrap rwgc-wrap rwgc-suite rwgcm-wrap rwgcm-wrap--pricing">
 	<?php if ( class_exists( 'RWGC_Admin_UI', false ) ) : ?>
 		<?php
 		RWGC_Admin_UI::render_page_header(

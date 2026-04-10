@@ -4,7 +4,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 $rwgc_nav_current = isset( $rwgc_nav_current ) ? $rwgc_nav_current : 'rwgcm-help';
 ?>
-<div class="wrap rwgc-wrap rwgcm-wrap">
+<div class="wrap rwgc-wrap rwgc-suite rwgcm-wrap">
 	<h1><?php esc_html_e( 'Geo Commerce — help', 'reactwoo-geo-commerce' ); ?></h1>
 	<p class="description"><?php esc_html_e( 'What belongs where, and how store pricing fits together.', 'reactwoo-geo-commerce' ); ?></p>
 	<?php RWGCM_Admin::render_inner_nav( $rwgc_nav_current ); ?>

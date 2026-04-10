@@ -6,7 +6,7 @@ $rwgc_nav_current = isset( $rwgc_nav_current ) ? $rwgc_nav_current : 'rwgcm-sett
 $rwgc_settings    = admin_url( 'admin.php?page=rwgc-settings' );
 $wc_settings      = admin_url( 'admin.php?page=wc-settings' );
 ?>
-<div class="wrap rwgc-wrap rwgcm-wrap">
+<div class="wrap rwgc-wrap rwgc-suite rwgcm-wrap">
 	<?php if ( class_exists( 'RWGC_Admin_UI', false ) ) : ?>
 		<?php
 		RWGC_Admin_UI::render_page_header(

@@ -40,7 +40,7 @@ $operators        = isset( $operators ) && is_array( $operators ) ? $operators :
 $list_url = admin_url( 'admin.php?page=rwgcm-product-overlays' );
 $form_url = admin_url( 'admin-post.php' );
 ?>
-<div class="wrap rwgc-wrap rwgcm-wrap rwgcm-wrap--overlays-edit">
+<div class="wrap rwgc-wrap rwgc-suite rwgcm-wrap rwgcm-wrap--overlays-edit">
 	<h1><?php echo $is_new ? esc_html__( 'Add product overlay', 'reactwoo-geo-commerce' ) : esc_html__( 'Edit product overlay', 'reactwoo-geo-commerce' ); ?></h1>
 	<?php RWGCM_Admin::render_inner_nav( $rwgc_nav_current ); ?>
 

@@ -67,7 +67,7 @@ $operators        = isset( $operators ) && is_array( $operators ) ? $operators :
 $list_url = admin_url( 'admin.php?page=rwgcm-pricing' );
 $form_url = admin_url( 'admin-post.php' );
 ?>
-<div class="wrap rwgc-wrap rwgcm-wrap rwgcm-wrap--rules-edit">
+<div class="wrap rwgc-wrap rwgc-suite rwgcm-wrap rwgcm-wrap--rules-edit">
 	<h1><?php echo $is_new ? esc_html__( 'Add rule', 'reactwoo-geo-commerce' ) : esc_html__( 'Edit rule', 'reactwoo-geo-commerce' ); ?></h1>
 	<?php RWGCM_Admin::render_inner_nav( $rwgc_nav_current ); ?>
 

@@ -22,7 +22,7 @@ if ( '' !== $fee_sim_country && class_exists( 'RWGCM_Simulator', false ) ) {
 	$fee_sim_rows = RWGCM_Simulator::fee_rows_for_country( $fee_sim_country );
 }
 ?>
-<div class="wrap rwgc-wrap rwgcm-wrap rwgcm-wrap--fees">
+<div class="wrap rwgc-wrap rwgc-suite rwgcm-wrap rwgcm-wrap--fees">
 	<?php if ( class_exists( 'RWGC_Admin_UI', false ) ) : ?>
 		<?php
 		RWGC_Admin_UI::render_page_header(
