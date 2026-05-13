@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.3.5
+Stable tag: 0.3.6
 
 WooCommerce overlays and pricing rules on ReactWoo Geo Core.
 
@@ -18,6 +18,9 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 2. Activate this plugin.
 
 == Changelog ==
+
+= 0.3.6 =
+* **Build / repo:** `package_zip.py` now bundles the `assets/` tree (icons) like other Geo satellites; expanded `.gitignore` (`*.zip`, `.cursor/`, PHPUnit cache); added `AGENTS.md` and `.cursor/rules` for suite-aligned workflow and shared-targeting reminders.
 
 = 0.3.5 =
 * **Targeting:** Commerce rule and overlay condition groups now evaluate through Geo Core `RWGC_Rule_Evaluator` and shared portable schema (`RWGC_Targeting_Rule_Set_Schema`), so Geo Core Pro campaign/audience/time hooks apply to pricing and overlays; legacy flat evaluation remains only when Geo Core classes are unavailable.

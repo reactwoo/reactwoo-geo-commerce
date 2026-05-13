@@ -1,0 +1,20 @@
+---
+description: Geo Commerce satellite — build parity, shared targeting, release hygiene
+alwaysApply: true
+---
+
+# ReactWoo Geo Commerce (satellite)
+
+## Product boundary
+
+- Requires **ReactWoo Geo Core** and **WooCommerce**. Do not implement a second geo detection or portable rules engine.
+- Rule **eligibility** uses **`RWGC_Rule_Evaluator`** (via **`RWGCM_Targeting_Adapter`** for stored commerce condition rows). Commerce applies **outcomes** only.
+
+## Repo structure (aligned with Geo AI / Geo Optimise)
+
+- PHP: `includes/`, admin UI: `admin/`, static assets: `assets/`, bootstrap: `reactwoo-geo-commerce.php`, `readme.txt`.
+- Packaging: `package.json` → `reactwooBuild.*`; `npm run package:zip` → `scripts/package_zip.py` (must include `admin`, `assets`, `includes`).
+
+## After implementation
+
+When a change is **complete and validated**, unless the user opts out: **commit**, bump **`RWGCM_VERSION`** + plugin header + readme **Stable tag** if shipping, **annotated tag** `v*`, build zip (`npm run package:zip` or `git archive` with correct `--prefix`), **push** branch and tag. Do **not** commit generated `.zip` files.
