@@ -45,7 +45,7 @@ class RWGCM_Rule_Evaluator {
 			return false;
 		}
 		$conds = isset( $rule['conditions'] ) && is_array( $rule['conditions'] ) ? $rule['conditions'] : array();
-		return RWGCM_Condition_Evaluator::group_matches( $conds, $context );
+		return RWGCM_Targeting_Adapter::group_matches( $conds, $context );
 	}
 
 	/**

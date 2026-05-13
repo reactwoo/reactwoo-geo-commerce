@@ -26,7 +26,7 @@ class RWGCM_Product_Overlay_Resolver {
 				continue;
 			}
 			$conds = isset( $ov['conditions'] ) && is_array( $ov['conditions'] ) ? $ov['conditions'] : array();
-			if ( RWGCM_Condition_Evaluator::group_matches( $conds, $context ) ) {
+			if ( RWGCM_Targeting_Adapter::group_matches( $conds, $context ) ) {
 				return $ov;
 			}
 		}
