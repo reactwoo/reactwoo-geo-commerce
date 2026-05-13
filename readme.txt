@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.3.6
+Stable tag: 0.3.7
 
 WooCommerce overlays and pricing rules on ReactWoo Geo Core.
 
@@ -18,6 +18,9 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 2. Activate this plugin.
 
 == Changelog ==
+
+= 0.3.7 =
+* **Admin:** Register all Geo Commerce screens as **submenus under Geo Core** (`rwgc-dashboard`) instead of a separate top-level admin menu, for a unified ReactWoo Geo hub experience. Screen URLs (`?page=rwgcm-*`) are unchanged.
 
 = 0.3.6 =
 * **Build / repo:** `package_zip.py` now bundles the `assets/` tree (icons) like other Geo satellites; expanded `.gitignore` (`*.zip`, `.cursor/`, PHPUnit cache); added `AGENTS.md` and `.cursor/rules` for suite-aligned workflow and shared-targeting reminders.

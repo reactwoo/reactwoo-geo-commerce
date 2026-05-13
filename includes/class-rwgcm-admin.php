@@ -1,6 +1,6 @@
 <?php
 /**
- * Geo Commerce — wp-admin (own top-level menu; optional summary on Geo Core dashboard).
+ * Geo Commerce — wp-admin (submenus under ReactWoo Geo Core; optional summary on Geo Core dashboard).
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -13,9 +13,18 @@ if ( ! defined( 'ABSPATH' ) ) {
 class RWGCM_Admin {
 
 	/**
-	 * Parent admin page slug (top-level menu).
+	 * Parent admin page slug (first screen / dashboard).
 	 */
 	const MENU_PARENT = 'rwgcm-dashboard';
+
+	/**
+	 * WordPress admin menu parent (Geo Core hub).
+	 *
+	 * @return string
+	 */
+	private static function admin_menu_parent() {
+		return 'rwgc-dashboard';
+	}
 
 	/**
 	 * @return void
@@ -267,102 +276,95 @@ class RWGCM_Admin {
 	 * @return void
 	 */
 	public static function register_menu() {
-		add_menu_page(
-			__( 'Geo Commerce', 'reactwoo-geo-commerce' ),
-			__( 'Geo Commerce', 'reactwoo-geo-commerce' ),
-			'manage_options',
-			self::MENU_PARENT,
-			array( __CLASS__, 'render_dashboard' ),
-			'dashicons-cart',
-			56
-		);
+		$parent = self::admin_menu_parent();
+		$cap     = 'manage_options';
 
 		add_submenu_page(
-			self::MENU_PARENT,
-			__( 'Overview', 'reactwoo-geo-commerce' ),
-			__( 'Overview', 'reactwoo-geo-commerce' ),
-			'manage_options',
+			$parent,
+			__( 'Geo Commerce', 'reactwoo-geo-commerce' ),
+			__( 'Commerce', 'reactwoo-geo-commerce' ),
+			$cap,
 			self::MENU_PARENT,
 			array( __CLASS__, 'render_dashboard' )
 		);
 
 		add_submenu_page(
-			self::MENU_PARENT,
+			$parent,
 			__( 'Geo Commerce — License', 'reactwoo-geo-commerce' ),
 			__( 'License', 'reactwoo-geo-commerce' ),
-			'manage_options',
+			$cap,
 			'rwgcm-license',
 			array( __CLASS__, 'render_license' )
 		);
 
 		add_submenu_page(
-			self::MENU_PARENT,
+			$parent,
 			__( 'Geo Commerce — Rules', 'reactwoo-geo-commerce' ),
 			__( 'Rules', 'reactwoo-geo-commerce' ),
-			'manage_options',
+			$cap,
 			'rwgcm-pricing',
 			array( 'RWGCM_Admin_Rules', 'render' )
 		);
 
 		add_submenu_page(
-			self::MENU_PARENT,
+			$parent,
 			__( 'Geo Commerce — Legacy country pricing', 'reactwoo-geo-commerce' ),
 			__( 'Legacy country rows', 'reactwoo-geo-commerce' ),
-			'manage_options',
+			$cap,
 			'rwgcm-legacy-pricing',
 			array( 'RWGCM_Admin_Pricing', 'render' )
 		);
 
 		add_submenu_page(
-			self::MENU_PARENT,
+			$parent,
 			__( 'Geo Commerce — Product overlays', 'reactwoo-geo-commerce' ),
 			__( 'Product overlays', 'reactwoo-geo-commerce' ),
-			'manage_options',
+			$cap,
 			'rwgcm-product-overlays',
 			array( __CLASS__, 'render_product_overlays' )
 		);
 
 		add_submenu_page(
-			self::MENU_PARENT,
+			$parent,
 			__( 'Commerce fees', 'reactwoo-geo-commerce' ),
 			__( 'Cart fees', 'reactwoo-geo-commerce' ),
-			'manage_options',
+			$cap,
 			'rwgcm-fees',
 			array( 'RWGCM_Admin_Fees', 'render' )
 		);
 
 		add_submenu_page(
-			self::MENU_PARENT,
+			$parent,
 			__( 'Geo Commerce — Marketing attribution', 'reactwoo-geo-commerce' ),
 			__( 'Marketing attribution', 'reactwoo-geo-commerce' ),
-			'manage_options',
+			$cap,
 			'rwgcm-attribution',
 			array( __CLASS__, 'render_attribution' )
 		);
 
 		add_submenu_page(
-			self::MENU_PARENT,
+			$parent,
 			__( 'Geo Commerce — Diagnostics', 'reactwoo-geo-commerce' ),
 			__( 'Diagnostics', 'reactwoo-geo-commerce' ),
-			'manage_options',
+			$cap,
 			'rwgcm-diagnostics',
 			array( __CLASS__, 'render_diagnostics' )
 		);
 
 		add_submenu_page(
-			self::MENU_PARENT,
+			$parent,
 			__( 'Geo Commerce — Settings', 'reactwoo-geo-commerce' ),
 			__( 'Settings', 'reactwoo-geo-commerce' ),
-			'manage_options',
+			$cap,
 			'rwgcm-settings',
 			array( __CLASS__, 'render_settings' )
 		);
 
 		add_submenu_page(
-			self::MENU_PARENT,
+			$parent,
 			__( 'Geo Commerce help', 'reactwoo-geo-commerce' ),
 			__( 'Help', 'reactwoo-geo-commerce' ),
-			'manage_options',
+			$cap,
 			'rwgcm-help',
 			array( __CLASS__, 'render_help' )
 		);
