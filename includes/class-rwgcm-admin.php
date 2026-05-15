@@ -34,6 +34,7 @@ class RWGCM_Admin {
 	 */
 	public static function init() {
 		add_action( 'admin_menu', array( __CLASS__, 'register_menu' ), 26 );
+		add_action( 'admin_head', array( __CLASS__, 'hide_detail_submenu_css' ) );
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_assets' ) );
 		add_action( 'admin_init', array( __CLASS__, 'handle_license_actions' ) );
 		add_action( 'admin_post_rwgcm_save_dashboard', array( __CLASS__, 'handle_save_dashboard' ) );
@@ -143,12 +144,87 @@ class RWGCM_Admin {
 			'rwgcm-license'          => __( 'License', 'reactwoo-geo-commerce' ),
 			'rwgcm-help'             => __( 'Help', 'reactwoo-geo-commerce' ),
 		);
+
+		if ( function_exists( 'rw_geo_render_inner_nav' ) ) {
+			rw_geo_render_inner_nav(
+				$items,
+				(string) $current,
+				array(
+					'filter'              => 'rwgcm_inner_nav_items',
+					'aria_label'          => __( 'Geo Commerce section navigation', 'reactwoo-geo-commerce' ),
+					'show_hub_breadcrumb' => 'rwgc-dashboard' === self::admin_menu_parent(),
+					'hub_extension_label' => __( 'Geo Commerce', 'reactwoo-geo-commerce' ),
+				)
+			);
+			return;
+		}
+
 		echo '<nav class="rwgc-inner-nav" aria-label="' . esc_attr__( 'Geo Commerce section navigation', 'reactwoo-geo-commerce' ) . '">';
 		foreach ( $items as $slug => $label ) {
 			$class = 'rwgc-inner-nav__link' . ( $slug === $current ? ' is-active' : '' );
 			echo '<a class="' . esc_attr( $class ) . '" href="' . esc_url( admin_url( 'admin.php?page=' . $slug ) ) . '">' . esc_html( $label ) . '</a>';
 		}
 		echo '</nav>';
+	}
+
+	/**
+	 * Register one submenu under the Geo Core hub (reference pattern for satellites).
+	 *
+	 * @param string   $page_title Screen title.
+	 * @param string   $menu_title Sidebar label.
+	 * @param string   $slug       Page slug.
+	 * @param callable $callback   Render callback.
+	 * @return string|false
+	 */
+	private static function register_hub_submenu( $page_title, $menu_title, $slug, $callback ) {
+		$args = array(
+			'page_title' => $page_title,
+			'menu_title' => $menu_title,
+			'capability' => 'manage_options',
+			'menu_slug'  => $slug,
+			'callback'   => $callback,
+		);
+		if ( function_exists( 'rw_geo_register_admin_submenu' ) ) {
+			return rw_geo_register_admin_submenu( $args );
+		}
+		return add_submenu_page(
+			self::admin_menu_parent(),
+			$page_title,
+			$menu_title,
+			'manage_options',
+			$slug,
+			$callback
+		);
+	}
+
+	/**
+	 * Hide detail Commerce links from the wp-admin sidebar (use in-page inner nav).
+	 *
+	 * @return void
+	 */
+	public static function hide_detail_submenu_css() {
+		if ( 'rwgc-dashboard' !== self::admin_menu_parent() || ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		$hide = array(
+			'rwgcm-license',
+			'rwgcm-pricing',
+			'rwgcm-legacy-pricing',
+			'rwgcm-product-overlays',
+			'rwgcm-fees',
+			'rwgcm-attribution',
+			'rwgcm-diagnostics',
+			'rwgcm-settings',
+			'rwgcm-help',
+		);
+		echo '<style id="rwgcm-hide-detail-submenus">';
+		foreach ( $hide as $slug ) {
+			printf(
+				'#toplevel_page_rwgc-dashboard .wp-submenu li:has(> a[href*="page=%1$s"]) { display: none !important; }',
+				esc_attr( $slug )
+			);
+		}
+		echo '</style>';
 	}
 
 	/**
@@ -279,95 +355,72 @@ class RWGCM_Admin {
 	 * @return void
 	 */
 	public static function register_menu() {
-		$parent = self::admin_menu_parent();
-		$cap     = 'manage_options';
-
-		add_submenu_page(
-			$parent,
+		self::register_hub_submenu(
 			__( 'Geo Commerce', 'reactwoo-geo-commerce' ),
 			__( 'Commerce', 'reactwoo-geo-commerce' ),
-			$cap,
 			self::MENU_PARENT,
 			array( __CLASS__, 'render_dashboard' )
 		);
 
-		add_submenu_page(
-			$parent,
+		self::register_hub_submenu(
 			__( 'Geo Commerce — License', 'reactwoo-geo-commerce' ),
 			__( 'License', 'reactwoo-geo-commerce' ),
-			$cap,
 			'rwgcm-license',
 			array( __CLASS__, 'render_license' )
 		);
 
-		add_submenu_page(
-			$parent,
+		self::register_hub_submenu(
 			__( 'Geo Commerce — Rules', 'reactwoo-geo-commerce' ),
 			__( 'Rules', 'reactwoo-geo-commerce' ),
-			$cap,
 			'rwgcm-pricing',
 			array( 'RWGCM_Admin_Rules', 'render' )
 		);
 
-		add_submenu_page(
-			$parent,
+		self::register_hub_submenu(
 			__( 'Geo Commerce — Legacy country pricing', 'reactwoo-geo-commerce' ),
 			__( 'Legacy country rows', 'reactwoo-geo-commerce' ),
-			$cap,
 			'rwgcm-legacy-pricing',
 			array( 'RWGCM_Admin_Pricing', 'render' )
 		);
 
-		add_submenu_page(
-			$parent,
+		self::register_hub_submenu(
 			__( 'Geo Commerce — Product overlays', 'reactwoo-geo-commerce' ),
 			__( 'Product overlays', 'reactwoo-geo-commerce' ),
-			$cap,
 			'rwgcm-product-overlays',
 			array( __CLASS__, 'render_product_overlays' )
 		);
 
-		add_submenu_page(
-			$parent,
+		self::register_hub_submenu(
 			__( 'Commerce fees', 'reactwoo-geo-commerce' ),
 			__( 'Cart fees', 'reactwoo-geo-commerce' ),
-			$cap,
 			'rwgcm-fees',
 			array( 'RWGCM_Admin_Fees', 'render' )
 		);
 
-		add_submenu_page(
-			$parent,
+		self::register_hub_submenu(
 			__( 'Geo Commerce — Marketing attribution', 'reactwoo-geo-commerce' ),
 			__( 'Marketing attribution', 'reactwoo-geo-commerce' ),
-			$cap,
 			'rwgcm-attribution',
 			array( __CLASS__, 'render_attribution' )
 		);
 
-		add_submenu_page(
-			$parent,
+		self::register_hub_submenu(
 			__( 'Geo Commerce — Diagnostics', 'reactwoo-geo-commerce' ),
 			__( 'Diagnostics', 'reactwoo-geo-commerce' ),
-			$cap,
 			'rwgcm-diagnostics',
 			array( __CLASS__, 'render_diagnostics' )
 		);
 
-		add_submenu_page(
-			$parent,
+		self::register_hub_submenu(
 			__( 'Geo Commerce — Settings', 'reactwoo-geo-commerce' ),
 			__( 'Settings', 'reactwoo-geo-commerce' ),
-			$cap,
 			'rwgcm-settings',
 			array( __CLASS__, 'render_settings' )
 		);
 
-		add_submenu_page(
-			$parent,
+		self::register_hub_submenu(
 			__( 'Geo Commerce help', 'reactwoo-geo-commerce' ),
 			__( 'Help', 'reactwoo-geo-commerce' ),
-			$cap,
 			'rwgcm-help',
 			array( __CLASS__, 'render_help' )
 		);
