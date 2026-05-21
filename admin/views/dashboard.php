@@ -55,6 +55,7 @@ if ( class_exists( 'RWGCM_DB', false ) && RWGCM_DB::rules_table_exists() && clas
 			__( 'Geo Commerce', 'reactwoo-geo-commerce' ),
 			__( 'Country-based catalog pricing, cart fees, and order context — built on Geo Core visitor detection.', 'reactwoo-geo-commerce' )
 		);
+		RWGC_Admin_UI::render_provider_badge( 'geo_commerce' );
 		?>
 	<?php else : ?>
 		<h1><?php esc_html_e( 'Geo Commerce', 'reactwoo-geo-commerce' ); ?></h1>
