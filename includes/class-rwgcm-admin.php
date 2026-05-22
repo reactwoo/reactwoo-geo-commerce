@@ -18,6 +18,28 @@ class RWGCM_Admin {
 	const MENU_PARENT = 'rwgcm-dashboard';
 
 	/**
+	 * Capability for Commerce admin screens (aligned with Geo Core hub).
+	 *
+	 * @return string
+	 */
+	public static function required_capability() {
+		if ( class_exists( 'RWGC_Admin', false ) ) {
+			return RWGC_Admin::required_capability();
+		}
+		if ( current_user_can( 'manage_woocommerce' ) ) {
+			return 'manage_woocommerce';
+		}
+		return 'manage_options';
+	}
+
+	/**
+	 * @return bool
+	 */
+	public static function can_manage() {
+		return current_user_can( self::required_capability() );
+	}
+
+	/**
 	 * WordPress admin menu parent (Geo Core hub).
 	 *
 	 * @return string
@@ -78,7 +100,7 @@ class RWGCM_Admin {
 	 * @return void
 	 */
 	public static function render_geo_core_summary_card() {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! self::can_manage() ) {
 			return;
 		}
 		$ps = array(
@@ -210,7 +232,7 @@ class RWGCM_Admin {
 			array(
 				'section'      => 'commerce',
 				'provider'     => 'geo_commerce',
-				'capability'   => 'manage_options',
+				'capability'   => self::required_capability(),
 				'module'       => 'commerce',
 				'page_title'   => '',
 				'menu_title'   => '',
@@ -246,7 +268,7 @@ class RWGCM_Admin {
 	 * @return void
 	 */
 	public static function handle_save_dashboard() {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! self::can_manage() ) {
 			wp_die( esc_html__( 'Forbidden.', 'reactwoo-geo-commerce' ) );
 		}
 		check_admin_referer( 'rwgcm_save_dashboard' );
@@ -315,7 +337,7 @@ class RWGCM_Admin {
 	 * @return void
 	 */
 	public static function render_license() {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! self::can_manage() ) {
 			return;
 		}
 		$rwgc_nav_current = 'rwgcm-license';
@@ -455,7 +477,7 @@ class RWGCM_Admin {
 	 * @return void
 	 */
 	public static function render_dashboard() {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! self::can_manage() ) {
 			return;
 		}
 		$sample = array();
@@ -490,7 +512,7 @@ class RWGCM_Admin {
 	 * @return void
 	 */
 	public static function render_help() {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! self::can_manage() ) {
 			return;
 		}
 		$rwgc_nav_current = 'rwgcm-help';
@@ -515,7 +537,7 @@ class RWGCM_Admin {
 	 * @return void
 	 */
 	public static function render_diagnostics() {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! self::can_manage() ) {
 			return;
 		}
 		$rwgcm_diag = class_exists( 'RWGCM_Diagnostics', false ) ? RWGCM_Diagnostics::collect() : array();
@@ -529,7 +551,7 @@ class RWGCM_Admin {
 	 * @return void
 	 */
 	public static function render_settings() {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! self::can_manage() ) {
 			return;
 		}
 		$rwgc_nav_current = 'rwgcm-settings';
@@ -542,7 +564,7 @@ class RWGCM_Admin {
 	 * @return void
 	 */
 	public static function render_attribution() {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! self::can_manage() ) {
 			return;
 		}
 		$rwgcm_attr_orders = array();
