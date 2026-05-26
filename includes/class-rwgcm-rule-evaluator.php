@@ -44,8 +44,7 @@ class RWGCM_Rule_Evaluator {
 		if ( empty( $rule['status'] ) || 'active' !== $rule['status'] ) {
 			return false;
 		}
-		$conds = isset( $rule['conditions'] ) && is_array( $rule['conditions'] ) ? $rule['conditions'] : array();
-		return RWGCM_Targeting_Adapter::group_matches( $conds, $context );
+		return RWGCM_Targeting_Adapter::rule_matches( $rule, $context );
 	}
 
 	/**

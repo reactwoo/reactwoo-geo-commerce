@@ -143,4 +143,28 @@ class RWGCM_Targeting_Adapter {
 
 		return RWGCM_Condition_Evaluator::group_matches( $group, $context );
 	}
+
+	/**
+	 * Evaluate a stored commerce rule (optional portable JSON in meta, else legacy condition rows).
+	 *
+	 * @param array<string, mixed> $rule    Full rule row from {@see RWGCM_Rule_Store}.
+	 * @param array<string, mixed> $context Visitor context snapshot.
+	 * @return bool
+	 */
+	public static function rule_matches( array $rule, array $context ) {
+		$meta = isset( $rule['meta'] ) && is_array( $rule['meta'] ) ? $rule['meta'] : array();
+		if ( ! empty( $meta['use_portable_targeting'] ) && ! empty( $meta['portable_targeting'] ) ) {
+			$snapshot = self::snapshot_from_context( $context );
+			if ( $snapshot && class_exists( 'RWGC_Rule_Evaluator', false ) && class_exists( 'RWGC_Targeting_Rule_Set_Schema', false ) ) {
+				$set = RWGC_Targeting_Rule_Set_Schema::sanitize( (string) $meta['portable_targeting'] );
+				if ( is_array( $set ) ) {
+					return RWGC_Rule_Evaluator::matches( $set, $snapshot );
+				}
+				return false;
+			}
+		}
+
+		$conds = isset( $rule['conditions'] ) && is_array( $rule['conditions'] ) ? $rule['conditions'] : array();
+		return self::group_matches( $conds, $context );
+	}
 }

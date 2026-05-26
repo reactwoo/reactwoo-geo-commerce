@@ -2,7 +2,8 @@
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
-$rwgc_nav_current = isset( $rwgc_nav_current ) ? $rwgc_nav_current : RWGCM_Admin::MENU_PARENT;
+$rwgc_nav_current        = isset( $rwgc_nav_current ) ? $rwgc_nav_current : RWGCM_Admin::MENU_PARENT;
+$rwgcm_use_platform_shell = class_exists( 'RWGCM_Admin', false ) && RWGCM_Admin::uses_platform_shell();
 
 $ps = isset( $rwgcm_pricing_status ) && is_array( $rwgcm_pricing_status ) ? $rwgcm_pricing_status : array( 'enabled' => false, 'rule_count' => 0 );
 $fs = isset( $rwgcm_fee_status ) && is_array( $rwgcm_fee_status ) ? $rwgcm_fee_status : array( 'enabled' => false, 'rule_count' => 0 );
@@ -52,7 +53,9 @@ if ( class_exists( 'RWGCM_DB', false ) && RWGCM_DB::rules_table_exists() && clas
 	<?php if ( class_exists( 'RWGC_Admin_UI', false ) ) : ?>
 		<?php
 		RWGC_Admin_UI::render_page_header(
-			__( 'Geo Commerce', 'reactwoo-geo-commerce' ),
+			$rwgcm_use_platform_shell
+				? __( 'Commerce overview', 'reactwoo-geo-commerce' )
+				: __( 'Geo Commerce', 'reactwoo-geo-commerce' ),
 			__( 'Country-based catalog pricing, cart fees, and order context — built on Geo Core visitor detection.', 'reactwoo-geo-commerce' )
 		);
 		RWGC_Admin_UI::render_provider_badge( 'geo_commerce' );
@@ -62,7 +65,9 @@ if ( class_exists( 'RWGCM_DB', false ) && RWGCM_DB::rules_table_exists() && clas
 		<p class="description"><?php esc_html_e( 'WooCommerce store rules from visitor country.', 'reactwoo-geo-commerce' ); ?></p>
 	<?php endif; ?>
 
-	<?php RWGCM_Admin::render_inner_nav( $rwgc_nav_current ); ?>
+	<?php if ( ! $rwgcm_use_platform_shell ) : ?>
+		<?php RWGCM_Admin::render_inner_nav( $rwgc_nav_current ); ?>
+	<?php endif; ?>
 
 	<?php if ( isset( $_GET['updated'] ) && '1' === $_GET['updated'] ) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>
 		<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Settings saved.', 'reactwoo-geo-commerce' ); ?></p></div>

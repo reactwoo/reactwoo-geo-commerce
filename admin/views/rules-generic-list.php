@@ -2,8 +2,10 @@
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
-$rules            = isset( $rules ) && is_array( $rules ) ? $rules : array();
-$rwgc_nav_current = isset( $rwgc_nav_current ) ? $rwgc_nav_current : 'rwgcm-pricing';
+$rules                   = isset( $rules ) && is_array( $rules ) ? $rules : array();
+$rwgc_nav_current        = isset( $rwgc_nav_current ) ? $rwgc_nav_current : 'rwgcm-pricing';
+$rwgcm_use_platform_shell = class_exists( 'RWGCM_Admin', false ) && RWGCM_Admin::uses_platform_shell();
+$rule_builder_url        = admin_url( 'admin.php?page=rwgc-target-types' );
 $legacy_url       = admin_url( 'admin.php?page=rwgcm-legacy-pricing' );
 $new_url          = admin_url( 'admin.php?page=rwgcm-pricing&rwgcm_edit=new' );
 ?>
@@ -11,7 +13,9 @@ $new_url          = admin_url( 'admin.php?page=rwgcm-pricing&rwgcm_edit=new' );
 	<?php if ( class_exists( 'RWGC_Admin_UI', false ) ) : ?>
 		<?php
 		RWGC_Admin_UI::render_page_header(
-			__( 'Rules', 'reactwoo-geo-commerce' ),
+			$rwgcm_use_platform_shell
+				? __( 'Regional pricing', 'reactwoo-geo-commerce' )
+				: __( 'Rules', 'reactwoo-geo-commerce' ),
 			__( 'Commerce rules use Geo Core target types (country, device, language, …). More specific scopes and conditions win over broader ones.', 'reactwoo-geo-commerce' )
 		);
 		?>
@@ -19,7 +23,15 @@ $new_url          = admin_url( 'admin.php?page=rwgcm-pricing&rwgcm_edit=new' );
 		<h1><?php esc_html_e( 'Rules', 'reactwoo-geo-commerce' ); ?></h1>
 	<?php endif; ?>
 
-	<?php RWGCM_Admin::render_inner_nav( $rwgc_nav_current ); ?>
+	<?php if ( ! $rwgcm_use_platform_shell ) : ?>
+		<?php RWGCM_Admin::render_inner_nav( $rwgc_nav_current ); ?>
+	<?php endif; ?>
+
+	<?php if ( $rwgcm_use_platform_shell && class_exists( 'RWGC_Admin', false ) ) : ?>
+		<p class="description">
+			<a href="<?php echo esc_url( $rule_builder_url ); ?>"><?php esc_html_e( 'Rule builder reference (Targeting)', 'reactwoo-geo-commerce' ); ?></a>
+		</p>
+	<?php endif; ?>
 
 	<?php if ( isset( $_GET['updated'] ) && '1' === $_GET['updated'] ) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>
 		<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Rule saved.', 'reactwoo-geo-commerce' ); ?></p></div>

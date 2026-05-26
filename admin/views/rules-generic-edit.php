@@ -64,12 +64,35 @@ $wc_cats          = isset( $wc_cats ) && is_array( $wc_cats ) ? $wc_cats : array
 $target_defs      = isset( $target_defs ) && is_array( $target_defs ) ? $target_defs : array();
 $operators        = isset( $operators ) && is_array( $operators ) ? $operators : array( 'is', 'is_not' );
 
+$rule_meta          = isset( $rule['meta'] ) && is_array( $rule['meta'] ) ? $rule['meta'] : array();
+$rwgcm_use_portable = ! empty( $rule_meta['use_portable_targeting'] );
+$rwgcm_portable_raw = isset( $rule_meta['portable_targeting'] ) ? (string) $rule_meta['portable_targeting'] : '';
+if ( '' !== trim( $rwgcm_portable_raw ) && class_exists( 'RWGC_Targeting_Rule_Set_Schema', false ) ) {
+	$decoded = json_decode( $rwgcm_portable_raw, true );
+	if ( is_array( $decoded ) ) {
+		$rwgcm_portable_raw = wp_json_encode( $decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE );
+	}
+}
+
 $list_url = admin_url( 'admin.php?page=rwgcm-pricing' );
 $form_url = admin_url( 'admin-post.php' );
+$rwgcm_use_platform_shell = class_exists( 'RWGCM_Admin', false ) && RWGCM_Admin::uses_platform_shell();
+$rule_builder_url         = admin_url( 'admin.php?page=rwgc-target-types' );
 ?>
 <div class="wrap rwgc-wrap rwgc-suite rwgcm-wrap rwgcm-wrap--rules-edit">
-	<h1><?php echo $is_new ? esc_html__( 'Add rule', 'reactwoo-geo-commerce' ) : esc_html__( 'Edit rule', 'reactwoo-geo-commerce' ); ?></h1>
-	<?php RWGCM_Admin::render_inner_nav( $rwgc_nav_current ); ?>
+	<?php if ( class_exists( 'RWGC_Admin_UI', false ) ) : ?>
+		<?php
+		RWGC_Admin_UI::render_page_header(
+			$is_new ? __( 'Add commerce rule', 'reactwoo-geo-commerce' ) : __( 'Edit commerce rule', 'reactwoo-geo-commerce' ),
+			__( 'Conditions are evaluated with Geo Core; this screen applies WooCommerce price outcomes.', 'reactwoo-geo-commerce' )
+		);
+		?>
+	<?php else : ?>
+		<h1><?php echo $is_new ? esc_html__( 'Add rule', 'reactwoo-geo-commerce' ) : esc_html__( 'Edit rule', 'reactwoo-geo-commerce' ); ?></h1>
+	<?php endif; ?>
+	<?php if ( ! $rwgcm_use_platform_shell ) : ?>
+		<?php RWGCM_Admin::render_inner_nav( $rwgc_nav_current ); ?>
+	<?php endif; ?>
 
 	<?php if ( isset( $_GET['updated'] ) && '1' === $_GET['updated'] ) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>
 		<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Rule saved.', 'reactwoo-geo-commerce' ); ?></p></div>
@@ -138,8 +161,37 @@ $form_url = admin_url( 'admin-post.php' );
 			</tr>
 		</table>
 
-		<h2><?php esc_html_e( 'Conditions', 'reactwoo-geo-commerce' ); ?></h2>
-		<p class="description"><?php esc_html_e( 'All rows with a target key apply. Uses Geo Core context (see Geo Core → Target types).', 'reactwoo-geo-commerce' ); ?></p>
+		<h2><?php esc_html_e( 'Visitor conditions', 'reactwoo-geo-commerce' ); ?></h2>
+		<p class="description">
+			<?php esc_html_e( 'Uses the same Geo Core visibility engine as Targeting → Rule builder.', 'reactwoo-geo-commerce' ); ?>
+		</p>
+
+		<table class="form-table rwgcm-portable-toggle" role="presentation">
+			<tr>
+				<th scope="row"><?php esc_html_e( 'Rule builder', 'reactwoo-geo-commerce' ); ?></th>
+				<td>
+					<label>
+						<input type="checkbox" name="rwgcm_use_portable_targeting" id="rwgcm_use_portable_targeting" value="1" <?php checked( $rwgcm_use_portable ); ?> />
+						<?php esc_html_e( 'Use visibility rule builder (recommended)', 'reactwoo-geo-commerce' ); ?>
+					</label>
+					<p class="description"><?php esc_html_e( 'When enabled, the visual builder below replaces the legacy condition table. Raw JSON is under Advanced in the builder.', 'reactwoo-geo-commerce' ); ?></p>
+				</td>
+			</tr>
+			<tr class="rwgcm-portable-builder-row" style="<?php echo $rwgcm_use_portable ? '' : 'display:none;'; ?>">
+				<th scope="row">
+					<label for="rwgcm_portable_targeting"><?php esc_html_e( 'Visibility rules', 'reactwoo-geo-commerce' ); ?></label>
+				</th>
+				<td>
+					<div class="rwgc-rb-mount-wrap">
+						<textarea name="rwgcm_portable_targeting" id="rwgcm_portable_targeting" rows="3" class="large-text code"><?php echo esc_textarea( $rwgcm_portable_raw ); ?></textarea>
+					</div>
+				</td>
+			</tr>
+		</table>
+
+		<div id="rwgcm-legacy-conditions" style="<?php echo $rwgcm_use_portable ? 'display:none;' : ''; ?>">
+		<h3><?php esc_html_e( 'Legacy condition rows', 'reactwoo-geo-commerce' ); ?></h3>
+		<p class="description"><?php esc_html_e( 'Simple target / operator / value rows. Switch to the rule builder above for GA4 audiences, campaigns, and grouped logic.', 'reactwoo-geo-commerce' ); ?></p>
 		<table class="widefat">
 			<thead>
 				<tr>
@@ -203,6 +255,7 @@ $form_url = admin_url( 'admin-post.php' );
 				<?php endforeach; ?>
 			</tbody>
 		</table>
+		</div>
 
 		<h2><?php esc_html_e( 'Price adjustment', 'reactwoo-geo-commerce' ); ?></h2>
 		<table class="form-table">
@@ -227,16 +280,31 @@ $form_url = admin_url( 'admin-post.php' );
 	<script>
 	(function(){
 		var st = document.getElementById('rwgcm_scope_type');
-		if (!st) return;
-		function syncScope(){
-			var v = st.value;
-			var trc = document.querySelector('.rwgcm-scope-cats');
-			var trp = document.querySelector('.rwgcm-scope-product');
-			if (trc) trc.style.display = (v === 'product_category') ? '' : 'none';
-			if (trp) trp.style.display = (v === 'product') ? '' : 'none';
+		if (st) {
+			function syncScope(){
+				var v = st.value;
+				var trc = document.querySelector('.rwgcm-scope-cats');
+				var trp = document.querySelector('.rwgcm-scope-product');
+				if (trc) trc.style.display = (v === 'product_category') ? '' : 'none';
+				if (trp) trp.style.display = (v === 'product') ? '' : 'none';
+			}
+			st.addEventListener('change', syncScope);
+			syncScope();
 		}
-		st.addEventListener('change', syncScope);
-		syncScope();
+		var portableToggle = document.getElementById('rwgcm_use_portable_targeting');
+		var legacyBlock = document.getElementById('rwgcm-legacy-conditions');
+		var builderRow = document.querySelector('.rwgcm-portable-builder-row');
+		if (portableToggle && legacyBlock) {
+			function syncPortable(){
+				var on = portableToggle.checked;
+				legacyBlock.style.display = on ? 'none' : '';
+				if (builderRow) {
+					builderRow.style.display = on ? '' : 'none';
+				}
+			}
+			portableToggle.addEventListener('change', syncPortable);
+			syncPortable();
+		}
 	})();
 	</script>
 </div>

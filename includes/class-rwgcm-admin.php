@@ -179,13 +179,18 @@ class RWGCM_Admin {
 	}
 
 	/**
-	 * Section navigation for Geo Commerce screens (reuses Geo Core nav styling when available).
-	 *
+	 * @return bool
+	 */
+	public static function uses_platform_shell() {
+		return function_exists( 'rwgc_uses_platform_shell' ) && rwgc_uses_platform_shell();
+	}
+
+	/**
 	 * @param string $current Current page slug.
 	 * @return void
 	 */
 	public static function render_inner_nav( $current ) {
-		if ( function_exists( 'rwgc_uses_platform_shell' ) && rwgc_uses_platform_shell() ) {
+		if ( self::uses_platform_shell() ) {
 			return;
 		}
 
@@ -388,6 +393,19 @@ class RWGCM_Admin {
 				array(),
 				RWGCM_VERSION,
 				true
+			);
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- screen detection only.
+		$on_rule_edit = false !== strpos( $hook, 'rwgcm-pricing' )
+			&& isset( $_GET['rwgcm_edit'] )
+			&& '' !== (string) wp_unslash( $_GET['rwgcm_edit'] );
+		if ( $on_rule_edit && class_exists( 'RWGC_Targeting_Rule_Builder_Assets', false ) ) {
+			RWGC_Targeting_Rule_Builder_Assets::enqueue_admin();
+			wp_add_inline_script(
+				RWGC_Targeting_Rule_Builder_Assets::SCRIPT_HANDLE,
+				RWGC_Targeting_Rule_Builder_Assets::get_mount_inline( '#rwgcm_portable_targeting' ),
+				'after'
 			);
 		}
 	}

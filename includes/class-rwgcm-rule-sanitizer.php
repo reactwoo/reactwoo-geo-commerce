@@ -88,6 +88,20 @@ class RWGCM_Rule_Sanitizer {
 		}
 
 		$meta = isset( $rule['meta'] ) && is_array( $rule['meta'] ) ? $rule['meta'] : array();
+		$use_portable = ! empty( $meta['use_portable_targeting'] );
+		$portable_raw = isset( $meta['portable_targeting'] ) ? (string) $meta['portable_targeting'] : '';
+		if ( $use_portable && class_exists( 'RWGC_Targeting_Rule_Set_Schema', false ) ) {
+			$set = RWGC_Targeting_Rule_Set_Schema::sanitize( $portable_raw );
+			$portable_raw = is_array( $set ) ? wp_json_encode( $set ) : '';
+			if ( '' === $portable_raw ) {
+				$use_portable = false;
+			}
+		} elseif ( $use_portable ) {
+			$use_portable = false;
+			$portable_raw = '';
+		}
+		$meta['use_portable_targeting'] = $use_portable;
+		$meta['portable_targeting']      = $portable_raw;
 
 		$out = array(
 			'id'         => isset( $rule['id'] ) ? absint( $rule['id'] ) : 0,

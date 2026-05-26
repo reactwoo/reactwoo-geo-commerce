@@ -141,6 +141,13 @@ class RWGCM_Admin_Rules {
 		}
 		$pav = isset( $_POST['rwgcm_pa_value'] ) ? floatval( wp_unslash( $_POST['rwgcm_pa_value'] ) ) : 0.0;
 
+		$use_portable = ! empty( $_POST['rwgcm_use_portable_targeting'] );
+		$portable_raw = '';
+		if ( isset( $_POST['rwgcm_portable_targeting'] ) ) {
+			$portable_raw = wp_unslash( (string) $_POST['rwgcm_portable_targeting'] );
+			$portable_raw = wp_check_invalid_utf8( $portable_raw, true );
+		}
+
 		$rule = array(
 			'id'         => $id,
 			'label'      => $label,
@@ -162,7 +169,9 @@ class RWGCM_Admin_Rules {
 				),
 			),
 			'meta'       => array(
-				'source' => 'admin_generic_rules',
+				'source'                  => 'admin_generic_rules',
+				'use_portable_targeting'  => $use_portable,
+				'portable_targeting'      => $portable_raw,
 			),
 		);
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
