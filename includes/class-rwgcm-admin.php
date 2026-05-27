@@ -420,12 +420,13 @@ class RWGCM_Admin {
 				'route'     => 'overview',
 				'label'     => __( 'Overview', 'reactwoo-geo-commerce' ),
 				'order'     => 10,
+				'is_section_nav' => false,
 				'callback'  => array( __CLASS__, 'render_dashboard' ),
 			),
 			array(
 				'menu_slug' => 'rwgcm-pricing',
 				'route'     => 'pricing',
-				'label'     => __( 'Regional pricing', 'reactwoo-geo-commerce' ),
+				'label'     => __( 'Pricing rules', 'reactwoo-geo-commerce' ),
 				'order'     => 20,
 				'callback'  => array( 'RWGCM_Admin_Rules', 'render' ),
 			),
@@ -434,6 +435,7 @@ class RWGCM_Admin {
 				'route'     => 'legacy-pricing',
 				'label'     => __( 'Legacy country rows', 'reactwoo-geo-commerce' ),
 				'order'     => 25,
+				'is_section_nav' => false,
 				'callback'  => array( 'RWGCM_Admin_Pricing', 'render' ),
 			),
 			array(
@@ -445,21 +447,37 @@ class RWGCM_Admin {
 			),
 			array(
 				'menu_slug' => 'rwgcm-fees',
-				'route'     => 'cart-rules',
-				'label'     => __( 'Cart rules', 'reactwoo-geo-commerce' ),
+				'route'     => 'offers',
+				'label'     => __( 'Offers', 'reactwoo-geo-commerce' ),
 				'order'     => 40,
 				'callback'  => array( 'RWGCM_Admin_Fees', 'render' ),
 			),
 			array(
+				'menu_slug' => 'rwgcm-merchandising',
+				'route'     => 'merchandising',
+				'label'     => __( 'Merchandising', 'reactwoo-geo-commerce' ),
+				'order'     => 45,
+				'callback'  => array( __CLASS__, 'render_merchandising' ),
+			),
+			array(
+				'menu_slug' => 'rwgcm-availability',
+				'route'     => 'availability',
+				'label'     => __( 'Availability', 'reactwoo-geo-commerce' ),
+				'order'     => 50,
+				'callback'  => array( __CLASS__, 'render_availability' ),
+			),
+			array(
 				'menu_slug' => 'rwgcm-attribution',
-				'route'     => 'attribution',
-				'label'     => __( 'Attribution', 'reactwoo-geo-commerce' ),
+				'section'   => 'insights',
+				'route'     => 'commerce-performance',
+				'label'     => __( 'Commerce performance', 'reactwoo-geo-commerce' ),
 				'order'     => 50,
 				'callback'  => array( __CLASS__, 'render_attribution' ),
 			),
 			array(
 				'menu_slug' => 'rwgcm-diagnostics',
-				'route'     => 'diagnostics',
+				'section'   => 'settings',
+				'route'     => 'commerce-diagnostics',
 				'label'     => __( 'Diagnostics', 'reactwoo-geo-commerce' ),
 				'order'     => 60,
 				'callback'  => array( __CLASS__, 'render_diagnostics' ),
@@ -539,6 +557,32 @@ class RWGCM_Admin {
 		}
 		$rwgc_nav_current = 'rwgcm-help';
 		include RWGCM_PATH . 'admin/views/help.php';
+	}
+
+	/**
+	 * Commerce merchandising entry (overlays + contextual product messaging).
+	 *
+	 * @return void
+	 */
+	public static function render_merchandising() {
+		if ( ! self::can_manage() ) {
+			return;
+		}
+		$rwgc_nav_current = 'rwgcm-merchandising';
+		include RWGCM_PATH . 'admin/views/commerce-merchandising.php';
+	}
+
+	/**
+	 * Commerce availability entry (geo-based visibility and purchase eligibility).
+	 *
+	 * @return void
+	 */
+	public static function render_availability() {
+		if ( ! self::can_manage() ) {
+			return;
+		}
+		$rwgc_nav_current = 'rwgcm-availability';
+		include RWGCM_PATH . 'admin/views/commerce-availability.php';
 	}
 
 	/**
