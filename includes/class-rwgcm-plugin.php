@@ -70,7 +70,8 @@ class RWGCM_Plugin {
 		}
 
 		require_once RWGCM_PATH . 'includes/class-rwgcm-pricing-rules.php';
-		RWGCM_Rule_Migration::maybe_migrate_legacy_pricing();
+		// Migration builds a translated label; defer to `init` to avoid WP 6.7 early-textdomain notices.
+		add_action( 'init', array( 'RWGCM_Rule_Migration', 'maybe_migrate_legacy_pricing' ), 1 );
 		require_once RWGCM_PATH . 'includes/class-rwgcm-pricing-calc.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-pricing-apply.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-catalog-price.php';
