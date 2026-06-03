@@ -27,6 +27,18 @@ if ( ! defined( 'RWGCM_URL' ) ) {
 	define( 'RWGCM_URL', plugin_dir_url( __FILE__ ) );
 }
 
+if ( class_exists( 'RWGC_I18n', false ) ) {
+	RWGC_I18n::bootstrap( RWGCM_FILE, 'reactwoo-geo-commerce' );
+} else {
+	add_action(
+		'init',
+		static function () {
+			load_plugin_textdomain( 'reactwoo-geo-commerce', false, dirname( plugin_basename( RWGCM_FILE ) ) . '/languages' );
+		},
+		0
+	);
+}
+
 require_once RWGCM_PATH . 'includes/class-rwgcm-plugin.php';
 
 /**

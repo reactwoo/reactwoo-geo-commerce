@@ -111,24 +111,32 @@ class RWGCM_Plugin {
 		RWGCM_Admin_Fees::init();
 		RWGCM_Admin_Overlays::init();
 
-		if ( class_exists( 'RWGC_Satellite_Updater', false ) ) {
-			RWGC_Satellite_Updater::register(
-				array(
-					'basename'              => plugin_basename( RWGCM_FILE ),
-					'version'               => RWGCM_VERSION,
-					'catalog_slug'          => 'reactwoo-geo-commerce',
-					'name'                  => __( 'ReactWoo Geo Commerce', 'reactwoo-geo-commerce' ),
-					'description'           => __( 'WooCommerce geo pricing, fees, and attribution on ReactWoo Geo Core.', 'reactwoo-geo-commerce' ),
-					'get_bearer_callback'   => array( 'RWGCM_Platform_Client', 'get_bearer_for_updates' ),
-					'get_api_base_callback' => array( 'RWGCM_Platform_Client', 'get_api_base' ),
-				)
-			);
-		}
+		add_action( 'init', array( __CLASS__, 'register_satellite_updater' ), 1 );
 
 		/**
 		 * Fires when Geo Commerce is ready (Geo Core + WooCommerce active).
 		 */
 		do_action( 'rwgcm_loaded' );
+	}
+
+	/**
+	 * @return void
+	 */
+	public static function register_satellite_updater() {
+		if ( ! class_exists( 'RWGC_Satellite_Updater', false ) ) {
+			return;
+		}
+		RWGC_Satellite_Updater::register(
+			array(
+				'basename'              => plugin_basename( RWGCM_FILE ),
+				'version'               => RWGCM_VERSION,
+				'catalog_slug'          => 'reactwoo-geo-commerce',
+				'name'                  => __( 'ReactWoo Geo Commerce', 'reactwoo-geo-commerce' ),
+				'description'           => __( 'WooCommerce geo pricing, fees, and attribution on ReactWoo Geo Core.', 'reactwoo-geo-commerce' ),
+				'get_bearer_callback'   => array( 'RWGCM_Platform_Client', 'get_bearer_for_updates' ),
+				'get_api_base_callback' => array( 'RWGCM_Platform_Client', 'get_api_base' ),
+			)
+		);
 	}
 
 	/**
