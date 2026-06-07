@@ -66,6 +66,12 @@ class RWGCM_Rule_Sanitizer {
 				'operator' => $op,
 				'value'    => isset( $it['value'] ) ? $it['value'] : null,
 			);
+			if ( ! empty( $it['field'] ) ) {
+				$clean_items[ count( $clean_items ) - 1 ]['field'] = sanitize_key( (string) $it['field'] );
+			}
+			if ( ! empty( $it['label'] ) ) {
+				$clean_items[ count( $clean_items ) - 1 ]['label'] = sanitize_text_field( (string) $it['label'] );
+			}
 			if ( count( $clean_items ) >= 40 ) {
 				break;
 			}

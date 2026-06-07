@@ -202,4 +202,107 @@ class RWGCM_Rule_Evaluator {
 		}
 		return null;
 	}
+
+	/**
+	 * Winning rule for product display actions (badges, overlays, notices).
+	 *
+	 * @param \WC_Product          $product Product.
+	 * @param array<string, mixed> $context Context.
+	 * @return array<string, mixed>|null
+	 */
+	public static function get_winning_display_rule( $product, array $context ) {
+		$rules = RWGCM_Rule_Store::get_all_rules();
+		$match = self::get_matching_rules( $rules, $context, $product, null );
+		$display = array();
+		foreach ( $match as $rule ) {
+			if ( ! self::rule_has_display_action( $rule ) ) {
+				continue;
+			}
+			$display[] = $rule;
+		}
+		return self::pick_winner( $display );
+	}
+
+	/**
+	 * @param array<string, mixed> $rule Rule.
+	 * @return bool
+	 */
+	private static function rule_has_display_action( array $rule ) {
+		$display_types = array(
+			'title_override',
+			'short_description_override',
+			'description_override',
+			'gallery_override',
+			'badge_override',
+			'product_badge',
+			'product_notice',
+			'product_overlay',
+			'product_visibility',
+			'cta_override',
+			'shipping_notice',
+			'stock_message',
+			'custom_html',
+		);
+		$actions = isset( $rule['actions'] ) && is_array( $rule['actions'] ) ? $rule['actions'] : array();
+		foreach ( $actions as $a ) {
+			if ( is_array( $a ) && isset( $a['type'] ) && in_array( sanitize_key( (string) $a['type'] ), $display_types, true ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Convert unified rule actions to overlay-style overrides map.
+	 *
+	 * @param array<string, mixed>|null $rule Rule.
+	 * @return array<string, mixed>|null
+	 */
+	public static function rule_to_overlay_shape( $rule ) {
+		if ( ! is_array( $rule ) || empty( $rule['actions'] ) ) {
+			return null;
+		}
+		$overrides = array();
+		foreach ( $rule['actions'] as $action ) {
+			if ( ! is_array( $action ) || empty( $action['type'] ) ) {
+				continue;
+			}
+			$type = sanitize_key( (string) $action['type'] );
+			switch ( $type ) {
+				case 'title_override':
+					$overrides['title'] = array( 'enabled' => true, 'value' => $action['value'] ?? '' );
+					break;
+				case 'short_description_override':
+					$overrides['short_description'] = array( 'enabled' => true, 'value' => $action['value'] ?? '' );
+					break;
+				case 'description_override':
+					$overrides['description'] = array( 'enabled' => true, 'value' => $action['value'] ?? '' );
+					break;
+				case 'gallery_override':
+					$overrides['gallery'] = array( 'enabled' => true, 'value' => $action['value'] ?? array() );
+					break;
+				case 'badge_override':
+				case 'product_badge':
+					$overrides['badge'] = array( 'enabled' => true, 'value' => $action['text'] ?? ( $action['value'] ?? '' ) );
+					break;
+				case 'cta_override':
+					$overrides['cta'] = array( 'enabled' => true, 'value' => $action['value'] ?? '' );
+					break;
+				case 'product_overlay':
+					$field = isset( $action['field'] ) ? sanitize_key( (string) $action['field'] ) : 'title';
+					if ( isset( $overrides[ $field ] ) ) {
+						break;
+					}
+					$overrides[ $field ] = array( 'enabled' => true, 'value' => $action['value'] ?? '' );
+					break;
+			}
+		}
+		if ( empty( $overrides ) ) {
+			return null;
+		}
+		return array(
+			'id'        => isset( $rule['id'] ) ? $rule['id'] : 0,
+			'overrides' => $overrides,
+		);
+	}
 }

@@ -85,11 +85,11 @@ class RWGCM_Admin {
 		$steps   = is_array( $steps ) ? $steps : array();
 		$steps[] = array(
 			'id'       => 'geo_commerce',
-			'label'    => __( 'Review Geo Commerce pricing rules', 'reactwoo-geo-commerce' ),
+			'label'    => __( 'Review Geo Commerce rules', 'reactwoo-geo-commerce' ),
 			'done'     => $commerce_done,
 			'url'      => admin_url( 'admin.php?page=rwgcm-dashboard' ),
 			'optional' => true,
-			'hint'     => __( 'Regional pricing and overlays under Commerce.', 'reactwoo-geo-commerce' ),
+			'hint'     => __( 'Rules, pricing actions, and product display under Commerce.', 'reactwoo-geo-commerce' ),
 		);
 		return $steps;
 	}
@@ -128,7 +128,7 @@ class RWGCM_Admin {
 				<div class="rwgc-addon-card__icon" aria-hidden="true"><span class="dashicons dashicons-cart"></span></div>
 				<div class="rwgc-addon-card__heading">
 					<h3><?php esc_html_e( 'Geo Commerce (WooCommerce)', 'reactwoo-geo-commerce' ); ?></h3>
-					<p><?php esc_html_e( 'Manage country-based pricing, cart fees, and geo-attributed WooCommerce behaviour.', 'reactwoo-geo-commerce' ); ?></p>
+					<p><?php esc_html_e( 'Manage country-based rules, cart fees, and geo-attributed WooCommerce behaviour.', 'reactwoo-geo-commerce' ); ?></p>
 				</div>
 			</div>
 			<?php if ( class_exists( 'RWGC_Admin_UI', false ) ) : ?>
@@ -195,13 +195,13 @@ class RWGCM_Admin {
 		}
 
 		$items = array(
-			self::MENU_PARENT        => __( 'Overview', 'reactwoo-geo-commerce' ),
+			self::MENU_PARENT        => __( 'Dashboard', 'reactwoo-geo-commerce' ),
 			'rwgcm-pricing'          => __( 'Rules', 'reactwoo-geo-commerce' ),
+			'rwgcm-products'         => __( 'Products', 'reactwoo-geo-commerce' ),
 			'rwgcm-legacy-pricing'   => __( 'Legacy country rows', 'reactwoo-geo-commerce' ),
-			'rwgcm-product-overlays' => __( 'Product overlays', 'reactwoo-geo-commerce' ),
 			'rwgcm-fees'             => __( 'Cart fees', 'reactwoo-geo-commerce' ),
 			'rwgcm-attribution'      => __( 'Marketing attribution', 'reactwoo-geo-commerce' ),
-			'rwgcm-diagnostics'      => __( 'Diagnostics', 'reactwoo-geo-commerce' ),
+			'rwgcm-diagnostics'      => __( 'Logs', 'reactwoo-geo-commerce' ),
 			'rwgcm-settings'         => __( 'Settings', 'reactwoo-geo-commerce' ),
 			'rwgcm-license'          => __( 'License', 'reactwoo-geo-commerce' ),
 			'rwgcm-help'             => __( 'Help', 'reactwoo-geo-commerce' ),
@@ -396,11 +396,29 @@ class RWGCM_Admin {
 			);
 		}
 
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- screen detection only.
 		$on_rule_edit = false !== strpos( $hook, 'rwgcm-pricing' )
 			&& isset( $_GET['rwgcm_edit'] )
 			&& '' !== (string) wp_unslash( $_GET['rwgcm_edit'] );
-		if ( $on_rule_edit && class_exists( 'RWGC_Targeting_Rule_Builder_Assets', false ) ) {
+		if ( $on_rule_edit ) {
+			wp_enqueue_script(
+				'rwgcm-condition-builder',
+				RWGCM_URL . 'admin/js/rwgcm-condition-builder.js',
+				array(),
+				RWGCM_VERSION,
+				true
+			);
+			wp_enqueue_script(
+				'rwgcm-rule-builder',
+				RWGCM_URL . 'admin/js/rwgcm-rule-builder.js',
+				array( 'rwgcm-condition-builder' ),
+				RWGCM_VERSION,
+				true
+			);
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- screen detection only.
+		$on_rule_edit_portable = $on_rule_edit;
+		if ( $on_rule_edit_portable && class_exists( 'RWGC_Targeting_Rule_Builder_Assets', false ) ) {
 			RWGC_Targeting_Rule_Builder_Assets::enqueue_admin();
 			wp_add_inline_script(
 				RWGC_Targeting_Rule_Builder_Assets::SCRIPT_HANDLE,
@@ -418,7 +436,7 @@ class RWGCM_Admin {
 			array(
 				'menu_slug' => self::MENU_PARENT,
 				'route'     => 'overview',
-				'label'     => __( 'Overview', 'reactwoo-geo-commerce' ),
+				'label'     => __( 'Dashboard', 'reactwoo-geo-commerce' ),
 				'order'     => 10,
 				'is_section_nav' => false,
 				'callback'  => array( __CLASS__, 'render_dashboard' ),
@@ -426,29 +444,37 @@ class RWGCM_Admin {
 			array(
 				'menu_slug' => 'rwgcm-pricing',
 				'route'     => 'pricing',
-				'label'     => __( 'Pricing rules', 'reactwoo-geo-commerce' ),
+				'label'     => __( 'Rules', 'reactwoo-geo-commerce' ),
 				'order'     => 20,
 				'callback'  => array( 'RWGCM_Admin_Rules', 'render' ),
+			),
+			array(
+				'menu_slug' => 'rwgcm-products',
+				'route'     => 'products',
+				'label'     => __( 'Products', 'reactwoo-geo-commerce' ),
+				'order'     => 25,
+				'callback'  => array( __CLASS__, 'render_products' ),
 			),
 			array(
 				'menu_slug' => 'rwgcm-legacy-pricing',
 				'route'     => 'legacy-pricing',
 				'label'     => __( 'Legacy country rows', 'reactwoo-geo-commerce' ),
-				'order'     => 25,
+				'order'     => 26,
 				'is_section_nav' => false,
 				'callback'  => array( 'RWGCM_Admin_Pricing', 'render' ),
 			),
 			array(
 				'menu_slug' => 'rwgcm-product-overlays',
-				'route'     => 'products',
-				'label'     => __( 'Product overlays', 'reactwoo-geo-commerce' ),
-				'order'     => 30,
+				'route'     => 'legacy-overlays',
+				'label'     => __( 'Legacy product overlays', 'reactwoo-geo-commerce' ),
+				'order'     => 27,
+				'is_section_nav' => false,
 				'callback'  => array( __CLASS__, 'render_product_overlays' ),
 			),
 			array(
 				'menu_slug' => 'rwgcm-fees',
 				'route'     => 'offers',
-				'label'     => __( 'Offers', 'reactwoo-geo-commerce' ),
+				'label'     => __( 'Cart fees', 'reactwoo-geo-commerce' ),
 				'order'     => 40,
 				'callback'  => array( 'RWGCM_Admin_Fees', 'render' ),
 			),
@@ -478,7 +504,7 @@ class RWGCM_Admin {
 				'menu_slug' => 'rwgcm-diagnostics',
 				'section'   => 'settings',
 				'route'     => 'commerce-diagnostics',
-				'label'     => __( 'Diagnostics', 'reactwoo-geo-commerce' ),
+				'label'     => __( 'Logs', 'reactwoo-geo-commerce' ),
 				'order'     => 60,
 				'callback'  => array( __CLASS__, 'render_diagnostics' ),
 			),
@@ -583,6 +609,28 @@ class RWGCM_Admin {
 		}
 		$rwgc_nav_current = 'rwgcm-availability';
 		include RWGCM_PATH . 'admin/views/commerce-availability.php';
+	}
+
+	/**
+	 * Product-scoped rule assignments (Rules with product scope).
+	 *
+	 * @return void
+	 */
+	public static function render_products() {
+		if ( ! self::can_manage() ) {
+			return;
+		}
+		$product_rules = array();
+		if ( class_exists( 'RWGCM_Rule_Store', false ) && RWGCM_DB::rules_table_exists() ) {
+			foreach ( RWGCM_Rule_Store::get_all_rules() as $rule ) {
+				if ( ! is_array( $rule ) || empty( $rule['scope']['type'] ) || 'product' !== $rule['scope']['type'] ) {
+					continue;
+				}
+				$product_rules[] = $rule;
+			}
+		}
+		$rwgc_nav_current = 'rwgcm-products';
+		include RWGCM_PATH . 'admin/views/products-rule-assignments.php';
 	}
 
 	/**

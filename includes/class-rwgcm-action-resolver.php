@@ -30,7 +30,33 @@ class RWGCM_Action_Resolver {
 			'description_override',
 			'gallery_override',
 			'badge_override',
+			'product_badge',
+			'product_notice',
+			'product_overlay',
+			'product_visibility',
 			'cta_override',
+			'shipping_notice',
+			'stock_message',
+			'custom_html',
+		);
+	}
+
+	/**
+	 * Action types shown in the unified rule builder.
+	 *
+	 * @return array<string, string> slug => label
+	 */
+	public static function builder_action_options() {
+		return array(
+			'price_adjustment'   => __( 'Price adjustment', 'reactwoo-geo-commerce' ),
+			'product_badge'      => __( 'Product badge', 'reactwoo-geo-commerce' ),
+			'product_notice'     => __( 'Product notice', 'reactwoo-geo-commerce' ),
+			'product_overlay'    => __( 'Product overlay', 'reactwoo-geo-commerce' ),
+			'product_visibility' => __( 'Product visibility', 'reactwoo-geo-commerce' ),
+			'cta_override'       => __( 'CTA / button change', 'reactwoo-geo-commerce' ),
+			'shipping_notice'    => __( 'Shipping notice', 'reactwoo-geo-commerce' ),
+			'stock_message'      => __( 'Stock message', 'reactwoo-geo-commerce' ),
+			'custom_html'        => __( 'Custom HTML', 'reactwoo-geo-commerce' ),
 		);
 	}
 
@@ -87,6 +113,40 @@ class RWGCM_Action_Resolver {
 					'type'    => $type,
 					'enabled' => ! empty( $action['enabled'] ),
 					'value'   => isset( $action['value'] ) ? $action['value'] : null,
+				);
+			case 'product_badge':
+				return array(
+					'type'  => 'product_badge',
+					'text'  => isset( $action['text'] ) ? sanitize_text_field( (string) $action['text'] ) : '',
+					'style' => isset( $action['style'] ) ? sanitize_key( (string) $action['style'] ) : 'default',
+				);
+			case 'product_notice':
+			case 'shipping_notice':
+			case 'stock_message':
+				return array(
+					'type' => $type,
+					'text' => isset( $action['text'] ) ? sanitize_text_field( (string) $action['text'] ) : '',
+				);
+			case 'product_overlay':
+				return array(
+					'type'    => 'product_overlay',
+					'field'   => isset( $action['field'] ) ? sanitize_key( (string) $action['field'] ) : 'title',
+					'enabled' => ! empty( $action['enabled'] ),
+					'value'   => isset( $action['value'] ) ? $action['value'] : '',
+				);
+			case 'product_visibility':
+				$mode = isset( $action['mode'] ) ? sanitize_key( (string) $action['mode'] ) : 'show';
+				if ( ! in_array( $mode, array( 'show', 'hide' ), true ) ) {
+					$mode = 'show';
+				}
+				return array(
+					'type' => 'product_visibility',
+					'mode' => $mode,
+				);
+			case 'custom_html':
+				return array(
+					'type'  => 'custom_html',
+					'value' => isset( $action['value'] ) ? wp_kses_post( (string) $action['value'] ) : '',
 				);
 			default:
 				return null;

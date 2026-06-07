@@ -20,6 +20,11 @@ $new_url          = admin_url( 'admin.php?page=rwgcm-product-overlays&rwgcm_over
 
 	<?php RWGCM_Admin::render_inner_nav( $rwgc_nav_current ); ?>
 
+	<div class="notice notice-warning"><p>
+		<?php esc_html_e( 'Product overlays are deprecated as a standalone concept. Use Rules with display actions (badges, notices, overlays) instead. Legacy overlay records remain functional.', 'reactwoo-geo-commerce' ); ?>
+		<a href="<?php echo esc_url( admin_url( 'admin.php?page=rwgcm-pricing&rwgcm_edit=new' ) ); ?>"><?php esc_html_e( 'Add rule', 'reactwoo-geo-commerce' ); ?></a>
+	</p></div>
+
 	<?php if ( isset( $_GET['updated'] ) && '1' === $_GET['updated'] ) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>
 		<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Overlay saved.', 'reactwoo-geo-commerce' ); ?></p></div>
 	<?php elseif ( isset( $_GET['updated'] ) && '0' === $_GET['updated'] ) : ?>

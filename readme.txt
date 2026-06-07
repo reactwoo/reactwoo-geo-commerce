@@ -4,9 +4,9 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.3.15
+Stable tag: 0.3.16
 
-WooCommerce overlays and pricing rules on ReactWoo Geo Core.
+WooCommerce rules and personalization on ReactWoo Geo Core.
 
 == Description ==
 
@@ -18,6 +18,11 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 2. Activate this plugin.
 
 == Changelog ==
+
+= 0.3.16 =
+* **Rules UX:** Unified Pricing Rules and Product Overlays under a shared Rules model with guided condition builder, multi-action rule builder, and human-readable summaries.
+* **Admin IA:** Primary nav uses Rules; Products screen for rule assignments; legacy overlays/pricing deprecated with migration.
+* **Runtime:** Unified display rules apply through rule evaluator with legacy overlay fallback.
 
 = 0.3.15 =
 * **i18n (WP 6.7):** Defer legacy pricing migration (which builds a translated label) from `plugins_loaded` boot to `init`, fixing `_load_textdomain_just_in_time` notices for the `reactwoo-geo-commerce` domain.

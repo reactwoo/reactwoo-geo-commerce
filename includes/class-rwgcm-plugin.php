@@ -52,6 +52,8 @@ class RWGCM_Plugin {
 		require_once RWGCM_PATH . 'includes/class-rwgcm-db.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-action-resolver.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-rule-sanitizer.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-condition-library.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-rule-summary.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-condition-evaluator.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-targeting-adapter.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-rule-evaluator.php';
@@ -71,7 +73,7 @@ class RWGCM_Plugin {
 
 		require_once RWGCM_PATH . 'includes/class-rwgcm-pricing-rules.php';
 		// Migration builds a translated label; defer to `init` to avoid WP 6.7 early-textdomain notices.
-		add_action( 'init', array( 'RWGCM_Rule_Migration', 'maybe_migrate_legacy_pricing' ), 1 );
+		add_action( 'init', array( 'RWGCM_Rule_Migration', 'maybe_migrate_all' ), 1 );
 		require_once RWGCM_PATH . 'includes/class-rwgcm-pricing-calc.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-pricing-apply.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-catalog-price.php';

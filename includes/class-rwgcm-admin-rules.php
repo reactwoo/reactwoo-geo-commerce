@@ -1,6 +1,6 @@
 <?php
 /**
- * Generic rules admin (Geo Core targets + custom table).
+ * Admin CRUD for generic commerce rules (unified Rules model).
  *
  * @package ReactWoo_Geo_Commerce
  */
@@ -92,8 +92,11 @@ class RWGCM_Admin_Rules {
 		$priority = isset( $_POST['rwgcm_rule_priority'] ) ? absint( wp_unslash( $_POST['rwgcm_rule_priority'] ) ) : 100;
 
 		$scope_type = isset( $_POST['rwgcm_scope_type'] ) ? sanitize_key( wp_unslash( (string) $_POST['rwgcm_scope_type'] ) ) : 'global';
-		if ( ! in_array( $scope_type, array( 'global', 'product_category', 'product', 'cart' ), true ) ) {
+		if ( ! in_array( $scope_type, array( 'global', 'product_category', 'product', 'cart', 'checkout', 'site' ), true ) ) {
 			$scope_type = 'global';
+		}
+		if ( 'checkout' === $scope_type || 'site' === $scope_type ) {
+			$scope_type = 'cart';
 		}
 
 		$scope_ids = array();
@@ -115,37 +118,23 @@ class RWGCM_Admin_Rules {
 			$match = 'all';
 		}
 
-		$items = array();
-		if ( isset( $_POST['rwgcm_cond_target'] ) && is_array( $_POST['rwgcm_cond_target'] ) ) {
-			$targets   = wp_unslash( $_POST['rwgcm_cond_target'] );
-			$operators = isset( $_POST['rwgcm_cond_operator'] ) && is_array( $_POST['rwgcm_cond_operator'] ) ? wp_unslash( $_POST['rwgcm_cond_operator'] ) : array();
-			$values    = isset( $_POST['rwgcm_cond_value'] ) && is_array( $_POST['rwgcm_cond_value'] ) ? wp_unslash( $_POST['rwgcm_cond_value'] ) : array();
-			foreach ( $targets as $i => $target_raw ) {
-				$target = sanitize_key( (string) $target_raw );
-				if ( '' === $target ) {
-					continue;
-				}
-				$op = isset( $operators[ $i ] ) ? sanitize_key( (string) $operators[ $i ] ) : 'is';
-				$val = isset( $values[ $i ] ) ? sanitize_text_field( (string) $values[ $i ] ) : '';
-				$items[] = array(
-					'target'   => $target,
-					'operator' => $op,
-					'value'    => $val,
-				);
-			}
-		}
+		$items = self::conditions_from_post();
 
-		$mode = isset( $_POST['rwgcm_pa_mode'] ) ? sanitize_key( wp_unslash( (string) $_POST['rwgcm_pa_mode'] ) ) : 'percent';
-		if ( ! in_array( $mode, array( 'percent', 'fixed_line' ), true ) ) {
-			$mode = 'percent';
-		}
-		$pav = isset( $_POST['rwgcm_pa_value'] ) ? floatval( wp_unslash( $_POST['rwgcm_pa_value'] ) ) : 0.0;
+		$actions = self::actions_from_post();
 
 		$use_portable = ! empty( $_POST['rwgcm_use_portable_targeting'] );
 		$portable_raw = '';
 		if ( isset( $_POST['rwgcm_portable_targeting'] ) ) {
 			$portable_raw = wp_unslash( (string) $_POST['rwgcm_portable_targeting'] );
 			$portable_raw = wp_check_invalid_utf8( $portable_raw, true );
+		}
+
+		$existing_meta = array();
+		if ( $id > 0 ) {
+			$existing = RWGCM_Rule_Store::get_rule( $id );
+			if ( is_array( $existing ) && ! empty( $existing['meta'] ) && is_array( $existing['meta'] ) ) {
+				$existing_meta = $existing['meta'];
+			}
 		}
 
 		$rule = array(
@@ -161,22 +150,128 @@ class RWGCM_Admin_Rules {
 				'match' => $match,
 				'items' => $items,
 			),
-			'actions'    => array(
+			'actions'    => $actions,
+			'meta'       => array_merge(
+				$existing_meta,
 				array(
-					'type'  => 'price_adjustment',
-					'mode'  => $mode,
-					'value' => $pav,
-				),
-			),
-			'meta'       => array(
-				'source'                  => 'admin_generic_rules',
-				'use_portable_targeting'  => $use_portable,
-				'portable_targeting'      => $portable_raw,
+					'source'                 => 'admin_generic_rules',
+					'use_portable_targeting' => $use_portable,
+					'portable_targeting'     => $portable_raw,
+				)
 			),
 		);
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		return $rule;
+	}
+
+	/**
+	 * @return list<array<string, mixed>>
+	 */
+	private static function conditions_from_post() {
+		$items = array();
+		if ( ! isset( $_POST['rwgcm_cond_field'] ) || ! is_array( $_POST['rwgcm_cond_field'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			return $items;
+		}
+
+		$fields    = wp_unslash( $_POST['rwgcm_cond_field'] ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		$operators = isset( $_POST['rwgcm_cond_operator'] ) && is_array( $_POST['rwgcm_cond_operator'] ) ? wp_unslash( $_POST['rwgcm_cond_operator'] ) : array(); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		$values    = isset( $_POST['rwgcm_cond_value'] ) && is_array( $_POST['rwgcm_cond_value'] ) ? wp_unslash( $_POST['rwgcm_cond_value'] ) : array(); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		$labels    = isset( $_POST['rwgcm_cond_label'] ) && is_array( $_POST['rwgcm_cond_label'] ) ? wp_unslash( $_POST['rwgcm_cond_label'] ) : array(); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+
+		foreach ( $fields as $i => $field_raw ) {
+			$field_id = sanitize_key( (string) $field_raw );
+			if ( '' === $field_id ) {
+				continue;
+			}
+			$def = RWGCM_Condition_Library::get_field_by_key( $field_id );
+			if ( null === $def || empty( $def['target'] ) ) {
+				continue;
+			}
+			$op = isset( $operators[ $i ] ) ? sanitize_key( (string) $operators[ $i ] ) : 'is';
+			$val = isset( $values[ $i ] ) ? sanitize_text_field( (string) $values[ $i ] ) : '';
+			if ( '' === $val ) {
+				continue;
+			}
+			$row = array(
+				'field'    => $field_id,
+				'target'   => sanitize_key( (string) $def['target'] ),
+				'operator' => $op,
+				'value'    => $val,
+			);
+			$label = isset( $labels[ $i ] ) ? sanitize_text_field( (string) $labels[ $i ] ) : '';
+			if ( '' === $label ) {
+				$label = RWGCM_Condition_Library::resolve_value_label( $row );
+			}
+			if ( '' !== $label ) {
+				$row['label'] = $label;
+			}
+			$items[] = $row;
+		}
+
+		return $items;
+	}
+
+	/**
+	 * @return list<array<string, mixed>>
+	 */
+	private static function actions_from_post() {
+		$actions = array();
+		if ( ! isset( $_POST['rwgcm_action_type'] ) || ! is_array( $_POST['rwgcm_action_type'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			return $actions;
+		}
+
+		$types = wp_unslash( $_POST['rwgcm_action_type'] ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		foreach ( $types as $i => $type_raw ) {
+			$type = sanitize_key( (string) $type_raw );
+			if ( '' === $type ) {
+				continue;
+			}
+			$action = array( 'type' => $type );
+			switch ( $type ) {
+				case 'price_adjustment':
+					$mode = isset( $_POST['rwgcm_action_pa_mode'][ $i ] ) ? sanitize_key( wp_unslash( (string) $_POST['rwgcm_action_pa_mode'][ $i ] ) ) : 'percent'; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+					if ( ! in_array( $mode, array( 'percent', 'fixed_line' ), true ) ) {
+						$mode = 'percent';
+					}
+					$action['mode']  = $mode;
+					$action['value'] = isset( $_POST['rwgcm_action_pa_value'][ $i ] ) ? floatval( wp_unslash( $_POST['rwgcm_action_pa_value'][ $i ] ) ) : 0.0; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+					break;
+				case 'product_badge':
+				case 'product_notice':
+				case 'shipping_notice':
+				case 'stock_message':
+					$action['text'] = isset( $_POST['rwgcm_action_text'][ $i ] ) ? sanitize_text_field( wp_unslash( (string) $_POST['rwgcm_action_text'][ $i ] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+					if ( 'product_badge' === $type ) {
+						$action['style'] = isset( $_POST['rwgcm_action_badge_style'][ $i ] ) ? sanitize_key( wp_unslash( (string) $_POST['rwgcm_action_badge_style'][ $i ] ) ) : 'default'; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+					}
+					break;
+				case 'product_overlay':
+					$action['field']   = isset( $_POST['rwgcm_action_overlay_field'][ $i ] ) ? sanitize_key( wp_unslash( (string) $_POST['rwgcm_action_overlay_field'][ $i ] ) ) : 'title'; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+					$action['enabled'] = true;
+					$action['value']   = isset( $_POST['rwgcm_action_overlay_value'][ $i ] ) ? wp_kses_post( wp_unslash( (string) $_POST['rwgcm_action_overlay_value'][ $i ] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+					break;
+				case 'product_visibility':
+					$mode = isset( $_POST['rwgcm_action_visibility_mode'][ $i ] ) ? sanitize_key( wp_unslash( (string) $_POST['rwgcm_action_visibility_mode'][ $i ] ) ) : 'show'; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+					$action['mode'] = in_array( $mode, array( 'show', 'hide' ), true ) ? $mode : 'show';
+					break;
+				case 'cta_override':
+					$action['enabled'] = true;
+					$action['value']   = isset( $_POST['rwgcm_action_cta_value'][ $i ] ) ? wp_kses_post( wp_unslash( (string) $_POST['rwgcm_action_cta_value'][ $i ] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+					break;
+				case 'custom_html':
+					$action['value'] = isset( $_POST['rwgcm_action_html_value'][ $i ] ) ? wp_kses_post( wp_unslash( (string) $_POST['rwgcm_action_html_value'][ $i ] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+					break;
+				default:
+					continue 2;
+			}
+			$sanitized = RWGCM_Action_Resolver::sanitize_action( $type, $action );
+			if ( is_array( $sanitized ) ) {
+				$actions[] = $sanitized;
+			}
+		}
+
+		return $actions;
 	}
 
 	/**
@@ -236,11 +331,11 @@ class RWGCM_Admin_Rules {
 			$wc_cats = array();
 		}
 
-		if ( class_exists( 'RWGC_Target_Registry', false ) ) {
-			RWGC_Target_Registry::init();
-		}
-		$target_defs = function_exists( 'rwgc_get_target_types' ) ? rwgc_get_target_types() : array();
-		$operators   = class_exists( 'RWGC_Target_Operators', false ) ? RWGC_Target_Operators::all() : array( 'is', 'is_not', 'in', 'not_in', 'contains', 'not_contains' );
+		$condition_fields = RWGCM_Condition_Library::get_fields();
+		$condition_groups = RWGCM_Condition_Library::get_groups();
+		$operator_labels  = RWGCM_Condition_Library::get_operator_labels();
+		$value_sources    = RWGCM_Condition_Library::get_value_sources();
+		$action_options   = RWGCM_Action_Resolver::builder_action_options();
 
 		$rwgc_nav_current = 'rwgcm-pricing';
 		include RWGCM_PATH . 'admin/views/rules-generic-edit.php';
@@ -251,6 +346,46 @@ class RWGCM_Admin_Rules {
 	 */
 	private static function render_list() {
 		$rules            = RWGCM_Rule_Store::get_all_rules();
+		$filter           = isset( $_GET['rwgcm_filter'] ) ? sanitize_key( wp_unslash( (string) $_GET['rwgcm_filter'] ) ) : 'all'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( 'pricing' === $filter ) {
+			$rules = array_values(
+				array_filter(
+					$rules,
+					static function ( $rule ) {
+						if ( ! is_array( $rule ) || empty( $rule['actions'] ) ) {
+							return false;
+						}
+						foreach ( $rule['actions'] as $action ) {
+							if ( is_array( $action ) && isset( $action['type'] ) && 'price_adjustment' === $action['type'] ) {
+								return true;
+							}
+						}
+						return false;
+					}
+				)
+			);
+		} elseif ( 'display' === $filter ) {
+			$rules = array_values(
+				array_filter(
+					$rules,
+					static function ( $rule ) {
+						if ( ! is_array( $rule ) || empty( $rule['actions'] ) ) {
+							return false;
+						}
+						foreach ( $rule['actions'] as $action ) {
+							if ( ! is_array( $action ) || empty( $action['type'] ) ) {
+								continue;
+							}
+							$type = sanitize_key( (string) $action['type'] );
+							if ( 'price_adjustment' !== $type && 'cart_fee' !== $type ) {
+								return true;
+							}
+						}
+						return false;
+					}
+				)
+			);
+		}
 		$rwgc_nav_current = 'rwgcm-pricing';
 		include RWGCM_PATH . 'admin/views/rules-generic-list.php';
 	}

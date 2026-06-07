@@ -26,7 +26,7 @@ class RWGCM_Product_Display_Apply {
 		if ( is_admin() && ! wp_doing_ajax() ) {
 			return;
 		}
-		if ( ! RWGCM_DB::overlays_table_exists() ) {
+		if ( ! RWGCM_DB::overlays_table_exists() && ! RWGCM_DB::rules_table_exists() ) {
 			do_action( 'rwgcm_product_display_apply_init' );
 			return;
 		}
@@ -74,7 +74,17 @@ class RWGCM_Product_Display_Apply {
 			return null;
 		}
 		$ctx = rwgc_get_context_snapshot();
-		$ov  = RWGCM_Product_Overlay_Resolver::resolve( $cid, is_array( $ctx ) ? $ctx : array() );
+		$ctx = is_array( $ctx ) ? $ctx : array();
+
+		$ov = null;
+		if ( class_exists( 'RWGCM_Rule_Evaluator', false ) && is_a( $product, 'WC_Product' ) ) {
+			$display_rule = RWGCM_Rule_Evaluator::get_winning_display_rule( $product, $ctx );
+			$ov           = RWGCM_Rule_Evaluator::rule_to_overlay_shape( $display_rule );
+		}
+		if ( null === $ov ) {
+			$ov = RWGCM_Product_Overlay_Resolver::resolve( $cid, $ctx );
+		}
+
 		self::$overlay_cache[ $cid ] = $ov;
 		return $ov;
 	}

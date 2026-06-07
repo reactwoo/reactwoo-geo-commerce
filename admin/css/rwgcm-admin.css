@@ -182,3 +182,56 @@
   /* Optional: tie neutral borders to suite tokens when loaded */
   --rwgcm-suite-border: var(--rw-suite-border, #e5e7eb);
 }
+
+.rwgcm-rule-step {
+  border: 1px solid var(--rwgcm-suite-border, #e5e7eb);
+  border-radius: 10px;
+  padding: 16px 18px 8px;
+  margin-bottom: 18px;
+  background: #fff;
+}
+
+.rwgcm-rule-step h2 {
+  margin-top: 0;
+  font-size: 16px;
+}
+
+.rwgcm-rule-summary-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.rwgcm-rules-filter-nav {
+  display: flex;
+  gap: 12px;
+  margin: 12px 0 16px;
+}
+
+.rwgcm-rules-filter-nav a {
+  text-decoration: none;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+.rwgcm-rules-filter-nav a.is-active {
+  background: #059669;
+  border-color: #059669;
+  color: #fff;
+}
+
+.rwgcm-actions-list .rwgcm-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 0;
+  border-bottom: 1px dashed #e2e8f0;
+}
+
+.rwgcm-rule-summary-cell {
+  max-width: 360px;
+}
