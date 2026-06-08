@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.3.16
+Stable tag: 0.3.17
 
 WooCommerce rules and personalization on ReactWoo Geo Core.
 
@@ -18,6 +18,9 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 2. Activate this plugin.
 
 == Changelog ==
+
+= 0.3.17 =
+* **Geo AI snapshot:** Append `geo_commerce` rule metadata and commerce_rule→product relationships to Geo Core site intelligence snapshots (no order PII or prices).
 
 = 0.3.16 =
 * **Rules UX:** Unified Pricing Rules and Product Overlays under a shared Rules model with guided condition builder, multi-action rule builder, and human-readable summaries.
