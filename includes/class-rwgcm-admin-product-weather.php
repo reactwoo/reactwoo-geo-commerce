@@ -189,7 +189,7 @@ class RWGCM_Admin_Product_Weather {
 
 		wp_add_inline_script(
 			'jquery',
-			"(function($){$('#rwgcm-apply-category-weather').on('click',function(){var raw=$(this).data('facets')||'';raw.toString().split(',').forEach(function(slug){slug=$.trim(slug);if(!slug){return;}$('#rwgcm_weather_facet_'+slug).prop('checked',true).trigger('change');});});})(jQuery);"
+			'(function($){$(\'#rwgcm-apply-category-weather\').on(\'click\',function(){var raw=$(this).data(\'facets\')||\'\';raw.toString().split(\',\').forEach(function(slug){slug=$.trim(slug);if(!slug){return;}$("#rwgcm_weather_facet_"+slug).prop(\'checked\',true).trigger(\'change\');});});})(jQuery);'
 		);
 	}
 }
