@@ -216,7 +216,15 @@ class RWGCM_Catalog_Weather_Boost {
 				$unmatched[] = $post;
 				continue;
 			}
-			$score = RWGCM_Weather_Affinity::overlap_score( (int) $post->ID, self::snapshot() );
+			$product_id = (int) $post->ID;
+			if ( class_exists( 'RWGC_Product_Meta', false ) ) {
+				$boost_mode = RWGC_Product_Meta::get_boost_enabled( $product_id );
+				if ( RWGC_Product_Meta::BOOST_NO === $boost_mode ) {
+					$unmatched[] = $post;
+					continue;
+				}
+			}
+			$score = RWGCM_Weather_Affinity::overlap_score( $product_id, self::snapshot() );
 			if ( $score > 0 ) {
 				$matched[] = array(
 					'post'  => $post,

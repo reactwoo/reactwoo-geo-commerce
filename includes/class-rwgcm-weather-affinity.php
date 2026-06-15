@@ -100,6 +100,12 @@ class RWGCM_Weather_Affinity {
 			return array();
 		}
 		$raw = get_post_meta( $pid, self::META_KEY, true );
+		if ( ( '' === $raw || ( is_array( $raw ) && empty( $raw ) ) ) && class_exists( 'RWGC_Product_Meta', false ) ) {
+			$alt = get_post_meta( $pid, RWGC_Product_Meta::META_WEATHER_TAGS, true );
+			if ( ! empty( $alt ) ) {
+				$raw = $alt;
+			}
+		}
 		if ( is_string( $raw ) && '' !== $raw ) {
 			$decoded = json_decode( $raw, true );
 			if ( is_array( $decoded ) ) {
