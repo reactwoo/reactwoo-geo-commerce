@@ -1,0 +1,62 @@
+{
+  "apiVersion": 3,
+  "name": "rwgcm/weather-products",
+  "title": "Weather Products",
+  "category": "woocommerce",
+  "icon": "cloud",
+  "description": "Show WooCommerce products that match the visitor's shopping weather.",
+  "keywords": ["weather", "products", "woocommerce", "reactwoo"],
+  "textdomain": "reactwoo-geo-commerce",
+  "supports": {
+    "html": false,
+    "align": ["wide", "full"]
+  },
+  "attributes": {
+    "title": {
+      "type": "string",
+      "default": ""
+    },
+    "limit": {
+      "type": "number",
+      "default": 8
+    },
+    "columns": {
+      "type": "number",
+      "default": 4
+    },
+    "category": {
+      "type": "string",
+      "default": ""
+    },
+    "ids": {
+      "type": "string",
+      "default": ""
+    },
+    "orderby": {
+      "type": "string",
+      "default": "relevance"
+    },
+    "fallback": {
+      "type": "string",
+      "default": "hide"
+    },
+    "fallback_category": {
+      "type": "string",
+      "default": ""
+    },
+    "fallback_message": {
+      "type": "string",
+      "default": ""
+    },
+    "weather_unavailable": {
+      "type": "string",
+      "default": "hide"
+    },
+    "className": {
+      "type": "string",
+      "default": ""
+    }
+  },
+  "editorScript": "rwgcm-weather-products-editor",
+  "style": "rwgcm-weather-products"
+}

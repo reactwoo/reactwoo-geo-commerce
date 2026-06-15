@@ -1,0 +1,43 @@
+.rwgcm-weather-strip {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 12px;
+	margin: 0 0 1em;
+	padding: 10px 14px;
+	border-radius: 6px;
+	background: rgba(0, 0, 0, 0.04);
+	font-size: 0.95rem;
+}
+
+.rwgcm-weather-strip__label {
+	font-weight: 600;
+}
+
+.rwgcm-weather-strip__facets {
+	display: inline-flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.rwgcm-weather-strip__facet {
+	display: inline-block;
+	padding: 2px 10px;
+	border-radius: 999px;
+	background: #fff;
+	border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.rwgcm-weather-strip--empty {
+	opacity: 0.75;
+}
+
+.rwgcm-weather-strip__link {
+	display: block;
+	text-decoration: none;
+	color: inherit;
+}
+
+.rwgcm-weather-strip__link:hover .rwgcm-weather-strip {
+	background: rgba(0, 0, 0, 0.06);
+}

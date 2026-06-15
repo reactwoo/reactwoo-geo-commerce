@@ -69,6 +69,16 @@ class RWGCM_Plugin {
 		require_once RWGCM_PATH . 'includes/class-rwgcm-product-display-apply.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-action-applier.php';
 
+		require_once RWGCM_PATH . 'includes/class-rwgcm-weather-affinity.php';
+		if ( is_admin() ) {
+			require_once RWGCM_PATH . 'includes/class-rwgcm-admin-product-weather.php';
+			require_once RWGCM_PATH . 'includes/class-rwgcm-admin-products-weather.php';
+			require_once RWGCM_PATH . 'includes/class-rwgcm-category-weather.php';
+			RWGCM_Admin_Product_Weather::init();
+			RWGCM_Admin_Products_Weather::init();
+			RWGCM_Category_Weather::init();
+		}
+
 		if ( get_option( RWGCM_DB::VERSION_OPTION, '' ) !== RWGCM_DB::SCHEMA_VERSION ) {
 			RWGCM_DB::install();
 		}
@@ -116,12 +126,48 @@ class RWGCM_Plugin {
 		RWGCM_Admin_Fees::init();
 		RWGCM_Admin_Overlays::init();
 
+		require_once RWGCM_PATH . 'includes/class-rwgcm-weather-product-query.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-weather-products-display.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-weather-products-shortcode.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-gutenberg.php';
+		RWGCM_Weather_Products_Display::init();
+		RWGCM_Weather_Products_Shortcode::init();
+		RWGCM_Gutenberg::init();
+		require_once RWGCM_PATH . 'includes/class-rwgcm-catalog-weather-boost.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-weather-strip.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-weather-csv.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-weather-tagging.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-weather-product-badge.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-weather-facet-filter.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-weather-store-bridge.php';
+		RWGCM_Catalog_Weather_Boost::init();
+		RWGCM_Weather_Strip::init();
+		RWGCM_Weather_Csv::init();
+		RWGCM_Weather_Product_Badge::init();
+		RWGCM_Weather_Facet_Filter::init();
+		RWGCM_Weather_Store_Bridge::init();
+		if ( is_admin() ) {
+			RWGCM_Weather_Tagging::init();
+		}
+		add_action( 'elementor/loaded', array( __CLASS__, 'boot_elementor' ) );
+
 		add_action( 'init', array( __CLASS__, 'register_satellite_updater' ), 1 );
 
 		/**
 		 * Fires when Geo Commerce is ready (Geo Core + WooCommerce active).
 		 */
 		do_action( 'rwgcm_loaded' );
+	}
+
+	/**
+	 * @return void
+	 */
+	public static function boot_elementor() {
+		if ( ! did_action( 'elementor/loaded' ) ) {
+			return;
+		}
+		require_once RWGCM_PATH . 'includes/integrations/elementor/class-rwgcm-elementor.php';
+		RWGCM_Elementor::init();
 	}
 
 	/**

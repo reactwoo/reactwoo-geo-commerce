@@ -100,10 +100,17 @@ class RWGCM_Targeting_Adapter {
 			if ( class_exists( 'RWGC_Target_Operators', false ) && ! RWGC_Target_Operators::is_valid( $op ) ) {
 				$op = 'in';
 			}
+			$value = isset( $it['value'] ) ? $it['value'] : null;
+			if ( 'weather_facet' === $type && class_exists( 'RWGCM_Weather_Affinity', false ) ) {
+				$value = RWGCM_Weather_Affinity::sanitize_facet_list( $value );
+				if ( empty( $value ) ) {
+					continue;
+				}
+			}
 			$conditions[] = array(
 				'type'     => $type,
 				'operator' => $op,
-				'value'    => isset( $it['value'] ) ? $it['value'] : null,
+				'value'    => $value,
 			);
 		}
 

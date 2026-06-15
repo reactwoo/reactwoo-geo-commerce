@@ -22,5 +22,6 @@ Geo Commerce is a **Geo Core satellite** (WooCommerce layer). It is not a standa
 
 ## References
 
+- Weather merchandising (product tags, widgets, catalog boost): `docs/WEATHER-MERCHANDISING.md`; suite plan `reactwoo-geocore/docs/WEATHER-FACETS-MERCHANDISING-PLAN.md`.
 - Geo Core product context: `reactwoo-geocore/docs/geo-core-cursor-master-plan.md`, `docs/phases/phase-7.md`, `docs/releases-and-git-tags.md`.
 - Constants: **`RWGCM_VERSION`** in `reactwoo-geo-commerce.php` must match the shipped release and readme **Stable tag**.

@@ -1,0 +1,22 @@
+.rwgcm-weather-products {
+	margin: 1.5em 0;
+}
+
+.rwgcm-weather-products__title {
+	margin: 0 0 1em;
+	font-size: 1.25rem;
+}
+
+.rwgcm-weather-products__empty {
+	margin: 0;
+	padding: 1em;
+	text-align: center;
+	color: inherit;
+	opacity: 0.85;
+}
+
+.rwgcm-weather-products ul.products {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}

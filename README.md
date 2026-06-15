@@ -42,6 +42,7 @@ Requires **Geo Core** and **WooCommerce**. Does not implement a second geo engin
 
 ### Planned
 
+- **Weather facets merchandising** — product “good for this weather” tags, shop boost, `[rwgcm_weather_products]` / Gutenberg block / Elementor widget; see **`docs/WEATHER-MERCHANDISING.md`** and Geo Core **`docs/WEATHER-FACETS-MERCHANDISING-PLAN.md`**
 - Expanded cart/checkout condition types
 - Deeper HPOS reporting exports
 

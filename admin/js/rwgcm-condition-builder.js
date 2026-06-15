@@ -104,6 +104,51 @@
 			return wrap;
 		}
 
+		if (source && type === 'facet_multi_select') {
+			var selected = String(currentValue || '')
+				.split(',')
+				.map(function (s) { return s.trim(); })
+				.filter(Boolean);
+			var hidden = el('input');
+			hidden.type = 'hidden';
+			hidden.name = 'rwgcm_cond_value[]';
+			hidden.className = 'rwgcm-cond-value-facets';
+			hidden.value = selected.join(',');
+			wrap.appendChild(hidden);
+
+			var facetBox = el('div', 'rwgcm-cond-facet-checkboxes');
+			Object.keys(source).forEach(function (key) {
+				var label = document.createElement('label');
+				label.className = 'rwgcm-cond-facet-option';
+				var cb = document.createElement('input');
+				cb.type = 'checkbox';
+				cb.value = key;
+				cb.checked = selected.indexOf(key) !== -1;
+				cb.addEventListener('change', function () {
+					var picks = [];
+					var labels = [];
+					facetBox.querySelectorAll('input[type="checkbox"]:checked').forEach(function (node) {
+						picks.push(node.value);
+						if (source[node.value]) {
+							labels.push(source[node.value]);
+						}
+					});
+					hidden.value = picks.join(',');
+					hiddenLabel.value = labels.join(', ');
+				});
+				label.appendChild(cb);
+				label.appendChild(document.createTextNode(' ' + source[key]));
+				facetBox.appendChild(label);
+			});
+			if (selected.length && !hiddenLabel.value) {
+				hiddenLabel.value = selected.map(function (slug) {
+					return source[slug] || slug;
+				}).join(', ');
+			}
+			wrap.appendChild(facetBox);
+			return wrap;
+		}
+
 		var input = el('input');
 		input.type = type === 'numeric' ? 'number' : 'text';
 		input.name = 'rwgcm_cond_value[]';

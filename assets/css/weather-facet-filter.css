@@ -1,0 +1,40 @@
+.rwgcm-weather-filter {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 12px;
+	margin: 0 0 1em;
+}
+
+.rwgcm-weather-filter__label {
+	font-weight: 600;
+	font-size: 0.95rem;
+}
+
+.rwgcm-weather-filter__chips {
+	display: inline-flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.rwgcm-weather-filter__chip {
+	display: inline-block;
+	padding: 4px 12px;
+	border-radius: 999px;
+	text-decoration: none;
+	font-size: 0.9rem;
+	background: #fff;
+	border: 1px solid rgba(0, 0, 0, 0.12);
+	color: inherit;
+}
+
+.rwgcm-weather-filter__chip.is-active,
+.rwgcm-weather-filter__chip:hover {
+	border-color: #2271b1;
+	color: #2271b1;
+}
+
+.rwgcm-weather-filter--empty {
+	opacity: 0.75;
+	font-size: 0.9rem;
+}

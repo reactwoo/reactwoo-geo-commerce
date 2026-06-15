@@ -31,6 +31,21 @@ class RWGCM_Diagnostics {
 
 		$use_generic = self::uses_generic_pricing_rules();
 
+		$wx_block = is_array( $context ) && ! empty( $context['weather'] ) && is_array( $context['weather'] ) ? $context['weather'] : array();
+
+		$weather = array(
+			'connected'        => class_exists( 'RWGCM_Condition_Library', false ) ? RWGCM_Condition_Library::is_weather_available() : false,
+			'visitor_facets'   => class_exists( 'RWGCM_Weather_Affinity', false ) ? RWGCM_Weather_Affinity::get_visitor_facets( is_array( $context ) ? $context : null ) : array(),
+			'tagged_products'  => class_exists( 'RWGCM_Weather_Affinity', false ) ? RWGCM_Weather_Affinity::count_tagged_products() : 0,
+			'boost_shop'       => class_exists( 'RWGCM_Settings', false ) ? RWGCM_Settings::get_weather_catalog_boost_mode( 'shop' ) : 'off',
+			'boost_category'   => class_exists( 'RWGCM_Settings', false ) ? RWGCM_Settings::get_weather_catalog_boost_mode( 'category' ) : 'off',
+			'boost_collection' => class_exists( 'RWGCM_Settings', false ) ? RWGCM_Settings::get_weather_catalog_boost_mode( 'collection' ) : 'off',
+			'location_source'  => isset( $wx_block['location_source'] ) ? (string) $wx_block['location_source'] : '',
+			'coordinate_mode'  => class_exists( 'RWGCP_Weather_Service', false ) ? RWGCP_Weather_Service::get_coordinate_mode() : '',
+			'air_quality_epa'  => isset( $wx_block['air_quality_epa'] ) ? $wx_block['air_quality_epa'] : null,
+			'pollen_index_max' => isset( $wx_block['pollen_index_max'] ) ? $wx_block['pollen_index_max'] : null,
+		);
+
 		return array(
 			'context_snapshot'       => $context,
 			'available_target_keys'  => array_keys( $targets ),
@@ -39,6 +54,7 @@ class RWGCM_Diagnostics {
 			'price_adjustment_calc'  => $pa,
 			'generic_rule_count'     => RWGCM_DB::rules_table_exists() ? RWGCM_Rule_Store::count_by_status( 'active' ) : 0,
 			'legacy_pricing_enabled' => class_exists( 'RWGCM_Pricing_Rules', false ) ? RWGCM_Pricing_Rules::is_enabled() : false,
+			'weather_merchandising'  => $weather,
 		);
 	}
 

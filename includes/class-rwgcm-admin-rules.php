@@ -189,9 +189,19 @@ class RWGCM_Admin_Rules {
 				continue;
 			}
 			$op = isset( $operators[ $i ] ) ? sanitize_key( (string) $operators[ $i ] ) : 'is';
-			$val = isset( $values[ $i ] ) ? sanitize_text_field( (string) $values[ $i ] ) : '';
-			if ( '' === $val ) {
-				continue;
+			$val = isset( $values[ $i ] ) ? $values[ $i ] : '';
+			if ( 'facet_multi_select' === ( $def['value_type'] ?? '' ) ) {
+				$val = is_array( $val ) ? $val : ( is_string( $val ) ? explode( ',', $val ) : array() );
+				$val = RWGCM_Weather_Affinity::sanitize_facet_list( $val );
+				if ( empty( $val ) ) {
+					continue;
+				}
+				$val = implode( ',', $val );
+			} else {
+				$val = sanitize_text_field( (string) $val );
+				if ( '' === $val ) {
+					continue;
+				}
 			}
 			$row = array(
 				'field'    => $field_id,
@@ -331,8 +341,8 @@ class RWGCM_Admin_Rules {
 			$wc_cats = array();
 		}
 
-		$condition_fields = RWGCM_Condition_Library::get_fields();
-		$condition_groups = RWGCM_Condition_Library::get_groups();
+		$condition_fields = RWGCM_Condition_Library::get_fields_for_ui();
+		$condition_groups = RWGCM_Condition_Library::get_groups_for_ui();
 		$operator_labels  = RWGCM_Condition_Library::get_operator_labels();
 		$value_sources    = RWGCM_Condition_Library::get_value_sources();
 		$action_options   = RWGCM_Action_Resolver::builder_action_options();

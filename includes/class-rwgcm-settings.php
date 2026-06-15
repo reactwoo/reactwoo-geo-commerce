@@ -292,6 +292,25 @@ class RWGCM_Settings {
 			$out['reactwoo_license_key'] = ( '' !== $new_license ) ? $new_license : $prev_license;
 		}
 
+		if ( 'weather_merchandising' === $scope ) {
+			foreach ( array( 'weather_boost_shop', 'weather_boost_category', 'weather_boost_collection' ) as $key ) {
+				$raw = isset( $settings[ $key ] ) ? sanitize_key( (string) $settings[ $key ] ) : 'boost';
+				$out[ $key ] = in_array( $raw, array( 'off', 'boost', 'filter' ), true ) ? $raw : 'boost';
+			}
+			$out['weather_auto_category_defaults'] = ! empty( $settings['weather_auto_category_defaults'] ) ? 1 : 0;
+			$out['weather_meta_badge']             = ! empty( $settings['weather_meta_badge'] ) ? 1 : 0;
+			$strip_link = isset( $settings['weather_strip_link'] ) ? sanitize_key( (string) $settings['weather_strip_link'] ) : 'none';
+			$out['weather_strip_link'] = in_array( $strip_link, array( 'none', 'shop' ), true ) ? $strip_link : 'none';
+			$custom = isset( $settings['weather_strip_link_custom'] ) ? esc_url_raw( trim( (string) $settings['weather_strip_link_custom'] ) ) : '';
+			$out['weather_strip_link_custom'] = $custom;
+			$badge_text = isset( $settings['weather_meta_badge_text'] ) ? sanitize_text_field( (string) $settings['weather_meta_badge_text'] ) : '';
+			$out['weather_meta_badge_text'] = $badge_text;
+			$lat = isset( $settings['weather_store_lat'] ) ? trim( (string) $settings['weather_store_lat'] ) : '';
+			$lon = isset( $settings['weather_store_lon'] ) ? trim( (string) $settings['weather_store_lon'] ) : '';
+			$out['weather_store_lat'] = is_numeric( $lat ) ? (string) $lat : '';
+			$out['weather_store_lon'] = is_numeric( $lon ) ? (string) $lon : '';
+		}
+
 		return $out;
 	}
 
@@ -300,8 +319,121 @@ class RWGCM_Settings {
 	 */
 	public static function get_defaults() {
 		return array(
-			'reactwoo_api_base'    => 'https://api.reactwoo.com',
-			'reactwoo_license_key' => '',
+			'reactwoo_api_base'       => 'https://api.reactwoo.com',
+			'reactwoo_license_key'    => '',
+			'weather_boost_shop'      => 'boost',
+			'weather_boost_category'  => 'boost',
+			'weather_boost_collection'=> 'boost',
+			'weather_auto_category_defaults' => 0,
+			'weather_meta_badge'      => 1,
+			'weather_meta_badge_text' => '',
+			'weather_strip_link'      => 'none',
+			'weather_strip_link_custom' => '',
+			'weather_store_lat'       => '',
+			'weather_store_lon'       => '',
+		);
+	}
+
+	/**
+	 * Whether to copy category default facets onto products with no weather tags on save.
+	 *
+	 * @return bool
+	 */
+	public static function is_weather_auto_category_defaults_enabled() {
+		$s = self::get_settings();
+		return ! empty( $s['weather_auto_category_defaults'] );
+	}
+
+	/**
+	 * Whether to show meta-driven weather badges on product loops.
+	 *
+	 * @return bool
+	 */
+	public static function is_weather_meta_badge_enabled() {
+		$s = self::get_settings();
+		return ! isset( $s['weather_meta_badge'] ) || ! empty( $s['weather_meta_badge'] );
+	}
+
+	/**
+	 * Optional badge template; use {facets} for matched labels.
+	 *
+	 * @return string
+	 */
+	public static function get_weather_meta_badge_text() {
+		$s = self::get_settings();
+		return isset( $s['weather_meta_badge_text'] ) ? (string) $s['weather_meta_badge_text'] : '';
+	}
+
+	/**
+	 * Default weather strip link mode (none|shop).
+	 *
+	 * @return string
+	 */
+	public static function get_weather_strip_link_mode() {
+		$s = self::get_settings();
+		$mode = isset( $s['weather_strip_link'] ) ? sanitize_key( (string) $s['weather_strip_link'] ) : 'none';
+		return in_array( $mode, array( 'none', 'shop' ), true ) ? $mode : 'none';
+	}
+
+	/**
+	 * Optional custom URL when strip link is a full URL in shortcode/widget.
+	 *
+	 * @return string
+	 */
+	public static function get_weather_strip_link_custom_url() {
+		$s = self::get_settings();
+		$url = isset( $s['weather_strip_link_custom'] ) ? (string) $s['weather_strip_link_custom'] : '';
+		return ( '' !== $url && filter_var( $url, FILTER_VALIDATE_URL ) ) ? esc_url_raw( $url ) : '';
+	}
+
+	/**
+	 * Optional store coordinates for GeoCore Pro weather fallback (when Pro store fields are empty).
+	 *
+	 * @return array{lat: float, lon: float}|null
+	 */
+	public static function get_store_weather_coordinates() {
+		$s   = self::get_settings();
+		$lat = isset( $s['weather_store_lat'] ) ? trim( (string) $s['weather_store_lat'] ) : '';
+		$lon = isset( $s['weather_store_lon'] ) ? trim( (string) $s['weather_store_lon'] ) : '';
+		if ( ! is_numeric( $lat ) || ! is_numeric( $lon ) ) {
+			return null;
+		}
+		return array(
+			'lat' => (float) $lat,
+			'lon' => (float) $lon,
+		);
+	}
+
+	/**
+	 * Catalog boost mode for shop or category archives.
+	 *
+	 * @param string $surface shop|category
+	 * @return string off|boost|filter
+	 */
+	public static function get_weather_catalog_boost_mode( $surface = 'shop' ) {
+		$s     = self::get_settings();
+		$surface = sanitize_key( (string) $surface );
+		if ( 'category' === $surface ) {
+			$key = 'weather_boost_category';
+		} elseif ( 'collection' === $surface ) {
+			$key = 'weather_boost_collection';
+		} else {
+			$key = 'weather_boost_shop';
+		}
+		$mode  = isset( $s[ $key ] ) ? sanitize_key( (string) $s[ $key ] ) : 'boost';
+		return in_array( $mode, array( 'off', 'boost', 'filter' ), true ) ? $mode : 'boost';
+	}
+
+	/**
+	 * Labels for weather catalog boost modes (admin UI).
+	 *
+	 * @return array<string, string>
+	 */
+	public static function get_weather_catalog_boost_mode_labels() {
+		return array(
+			'off'    => __( 'Off', 'reactwoo-geo-commerce' ),
+			'boost'  => __( 'Boost matches (default order for others)', 'reactwoo-geo-commerce' ),
+			'filter' => __( 'Show matching products only', 'reactwoo-geo-commerce' ),
 		);
 	}
 }

@@ -21,8 +21,9 @@ class RWGCM_Condition_Library {
 	 */
 	public static function get_groups() {
 		return array(
-			'visitor_location' => __( 'Visitor Location', 'reactwoo-geo-commerce' ),
-			'woocommerce'      => __( 'WooCommerce Product', 'reactwoo-geo-commerce' ),
+			'visitor_location'   => __( 'Visitor Location', 'reactwoo-geo-commerce' ),
+			'weather_environment' => __( 'Weather / Environment', 'reactwoo-geo-commerce' ),
+			'woocommerce'        => __( 'WooCommerce Product', 'reactwoo-geo-commerce' ),
 			'cart_checkout'      => __( 'Cart / Checkout', 'reactwoo-geo-commerce' ),
 			'customer'           => __( 'Customer', 'reactwoo-geo-commerce' ),
 			'device_session'     => __( 'Device / Session', 'reactwoo-geo-commerce' ),
@@ -218,6 +219,16 @@ class RWGCM_Condition_Library {
 				'value_type'   => 'boolean_select',
 				'value_source' => 'yes_no',
 			),
+			'visitor.weather_facet' => array(
+				'id'               => 'visitor.weather_facet',
+				'target'           => 'weather_facet',
+				'label'            => __( 'Shopping weather', 'reactwoo-geo-commerce' ),
+				'group'            => 'weather_environment',
+				'operators'        => array( 'in', 'not_in', 'is', 'is_not' ),
+				'value_type'       => 'facet_multi_select',
+				'value_source'     => 'weather_facets',
+				'requires_weather' => true,
+			),
 		);
 
 		/**
@@ -226,6 +237,47 @@ class RWGCM_Condition_Library {
 		 * @param array<string, array<string, mixed>> $fields Field definitions.
 		 */
 		return apply_filters( 'rwgcm_condition_library_fields', $fields );
+	}
+
+	/**
+	 * Whether GeoCore Pro weather is configured for targeting.
+	 *
+	 * @return bool
+	 */
+	public static function is_weather_available() {
+		return (bool) apply_filters( 'rwgc_weather_targets_configured', false );
+	}
+
+	/**
+	 * Fields for admin rule builder (drops weather when provider not connected).
+	 *
+	 * @return array<string, array<string, mixed>>
+	 */
+	public static function get_fields_for_ui() {
+		$fields = self::get_fields();
+		if ( self::is_weather_available() ) {
+			return $fields;
+		}
+		foreach ( $fields as $key => $field ) {
+			if ( ! empty( $field['requires_weather'] ) ) {
+				unset( $fields[ $key ] );
+			}
+		}
+		return $fields;
+	}
+
+	/**
+	 * Groups for admin rule builder.
+	 *
+	 * @return array<string, string>
+	 */
+	public static function get_groups_for_ui() {
+		$groups = self::get_groups();
+		if ( self::is_weather_available() ) {
+			return $groups;
+		}
+		unset( $groups['weather_environment'] );
+		return $groups;
 	}
 
 	/**
@@ -348,6 +400,15 @@ class RWGCM_Condition_Library {
 			}
 		}
 
+		if ( class_exists( 'RWGCM_Weather_Affinity', false ) ) {
+			$sources['weather_facets'] = array();
+			foreach ( RWGCM_Weather_Affinity::get_facet_definitions() as $row ) {
+				if ( is_array( $row ) && ! empty( $row['slug'] ) ) {
+					$sources['weather_facets'][ (string) $row['slug'] ] = isset( $row['label'] ) ? (string) $row['label'] : (string) $row['slug'];
+				}
+			}
+		}
+
 		/**
 		 * Filter value sources for condition builder selectors.
 		 *
@@ -380,6 +441,14 @@ class RWGCM_Condition_Library {
 			$countries = RWGC_Countries::get_options();
 			$code      = strtoupper( substr( $value, 0, 2 ) );
 			return isset( $countries[ $code ] ) ? (string) $countries[ $code ] : $code;
+		}
+
+		if ( 'weather_facet' === ( $field['target'] ?? '' ) && class_exists( 'RWGCM_Weather_Affinity', false ) ) {
+			return RWGCM_Weather_Affinity::format_facet_value_label( $value );
+		}
+
+		if ( 'facet_multi_select' === ( $field['value_type'] ?? '' ) && class_exists( 'RWGCM_Weather_Affinity', false ) ) {
+			return RWGCM_Weather_Affinity::format_facet_value_label( $value );
 		}
 
 		if ( '' !== $source && isset( $sources[ $source ] ) && is_scalar( $value ) ) {
