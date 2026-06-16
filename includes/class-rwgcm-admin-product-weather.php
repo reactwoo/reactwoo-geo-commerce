@@ -18,9 +18,19 @@ class RWGCM_Admin_Product_Weather {
 	 * @return void
 	 */
 	public static function init() {
-		add_action( 'geocore_product_tab_weather', array( __CLASS__, 'render_weather_section' ), 10 );
+		add_action( 'plugins_loaded', array( __CLASS__, 'unregister_legacy_general_tab' ), 100 );
 		add_action( 'woocommerce_process_product_meta', array( __CLASS__, 'save_product' ), 20, 2 );
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_product_editor' ) );
+	}
+
+	/**
+	 * Stop legacy builds from rendering weather fields on the General tab.
+	 *
+	 * @return void
+	 */
+	public static function unregister_legacy_general_tab() {
+		remove_action( 'woocommerce_product_options_general_product_data', array( __CLASS__, 'render_product_fields' ), 25 );
+		remove_action( 'woocommerce_product_options_general_product_data', array( __CLASS__, 'render_weather_section' ), 25 );
 	}
 
 	/**

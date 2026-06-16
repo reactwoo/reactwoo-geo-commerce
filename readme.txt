@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.3.20
+Stable tag: 0.3.21
 
 WooCommerce rules and personalization on ReactWoo Geo Core.
 
@@ -18,6 +18,9 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 2. Activate this plugin.
 
 == Changelog ==
+
+= 0.3.21 =
+* **Product editor:** Unregister legacy General-tab weather output; Geo Core tab now invokes the weather renderer directly.
 
 = 0.3.20 =
 * **Product editor:** Move weather facet tagging into the GeoCore product data tab (checkbox grid); show facets even when live weather is not connected.
