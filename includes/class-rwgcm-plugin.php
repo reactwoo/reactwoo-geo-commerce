@@ -60,6 +60,8 @@ class RWGCM_Plugin {
 		require_once RWGCM_PATH . 'includes/class-rwgcm-rule-store.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-ai-snapshot.php';
 		RWGCM_AI_Snapshot::init();
+		require_once RWGCM_PATH . 'includes/class-rwgcm-insights-provider.php';
+		RWGCM_Insights_Provider::init();
 		require_once RWGCM_PATH . 'includes/class-rwgcm-rule-migration.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-pricing-resolution.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-diagnostics.php';
