@@ -24,4 +24,11 @@ Geo Commerce is a **Geo Core satellite** (WooCommerce layer). It is not a standa
 
 - Weather merchandising (product tags, widgets, catalog boost): `docs/WEATHER-MERCHANDISING.md`; suite plan `reactwoo-geocore/docs/WEATHER-FACETS-MERCHANDISING-PLAN.md`.
 - Geo Core product context: `reactwoo-geocore/docs/geo-core-cursor-master-plan.md`, `docs/phases/phase-7.md`, `docs/releases-and-git-tags.md`.
+- **AI handoff:** `ai-handoff/`, `reactwoo-geocore/docs/ai-handoff-workflow.md`, `.cursor/rules/ai-handoff.mdc`
 - Constants: **`RWGCM_VERSION`** in `reactwoo-geo-commerce.php` must match the shipped release and readme **Stable tag**.
+
+## AI handoff (ChatGPT ↔ Cursor)
+
+Planner → **`ai-handoff/current-task.md`**; Cursor → **`cursor-output.md`**. Suite doc: **`reactwoo-geocore/docs/ai-handoff-workflow.md`**.
+
+**Commerce-specific:** eligibility via `RWGCM_Targeting_Adapter` + `RWGC_Rule_Evaluator::matches()`; apply outcomes (pricing, fees, meta) only.
