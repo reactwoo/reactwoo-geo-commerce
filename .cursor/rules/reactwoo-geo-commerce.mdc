@@ -17,4 +17,4 @@ alwaysApply: true
 
 ## After implementation
 
-When a change is **complete and validated**, unless the user opts out: **commit**, bump **`RWGCM_VERSION`** + plugin header + readme **Stable tag** if shipping, **annotated tag** `v*`, build zip (`npm run package:zip` or `git archive` with correct `--prefix`), **push** branch and tag. Do **not** commit generated `.zip` files.
+When a change is **complete and validated**, unless the user opts out: **commit**, bump **`RWGCM_VERSION`** + plugin header + readme **Stable tag** if shipping, **annotated tag** `v*`, **`git push origin main "vVERSION"`** (one push — required for R2), verify tag on origin, build zip (`npm run package:zip` or `git archive` with correct `--prefix`). Do **not** commit generated `.zip` files. See `.cursor/rules/release.mdc`.
