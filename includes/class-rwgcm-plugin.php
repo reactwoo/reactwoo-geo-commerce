@@ -135,6 +135,8 @@ class RWGCM_Plugin {
 		RWGCM_Weather_Products_Display::init();
 		RWGCM_Weather_Products_Shortcode::init();
 		RWGCM_Gutenberg::init();
+		require_once RWGCM_PATH . 'includes/class-rwgcm-rule-tester-rendered-impacts.php';
+		RWGCM_Rule_Tester_Rendered_Impacts::init();
 		require_once RWGCM_PATH . 'includes/class-rwgcm-catalog-weather-boost.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-weather-strip.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-weather-csv.php';
