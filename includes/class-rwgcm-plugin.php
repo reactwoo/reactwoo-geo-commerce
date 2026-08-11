@@ -122,6 +122,8 @@ class RWGCM_Plugin {
 		RWGCM_Catalog_Price_Variable::init();
 		RWGCM_Product_Display_Apply::init();
 		RWGCM_Action_Applier::init();
+		require_once RWGCM_PATH . 'includes/class-rwgcm-platform-capabilities.php';
+		RWGCM_Platform_Capabilities::init();
 		RWGCM_Admin::init();
 		RWGCM_Admin_Pricing::init();
 		RWGCM_Admin_Rules::init();
