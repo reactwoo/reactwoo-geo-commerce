@@ -5,6 +5,7 @@ Geo Commerce is a **Geo Core satellite** (WooCommerce layer). It is not a standa
 ## Defaults
 
 - Prefer **one coherent thread** (read → change → verify). Match the sequential style described in Geo Core `docs/AGENTS.md` for suite work.
+- **Platform / Cloud plan:** Geo Core `docs/architecture/` — register conditions/actions as capabilities; do not create a second decision engine. See `.cursor/rules/reactwoo-platform.mdc`.
 - **Do not** duplicate visitor detection, MaxMind stacks, or portable targeting evaluation — use Geo Core APIs and **`RWGC_Rule_Evaluator`**.
 
 ## Build and release (parity with Geo AI / Geo Optimise)
