@@ -20,6 +20,8 @@ class RWGCM_Elementor {
 	public static function init() {
 		add_action( 'elementor/widgets/register', array( __CLASS__, 'register_widgets' ) );
 		add_action( 'elementor/dynamic_tags/register', array( __CLASS__, 'register_dynamic_tags' ) );
+		require_once RWGCM_PATH . 'includes/integrations/elementor/class-rwgcm-elementor-atomic.php';
+		RWGCM_Elementor_Atomic::init();
 	}
 
 	/**
