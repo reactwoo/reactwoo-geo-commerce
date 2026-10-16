@@ -50,6 +50,8 @@ class RWGCM_Gateway_Availability {
 
 	/**
 	 * Restrict only at checkout (or change-payment-method) when a billing country is known.
+	 * The block checkout lists the payment methods from the Store API cart response
+	 * (cart, cart/update-customer, batch), so those routes count as checkout too.
 	 * Admin screens, renewals, and renewal pay-for-order keep the full gateway list.
 	 *
 	 * @param array<string, mixed> $flags Request flags.
@@ -64,7 +66,7 @@ class RWGCM_Gateway_Availability {
 		if ( ! empty( $flags['renewal'] ) || ! empty( $flags['renewal_pay'] ) ) {
 			return false;
 		}
-		$at_payment = ! empty( $flags['checkout'] ) || ! empty( $flags['change_payment'] ) || ! empty( $flags['store_api_checkout'] );
+		$at_payment = ! empty( $flags['checkout'] ) || ! empty( $flags['change_payment'] ) || ! empty( $flags['store_api_checkout'] ) || ! empty( $flags['store_api_cart'] );
 		if ( ! $at_payment ) {
 			return false;
 		}
@@ -299,6 +301,10 @@ class RWGCM_Gateway_Availability {
 		if ( '' === $country ) {
 			$country = RWGCM_Price_Book_Currency::entered_billing_country();
 		}
+		$store_api_cart = self::is_store_api_cart();
+		if ( '' === $country && $store_api_cart ) {
+			$country = self::customer_billing_country();
+		}
 		return array(
 			'admin'              => function_exists( 'is_admin' ) && is_admin(),
 			'front_ajax'         => function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() && isset( $_REQUEST['wc-ajax'] ), // phpcs:ignore WordPress.Security.NonceVerification.Recommended
@@ -307,6 +313,7 @@ class RWGCM_Gateway_Availability {
 			'checkout'           => self::is_checkout_request(),
 			'change_payment'     => $change,
 			'store_api_checkout' => self::is_store_api_checkout(),
+			'store_api_cart'     => $store_api_cart,
 			'billing_country'    => $country,
 		);
 	}
@@ -330,6 +337,37 @@ class RWGCM_Gateway_Availability {
 		}
 		$uri = isset( $_SERVER['REQUEST_URI'] ) ? (string) $_SERVER['REQUEST_URI'] : '';
 		return false !== strpos( $uri, '/wc/store/' ) && false !== strpos( $uri, '/checkout' );
+	}
+
+	/**
+	 * Store API cart and batch routes. Their responses carry payment_methods,
+	 * which is the list the block checkout renders.
+	 *
+	 * @return bool
+	 */
+	private static function is_store_api_cart() {
+		if ( ! defined( 'REST_REQUEST' ) || ! REST_REQUEST ) {
+			return false;
+		}
+		$uri = isset( $_SERVER['REQUEST_URI'] ) ? (string) $_SERVER['REQUEST_URI'] : '';
+		if ( false === strpos( $uri, '/wc/store/' ) && false === strpos( $uri, 'rest_route=%2Fwc%2Fstore%2F' ) && false === strpos( $uri, 'rest_route=/wc/store/' ) ) {
+			return false;
+		}
+		return false !== strpos( $uri, '/cart' ) || false !== strpos( $uri, '%2Fcart' ) || false !== strpos( $uri, '/batch' ) || false !== strpos( $uri, '%2Fbatch' );
+	}
+
+	/**
+	 * @return string
+	 */
+	private static function customer_billing_country() {
+		if ( ! function_exists( 'WC' ) ) {
+			return '';
+		}
+		$wc = WC();
+		if ( ! $wc || ! $wc->customer || ! method_exists( $wc->customer, 'get_billing_country' ) ) {
+			return '';
+		}
+		return RWGCM_Price_Book::normalize_country( $wc->customer->get_billing_country() );
 	}
 
 	/**

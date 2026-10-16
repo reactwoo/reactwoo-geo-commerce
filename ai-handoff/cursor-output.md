@@ -6,7 +6,7 @@ needs-review
 
 ## Summary
 
-Price books (0.4.0) now take the pre-checkout currency from Geo Core’s visitor country, with an editable country map and fallback currency. Checkout payment gateways can be limited by billing country or a Geo Core country group. Subscription renewals keep the gateway already on the subscription. Still a draft; no tag and no merge.
+Block checkout gateway rules now apply on Store API cart and batch routes, which is where the Checkout block reads `payment_methods`. Tests: 65 + 8 passed. Store API order 13876 had the correct order currency and empty price-book meta because Store API never fires `woocommerce_checkout_create_order`; that meta is bookkeeping, not the charge. Release is not blocked on it.
 
 ## Files changed
 

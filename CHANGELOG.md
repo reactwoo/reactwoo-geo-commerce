@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Subscription renewals:** Renewal orders keep the subscription currency, the price already stored on the subscription, and the gateway already on the subscription.
 - **Settings:** “Keep store-currency geo price adjustments” is migrated on, so existing GBP (store-currency) pricing rules still apply when a product has no fixed price in the store currency.
 
+### Fixed
+- **Payment gateways (block checkout):** The country rule also applies to Store API cart and batch responses. The block checkout renders the `payment_methods` list from those responses, so it used to offer every enabled gateway even though the classic checkout and the Store API checkout route were already narrowed.
+
 ### Notes
 - Revolut Gateway for WooCommerce reads `get_woocommerce_currency()` for the checkout charge and then requires the WooCommerce order currency to match. Price books set both. Card payments accept ZAR, GBP, EUR, and USD when the merchant has those currency accounts.
 - Catalog HTML follows Geo Core’s server-resolved country. Geo Core varies full-page caches with the `rwgc_cc` cookie and the LiteSpeed vary group `rwgc_cc_{ISO2}`. A cache that ignores that vary serves one country’s prices to everyone. Cart and checkout are marked uncacheable. This plugin does not do its own IP lookup.

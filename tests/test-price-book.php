@@ -407,6 +407,34 @@ assert_true(
 		)
 	)
 );
+assert_true(
+	'the Store API cart (block checkout payment list) restricts gateways',
+	RWGCM_Gateway_Availability::should_restrict(
+		array(
+			'store_api_cart'  => true,
+			'billing_country' => 'ZA',
+		)
+	)
+);
+assert_true(
+	'the Store API cart without a billing country does not restrict gateways',
+	! RWGCM_Gateway_Availability::should_restrict(
+		array(
+			'store_api_cart'  => true,
+			'billing_country' => '',
+		)
+	)
+);
+assert_true(
+	'a Store API cart renewal does not restrict gateways',
+	! RWGCM_Gateway_Availability::should_restrict(
+		array(
+			'store_api_cart'  => true,
+			'renewal'         => true,
+			'billing_country' => 'ZA',
+		)
+	)
+);
 
 echo "\n{$passed} passed, {$failed} failed\n";
 exit( $failed > 0 ? 1 : 0 );
