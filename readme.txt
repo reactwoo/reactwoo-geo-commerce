@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.3.26
+Stable tag: 0.4.0
 
 WooCommerce rules and personalization on ReactWoo Geo Core.
 
@@ -18,6 +18,16 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 2. Activate this plugin.
 
 == Changelog ==
+
+= 0.4.0 =
+* **Price books:** Fixed prices per currency (ZAR, GBP, EUR, USD, filterable) on simple products and variable-subscription variations, including recurring price, sale price, and subscription sign-up fee.
+* **Currency:** Before checkout, Geo Core’s visitor country selects the currency. Once a billing country is entered, that country decides. No exchange-rate conversion. Missing prices fall back to the store currency.
+* **Country map:** Editable under Geo Commerce → Settings. Defaults: ZA ZAR, GB GBP, US USD, eurozone EUR. Other countries use the store currency or a configured fallback.
+* **Payment gateways:** Assign enabled gateways per billing country, or per Geo Core country group. Unassigned countries keep every enabled gateway. Renewals keep the gateway already on the subscription.
+* **Orders:** Cart, checkout, and order currency follow that choice. Subscription renewals keep the original currency and price.
+* **Cache:** Catalog prices follow Geo Core’s `rwgc_cc` / `rwgc_cc_{ISO2}` vary. Cart and checkout are not cached.
+* **Revolut:** Active WooCommerce currency matches the order currency so Revolut Gateway for WooCommerce charges the order currency.
+* **Pricing rules:** Existing store-currency geo adjustments stay on unless turned off under Geo Commerce → Settings.
 
 = 0.3.26 =
 * Elementor Atomic: register Weather Products and Weather Strip twins beside the classic widgets.

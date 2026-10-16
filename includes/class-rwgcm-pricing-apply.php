@@ -58,6 +58,10 @@ class RWGCM_Pricing_Apply {
 				continue;
 			}
 
+			if ( class_exists( 'RWGCM_Price_Book_Apply', false ) && ! RWGCM_Price_Book_Apply::allow_base_adjustment( $product ) ) {
+				continue;
+			}
+
 			$rule = RWGCM_Pricing_Resolution::find_price_adjustment( $product );
 			if ( null === $rule ) {
 				continue;

@@ -11,7 +11,7 @@ $wc_settings      = admin_url( 'admin.php?page=wc-settings' );
 		<?php
 		RWGC_Admin_UI::render_page_header(
 			__( 'Settings', 'reactwoo-geo-commerce' ),
-			__( 'Geo Commerce builds on Geo Core targeting and WooCommerce. Configure detection and currency in Geo Core; configure tax and currency in WooCommerce.', 'reactwoo-geo-commerce' )
+			__( 'Geo Commerce builds on Geo Core targeting and WooCommerce. Geo Core resolves the visitor country. Price-book currencies and checkout gateways are configured below. Tax stays in WooCommerce.', 'reactwoo-geo-commerce' )
 		);
 		?>
 	<?php else : ?>
@@ -27,4 +27,10 @@ $wc_settings      = admin_url( 'admin.php?page=wc-settings' );
 			<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=rwgcm-license' ) ); ?>"><?php esc_html_e( 'Geo Commerce — License', 'reactwoo-geo-commerce' ); ?></a></li>
 		</ul>
 	</div>
+
+	<?php
+	if ( class_exists( 'RWGCM_Price_Book_Admin', false ) ) {
+		RWGCM_Price_Book_Admin::render_settings_card();
+	}
+	?>
 </div>
