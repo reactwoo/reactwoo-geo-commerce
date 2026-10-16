@@ -11,7 +11,7 @@ $wc_settings      = admin_url( 'admin.php?page=wc-settings' );
 		<?php
 		RWGC_Admin_UI::render_page_header(
 			__( 'Settings', 'reactwoo-geo-commerce' ),
-			__( 'Geo Commerce builds on Geo Core targeting and WooCommerce. Configure detection and currency in Geo Core; configure tax and currency in WooCommerce.', 'reactwoo-geo-commerce' )
+			__( 'Geo Commerce builds on Geo Core targeting and WooCommerce. Geo Core resolves the visitor country. Price-book currencies and checkout gateways are configured below. Tax stays in WooCommerce.', 'reactwoo-geo-commerce' )
 		);
 		?>
 	<?php else : ?>

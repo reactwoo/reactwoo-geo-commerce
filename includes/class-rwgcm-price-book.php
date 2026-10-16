@@ -22,6 +22,10 @@ class RWGCM_Price_Book {
 
 	const OPTION_BASE_ADJUSTMENTS = 'rwgcm_price_book_base_adjustments';
 
+	const OPTION_COUNTRY_MAP = 'rwgcm_price_book_country_map';
+
+	const OPTION_FALLBACK_CURRENCY = 'rwgcm_price_book_fallback_currency';
+
 	/**
 	 * Built-in currencies. Filter `rwgcm_price_book_currencies` to extend.
 	 *
@@ -96,17 +100,123 @@ class RWGCM_Price_Book {
 	}
 
 	/**
+	 * Stored map, or the built-in defaults when nothing has been saved.
+	 * An empty array is a saved map with no countries, not "use the defaults".
+	 *
+	 * @param mixed $stored Option value.
+	 * @return array<string, string>
+	 */
+	public static function map_from_storage( $stored ) {
+		if ( ! is_array( $stored ) ) {
+			return self::normalize_map( self::default_country_map() );
+		}
+		return self::normalize_map( $stored );
+	}
+
+	/**
 	 * @return array<string, string>
 	 */
 	public static function country_currency_map() {
-		$map = self::default_country_map();
+		$stored = null;
+		if ( function_exists( 'get_option' ) ) {
+			$stored = get_option( self::OPTION_COUNTRY_MAP, null );
+		}
+		$map = self::map_from_storage( $stored );
 		if ( function_exists( 'apply_filters' ) ) {
 			$filtered = apply_filters( 'rwgcm_price_book_country_currencies', $map );
 			if ( is_array( $filtered ) ) {
-				$map = $filtered;
+				$map = self::normalize_map( $filtered );
 			}
 		}
-		return self::normalize_map( $map );
+		return $map;
+	}
+
+	/**
+	 * Fallback used for a known country that is not in the map.
+	 * Empty or unknown codes use the store currency.
+	 *
+	 * @param string $base_currency Store currency.
+	 * @return string
+	 */
+	public static function configured_fallback_currency( $base_currency ) {
+		$base = self::normalize_currency( $base_currency );
+		if ( '' === $base ) {
+			$base = 'GBP';
+		}
+		if ( ! function_exists( 'get_option' ) ) {
+			return $base;
+		}
+		$raw  = get_option( self::OPTION_FALLBACK_CURRENCY, '' );
+		$code = self::normalize_currency( is_string( $raw ) ? $raw : '' );
+		if ( '' === $code || ( $code !== $base && ! in_array( $code, self::currencies(), true ) ) ) {
+			return $base;
+		}
+		return $code;
+	}
+
+	/**
+	 * One `CC CURRENCY` pair per line. Blank lines and # comments are ignored.
+	 *
+	 * @param string $text Textarea contents.
+	 * @return array<string, string>
+	 */
+	public static function parse_country_map_text( $text ) {
+		$map   = array();
+		$lines = preg_split( '/\r\n|\r|\n/', (string) $text );
+		if ( ! is_array( $lines ) ) {
+			return $map;
+		}
+		foreach ( $lines as $line ) {
+			$line = trim( (string) $line );
+			if ( '' === $line || '#' === substr( $line, 0, 1 ) ) {
+				continue;
+			}
+			if ( ! preg_match( '/^([A-Za-z]{2})\s*[:=\s]\s*([A-Za-z]{3})\s*$/', $line, $matches ) ) {
+				continue;
+			}
+			$country  = self::normalize_country( $matches[1] );
+			$currency = self::normalize_currency( $matches[2] );
+			if ( '' === $country || '' === $currency ) {
+				continue;
+			}
+			$map[ $country ] = $currency;
+		}
+		return $map;
+	}
+
+	/**
+	 * @param array<string, string> $map Country map.
+	 * @return string
+	 */
+	public static function format_country_map_text( array $map ) {
+		$map = self::normalize_map( $map );
+		ksort( $map );
+		$lines = array();
+		foreach ( $map as $country => $currency ) {
+			$lines[] = $country . ' ' . $currency;
+		}
+		return implode( "\n", $lines );
+	}
+
+	/**
+	 * Posted billing always counts. A remembered country counts only on
+	 * cart, checkout, or the Store API cart/checkout request, so catalog HTML
+	 * stays on Geo Core's visitor country and can share that cache vary.
+	 *
+	 * @param string $posted        Posted billing country.
+	 * @param string $session       Remembered billing country.
+	 * @param bool   $checkout_flow True when cart or checkout is calculating.
+	 * @return string
+	 */
+	public static function effective_billing_country( $posted, $session, $checkout_flow ) {
+		$posted = self::normalize_country( $posted );
+		if ( '' !== $posted ) {
+			return $posted;
+		}
+		if ( $checkout_flow ) {
+			return self::normalize_country( $session );
+		}
+		return '';
 	}
 
 	/**
@@ -129,17 +239,19 @@ class RWGCM_Price_Book {
 
 	/**
 	 * Billing country wins. Geo IP is used only when billing is empty.
-	 * An unmapped billing country falls back to the store currency and does
-	 * not consult geo IP ("IP alone never decides once billing is known").
+	 * A known country that is not in the map uses the fallback currency
+	 * (the store currency when no fallback is configured) and does not
+	 * consult the other country ("IP alone never decides once billing is known").
 	 *
-	 * @param string                    $billing_country Billing ISO2 or empty.
-	 * @param string                    $geo_country     Geo IP ISO2 or empty.
-	 * @param string                    $base_currency   Store currency.
-	 * @param array<string, string>|null $map            Optional map override.
-	 * @param array<int, string>|null   $currencies      Optional currency override.
+	 * @param string                    $billing_country   Billing ISO2 or empty.
+	 * @param string                    $geo_country       Geo Core visitor ISO2 or empty.
+	 * @param string                    $base_currency     Store currency.
+	 * @param array<string, string>|null $map              Optional map override.
+	 * @param array<int, string>|null   $currencies        Optional currency override.
+	 * @param string                    $fallback_currency Unmapped-country currency, or empty for the store currency.
 	 * @return array{currency: string, source: string, country: string, reason: string}
 	 */
-	public static function resolve_context( $billing_country, $geo_country, $base_currency, $map = null, $currencies = null ) {
+	public static function resolve_context( $billing_country, $geo_country, $base_currency, $map = null, $currencies = null, $fallback_currency = '' ) {
 		$base = self::normalize_currency( $base_currency );
 		if ( '' === $base ) {
 			$base = 'GBP';
@@ -154,17 +266,13 @@ class RWGCM_Price_Book {
 		} else {
 			$currencies = self::normalize_currency_list( $currencies );
 		}
+		$fallback = self::resolve_fallback_currency( $fallback_currency, $base, $currencies );
 
 		$billing = self::normalize_country( $billing_country );
 		if ( '' !== $billing ) {
 			$currency = self::lookup_currency( $billing, $map, $currencies );
 			if ( '' === $currency ) {
-				return array(
-					'currency' => $base,
-					'source'   => 'base',
-					'country'  => $billing,
-					'reason'   => 'billing_unmapped',
-				);
+				return self::unmapped_decision( $fallback, $base, $billing, 'billing_unmapped' );
 			}
 			return array(
 				'currency' => $currency,
@@ -178,12 +286,7 @@ class RWGCM_Price_Book {
 		if ( '' !== $geo ) {
 			$currency = self::lookup_currency( $geo, $map, $currencies );
 			if ( '' === $currency ) {
-				return array(
-					'currency' => $base,
-					'source'   => 'base',
-					'country'  => $geo,
-					'reason'   => 'geo_unmapped',
-				);
+				return self::unmapped_decision( $fallback, $base, $geo, 'geo_unmapped' );
 			}
 			return array(
 				'currency' => $currency,
@@ -204,13 +307,14 @@ class RWGCM_Price_Book {
 	/**
 	 * Renewal currency is kept even when the current billing country differs.
 	 *
-	 * @param string $billing_country Billing ISO2.
-	 * @param string $geo_country     Geo ISO2.
-	 * @param string $base_currency   Store currency.
-	 * @param string $renewal_currency Subscription currency, or empty.
+	 * @param string $billing_country   Billing ISO2.
+	 * @param string $geo_country       Geo ISO2.
+	 * @param string $base_currency     Store currency.
+	 * @param string $renewal_currency  Subscription currency, or empty.
+	 * @param string $fallback_currency Unmapped-country currency, or empty for the store currency.
 	 * @return array{currency: string, source: string, country: string, reason: string}
 	 */
-	public static function resolve_charge( $billing_country, $geo_country, $base_currency, $renewal_currency = '' ) {
+	public static function resolve_charge( $billing_country, $geo_country, $base_currency, $renewal_currency = '', $fallback_currency = '' ) {
 		$renewal = self::normalize_currency( $renewal_currency );
 		if ( '' !== $renewal ) {
 			return array(
@@ -220,7 +324,7 @@ class RWGCM_Price_Book {
 				'reason'   => 'renewal',
 			);
 		}
-		return self::resolve_context( $billing_country, $geo_country, $base_currency );
+		return self::resolve_context( $billing_country, $geo_country, $base_currency, null, null, $fallback_currency );
 	}
 
 	/**
@@ -419,6 +523,36 @@ class RWGCM_Price_Book {
 		}
 		$value = get_option( self::OPTION_BASE_ADJUSTMENTS, 'yes' );
 		return 'yes' === $value || '1' === (string) $value || 1 === $value || true === $value;
+	}
+
+	/**
+	 * @param string             $fallback_currency Requested fallback.
+	 * @param string             $base              Store currency.
+	 * @param array<int, string> $currencies        Enabled currencies.
+	 * @return string
+	 */
+	private static function resolve_fallback_currency( $fallback_currency, $base, array $currencies ) {
+		$fallback = self::normalize_currency( $fallback_currency );
+		if ( '' === $fallback || ( $fallback !== $base && ! in_array( $fallback, $currencies, true ) ) ) {
+			return $base;
+		}
+		return $fallback;
+	}
+
+	/**
+	 * @param string $fallback Fallback currency.
+	 * @param string $base     Store currency.
+	 * @param string $country  Known ISO2.
+	 * @param string $reason   billing_unmapped or geo_unmapped.
+	 * @return array{currency: string, source: string, country: string, reason: string}
+	 */
+	private static function unmapped_decision( $fallback, $base, $country, $reason ) {
+		return array(
+			'currency' => $fallback,
+			'source'   => ( $fallback === $base ) ? 'base' : 'fallback',
+			'country'  => $country,
+			'reason'   => $reason,
+		);
 	}
 
 	/**

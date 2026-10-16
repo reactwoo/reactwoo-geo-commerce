@@ -46,7 +46,7 @@ class RWGCM_Price_Book_Admin {
 	public static function render_panel() {
 		echo '<div id="rwgcm_price_book_product_data" class="panel woocommerce_options_panel hidden">';
 		echo '<div class="options_group">';
-		echo '<p class="form-field" style="padding: 0 12px;">' . esc_html__( 'Fixed prices in each currency. The shopper’s billing country picks the currency. Before checkout, Geo Core’s country is used only when no billing country is known. A currency with no price falls back to the store currency. These amounts are not converted.', 'reactwoo-geo-commerce' ) . '</p>';
+		echo '<p class="form-field" style="padding: 0 12px;">' . esc_html__( 'Fixed prices in each currency. Before checkout the currency follows Geo Core’s visitor country. Once a billing country is entered, that country decides. The country map is edited under Geo Commerce → Settings. These amounts are not converted.', 'reactwoo-geo-commerce' ) . '</p>';
 		echo '<input type="hidden" name="rwgcm_price_book_present" value="1" />';
 		self::render_currency_inputs( 'rwgcm_price_book', self::product_book_from_global(), true );
 		echo '</div></div>';
@@ -142,6 +142,34 @@ class RWGCM_Price_Book_Admin {
 		}
 		$enabled = isset( $_POST['rwgcm_price_book_base_adjustments'] ) && 'yes' === sanitize_text_field( wp_unslash( $_POST['rwgcm_price_book_base_adjustments'] ) );
 		update_option( RWGCM_Price_Book::OPTION_BASE_ADJUSTMENTS, $enabled ? 'yes' : 'no' );
+
+		$map_text = isset( $_POST['rwgcm_country_map_text'] ) ? wp_unslash( $_POST['rwgcm_country_map_text'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		update_option( RWGCM_Price_Book::OPTION_COUNTRY_MAP, RWGCM_Price_Book::parse_country_map_text( $map_text ), false );
+
+		$fallback = isset( $_POST['rwgcm_price_book_fallback_currency'] ) ? RWGCM_Price_Book::normalize_currency( wp_unslash( $_POST['rwgcm_price_book_fallback_currency'] ) ) : '';
+		$base     = function_exists( 'get_option' ) ? RWGCM_Price_Book::normalize_currency( get_option( 'woocommerce_currency', '' ) ) : '';
+		if ( '' !== $fallback && $fallback !== $base && ! in_array( $fallback, RWGCM_Price_Book::currencies(), true ) ) {
+			$fallback = '';
+		}
+		update_option( RWGCM_Price_Book::OPTION_FALLBACK_CURRENCY, $fallback, false );
+
+		if ( isset( $_POST['rwgcm_gateway_rules_present'] ) ) {
+			$gateway_raw = array(
+				'countries' => array(),
+				'groups'    => array(),
+			);
+			if ( isset( $_POST['rwgcm_gateway_country'] ) && is_array( $_POST['rwgcm_gateway_country'] ) ) {
+				$gateway_raw['countries'] = wp_unslash( $_POST['rwgcm_gateway_country'] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			}
+			$new_country = isset( $_POST['rwgcm_gateway_country_new'] ) ? RWGCM_Price_Book::normalize_country( wp_unslash( $_POST['rwgcm_gateway_country_new'] ) ) : '';
+			if ( '' !== $new_country && isset( $_POST['rwgcm_gateway_country_new_ids'] ) && is_array( $_POST['rwgcm_gateway_country_new_ids'] ) ) {
+				$gateway_raw['countries'][ $new_country ] = wp_unslash( $_POST['rwgcm_gateway_country_new_ids'] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			}
+			if ( isset( $_POST['rwgcm_gateway_group'] ) && is_array( $_POST['rwgcm_gateway_group'] ) ) {
+				$gateway_raw['groups'] = wp_unslash( $_POST['rwgcm_gateway_group'] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			}
+			update_option( RWGCM_Gateway_Availability::OPTION_KEY, RWGCM_Gateway_Availability::sanitize_rules( $gateway_raw ), false );
+		}
 		$redirect = wp_get_referer();
 		if ( ! is_string( $redirect ) || '' === $redirect ) {
 			$redirect = admin_url( 'admin.php?page=rwgcm-settings' );
@@ -151,18 +179,20 @@ class RWGCM_Price_Book_Admin {
 	}
 
 	/**
-	 * Settings card for the migrated base-currency adjustment option.
+	 * Settings card for the country map, fallback currency, and gateway rules.
 	 *
 	 * @return void
 	 */
 	public static function render_settings_card() {
-		$enabled = RWGCM_Price_Book::base_adjustments_enabled();
+		$enabled  = RWGCM_Price_Book::base_adjustments_enabled();
+		$map_text = RWGCM_Price_Book::format_country_map_text( RWGCM_Price_Book::country_currency_map() );
+		$fallback = function_exists( 'get_option' ) ? RWGCM_Price_Book::normalize_currency( get_option( RWGCM_Price_Book::OPTION_FALLBACK_CURRENCY, '' ) ) : '';
 		if ( isset( $_GET['rwgcm_price_book_saved'] ) && '1' === $_GET['rwgcm_price_book_saved'] ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 			echo '<div class="notice notice-success"><p>' . esc_html__( 'Price book settings saved.', 'reactwoo-geo-commerce' ) . '</p></div>';
 		}
-		echo '<div class="rwgc-card" style="max-width: 720px; margin-top: 16px;">';
+		echo '<div class="rwgc-card" style="max-width: 960px; margin-top: 16px;">';
 		echo '<h2>' . esc_html__( 'Price books', 'reactwoo-geo-commerce' ) . '</h2>';
-		echo '<p>' . esc_html__( 'Set fixed ZAR, GBP, EUR, and USD prices on each product. The list can be extended with the rwgcm_price_book_currencies filter. Billing country selects the currency; Geo Core is only the fallback before a billing country is known.', 'reactwoo-geo-commerce' ) . '</p>';
+		echo '<p>' . esc_html__( 'Set fixed ZAR, GBP, EUR, and USD prices on each product. The list can be extended with the rwgcm_price_book_currencies filter. Before checkout, Geo Core’s visitor country selects the currency. Once a billing country is entered at cart or checkout, that country decides.', 'reactwoo-geo-commerce' ) . '</p>';
 		echo '<form method="post">';
 		wp_nonce_field( 'rwgcm_price_book_settings' );
 		echo '<input type="hidden" name="rwgcm_price_book_settings_save" value="1" />';
@@ -170,8 +200,105 @@ class RWGCM_Price_Book_Admin {
 		echo esc_html__( 'Keep store-currency geo price adjustments', 'reactwoo-geo-commerce' );
 		echo '</label>';
 		echo '<p class="description">' . esc_html__( 'On for existing sites. Pricing rules still adjust the store currency (for example GBP) when a product has no fixed price in that currency. Fixed price-book prices are not adjusted and are not converted.', 'reactwoo-geo-commerce' ) . '</p>';
+
+		echo '<h3>' . esc_html__( 'Country to currency', 'reactwoo-geo-commerce' ) . '</h3>';
+		echo '<p class="description">' . esc_html__( 'One country and currency per line, for example ZA ZAR. Saving replaces the built-in map (South Africa ZAR, United Kingdom GBP, United States USD, eurozone EUR). A blank map means every country uses the fallback. Countries that are not listed use the fallback currency.', 'reactwoo-geo-commerce' ) . '</p>';
+		echo '<textarea name="rwgcm_country_map_text" rows="12" cols="24" style="font-family: monospace;" class="large-text code">' . esc_textarea( $map_text ) . '</textarea>';
+		echo '<p><label for="rwgcm_price_book_fallback_currency">' . esc_html__( 'Fallback currency', 'reactwoo-geo-commerce' ) . '</label><br/>';
+		echo '<input type="text" id="rwgcm_price_book_fallback_currency" name="rwgcm_price_book_fallback_currency" value="' . esc_attr( $fallback ) . '" maxlength="3" class="regular-text" style="width: 6em;" placeholder="' . esc_attr__( 'Store', 'reactwoo-geo-commerce' ) . '" /></p>';
+		echo '<p class="description">' . esc_html__( 'Used when the country is known but not in the map. Leave blank to use the WooCommerce store currency. The code must be the store currency or one of the price-book currencies.', 'reactwoo-geo-commerce' ) . '</p>';
+		echo '<p class="description">' . esc_html( RWGCM_Price_Book_Currency::cache_compatibility_notes() ) . '</p>';
+
+		echo '<h3>' . esc_html__( 'Payment gateways by country', 'reactwoo-geo-commerce' ) . '</h3>';
+		echo '<p class="description">' . esc_html__( 'Checked gateways are the only ones offered at checkout for that billing country. A country or group with nothing checked keeps every enabled gateway. Subscription renewals keep charging the gateway already on the subscription. Changing the payment method uses the subscription billing country.', 'reactwoo-geo-commerce' ) . '</p>';
+		self::render_gateway_rules();
+
 		submit_button( __( 'Save price book settings', 'reactwoo-geo-commerce' ) );
 		echo '</form></div>';
+	}
+
+	/**
+	 * @return void
+	 */
+	private static function render_gateway_rules() {
+		$choices = RWGCM_Gateway_Availability::gateway_choices();
+		$rules   = RWGCM_Gateway_Availability::stored_rules();
+		$groups  = RWGCM_Gateway_Availability::country_group_choices();
+		if ( empty( $choices ) ) {
+			echo '<p>' . esc_html__( 'No enabled WooCommerce payment gateways were found.', 'reactwoo-geo-commerce' ) . '</p>';
+			return;
+		}
+		echo '<input type="hidden" name="rwgcm_gateway_rules_present" value="1" />';
+
+		$codes = array_values(
+			array_unique(
+				array_merge(
+					array_keys( RWGCM_Price_Book::country_currency_map() ),
+					array_keys( $rules['countries'] )
+				)
+			)
+		);
+		sort( $codes );
+
+		echo '<div style="overflow-x: auto;">';
+		echo '<table class="widefat striped"><thead><tr><th>' . esc_html__( 'Billing country', 'reactwoo-geo-commerce' ) . '</th>';
+		foreach ( $choices as $id => $title ) {
+			echo '<th>' . esc_html( $title ) . '<br/><code>' . esc_html( $id ) . '</code></th>';
+		}
+		echo '</tr></thead><tbody>';
+		foreach ( $codes as $code ) {
+			$selected = isset( $rules['countries'][ $code ] ) ? $rules['countries'][ $code ] : array();
+			self::render_gateway_row( $code, 'rwgcm_gateway_country[' . $code . '][]', $choices, $selected, false );
+		}
+		self::render_gateway_row( '', 'rwgcm_gateway_country_new_ids[]', $choices, array(), true );
+		echo '</tbody></table></div>';
+
+		echo '<h4>' . esc_html__( 'Country groups', 'reactwoo-geo-commerce' ) . '</h4>';
+		if ( empty( $groups ) ) {
+			echo '<p class="description">' . esc_html__( 'Geo Core has no country groups yet. Assign gateways per country above. Groups from Geo Core’s country group registry show up here when they exist.', 'reactwoo-geo-commerce' ) . '</p>';
+			return;
+		}
+		echo '<p class="description">' . esc_html__( 'A group applies when the billing country is in that Geo Core group and the country has no rule of its own. Several matching groups are combined.', 'reactwoo-geo-commerce' ) . '</p>';
+		echo '<div style="overflow-x: auto;">';
+		echo '<table class="widefat striped"><thead><tr><th>' . esc_html__( 'Group', 'reactwoo-geo-commerce' ) . '</th>';
+		foreach ( $choices as $id => $title ) {
+			echo '<th>' . esc_html( $title ) . '</th>';
+		}
+		echo '</tr></thead><tbody>';
+		foreach ( $groups as $slug => $label ) {
+			$selected = isset( $rules['groups'][ $slug ] ) ? $rules['groups'][ $slug ] : array();
+			echo '<tr><th scope="row">' . esc_html( $label ) . '<br/><code>' . esc_html( $slug ) . '</code></th>';
+			foreach ( $choices as $id => $title ) {
+				unset( $title );
+				echo '<td><input type="checkbox" name="' . esc_attr( 'rwgcm_gateway_group[' . $slug . '][]' ) . '" value="' . esc_attr( $id ) . '" ' . checked( in_array( $id, $selected, true ), true, false ) . ' /></td>';
+			}
+			echo '</tr>';
+		}
+		echo '</tbody></table></div>';
+	}
+
+	/**
+	 * @param string              $code     ISO2 or empty for the add row.
+	 * @param string              $name     Checkbox name.
+	 * @param array<string, string> $choices Gateway id => title.
+	 * @param array<int, string>  $selected Selected ids.
+	 * @param bool                $is_new   Editable country code.
+	 * @return void
+	 */
+	private static function render_gateway_row( $code, $name, array $choices, array $selected, $is_new ) {
+		echo '<tr><th scope="row">';
+		if ( $is_new ) {
+			echo '<label>' . esc_html__( 'Add country', 'reactwoo-geo-commerce' ) . '<br/>';
+			echo '<input type="text" name="rwgcm_gateway_country_new" value="" maxlength="2" style="width: 4em;" placeholder="' . esc_attr__( 'CC', 'reactwoo-geo-commerce' ) . '" /></label>';
+		} else {
+			echo '<code>' . esc_html( $code ) . '</code>';
+		}
+		echo '</th>';
+		foreach ( $choices as $id => $title ) {
+			unset( $title );
+			echo '<td><input type="checkbox" name="' . esc_attr( $name ) . '" value="' . esc_attr( $id ) . '" ' . checked( in_array( $id, $selected, true ), true, false ) . ' /></td>';
+		}
+		echo '</tr>';
 	}
 
 	/**

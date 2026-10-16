@@ -60,6 +60,8 @@ class RWGCM_Price_Book_Currency {
 		add_action( 'woocommerce_checkout_update_customer', array( __CLASS__, 'remember_checkout_billing' ), 10, 2 );
 		add_action( 'woocommerce_store_api_checkout_update_customer_from_request', array( __CLASS__, 'remember_store_api_billing' ), 10, 2 );
 		add_action( 'woocommerce_store_api_cart_update_customer_from_request', array( __CLASS__, 'remember_store_api_billing' ), 10, 2 );
+		add_action( 'litespeed_init', array( __CLASS__, 'register_litespeed_vary' ), 20 );
+		add_action( 'wp', array( __CLASS__, 'mark_transactional_pages_uncached' ) );
 	}
 
 	/**
@@ -81,6 +83,109 @@ class RWGCM_Price_Book_Currency {
 	 */
 	public static function revolut_constraint_notes() {
 		return 'Revolut checkout charges get_woocommerce_currency() and then requires the WooCommerce order currency to match. Renewals charge the renewal order currency. ZAR, GBP, EUR, and USD are in the card currency list; the Revolut merchant account must still have each currency account enabled.';
+	}
+
+	/**
+	 * How catalog currency stays aligned with Geo Core's page cache.
+	 *
+	 * @return string
+	 */
+	public static function cache_compatibility_notes() {
+		return 'Catalog prices follow rwgc_get_visitor_country() from Geo Core. This plugin does not look up the visitor IP and does not read the rwgc_cc cookie. Geo Core varies full-page caches with the rwgc_cc cookie and the LiteSpeed vary group rwgc_cc_{ISO2}, both taken from the server-resolved country. A page cache that ignores that vary serves one country\'s prices to everyone. Cart and checkout are not cached; once a billing country is entered there, that country selects the currency.';
+	}
+
+	/**
+	 * Geo Core visitor country. Never the rwgc_cc cookie and never a local IP lookup.
+	 *
+	 * @return string
+	 */
+	public static function visitor_country() {
+		if ( ! function_exists( 'rwgc_get_visitor_country' ) ) {
+			return '';
+		}
+		return RWGCM_Price_Book::normalize_country( rwgc_get_visitor_country() );
+	}
+
+	/**
+	 * Repeat Geo Core's LiteSpeed country vary. Idempotent if Geo Core already added it.
+	 *
+	 * @return void
+	 */
+	public static function register_litespeed_vary() {
+		if ( ! class_exists( 'RWGC_Cache_Compat', false ) || ! function_exists( 'do_action' ) ) {
+			return;
+		}
+		$group = RWGC_Cache_Compat::country_vary_group( RWGC_Cache_Compat::resolve_country_vary_key() );
+		if ( '' === $group ) {
+			return;
+		}
+		do_action( 'litespeed_vary_add', $group );
+	}
+
+	/**
+	 * Cart and checkout must not be served from a country-varied catalog cache.
+	 *
+	 * @return void
+	 */
+	public static function mark_transactional_pages_uncached() {
+		$cart     = function_exists( 'is_cart' ) && is_cart();
+		$checkout = function_exists( 'is_checkout' ) && is_checkout();
+		if ( ! $cart && ! $checkout ) {
+			return;
+		}
+		if ( ! defined( 'DONOTCACHEPAGE' ) ) {
+			define( 'DONOTCACHEPAGE', true );
+		}
+		if ( function_exists( 'nocache_headers' ) ) {
+			nocache_headers();
+		}
+	}
+
+	/**
+	 * Billing country the shopper has entered on cart or checkout.
+	 * Saved account billing is used there too. Catalog HTML stays on the geo country.
+	 *
+	 * @return string
+	 */
+	public static function entered_billing_country() {
+		$posted = self::posted_billing_country();
+		if ( '' !== $posted ) {
+			self::remember_billing_country( $posted );
+		}
+		$remembered = self::session_billing_country();
+		if ( '' === $remembered && self::billing_context_active() ) {
+			$remembered = self::account_billing_country();
+		}
+		$country = RWGCM_Price_Book::effective_billing_country( $posted, $remembered, self::billing_context_active() );
+		if ( '' !== $country ) {
+			return $country;
+		}
+		if ( self::checkout_form_active() ) {
+			return self::customer_billing_country();
+		}
+		return '';
+	}
+
+	/**
+	 * Subscription id from the change-payment-method request, or 0.
+	 *
+	 * @return int
+	 */
+	public static function change_payment_subscription_id() {
+		if ( isset( $_GET['change_payment_method'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			$raw = function_exists( 'wp_unslash' ) ? wp_unslash( $_GET['change_payment_method'] ) : $_GET['change_payment_method']; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			$id  = function_exists( 'absint' ) ? absint( $raw ) : (int) $raw;
+			if ( $id > 0 ) {
+				return $id;
+			}
+		}
+		if ( function_exists( 'get_query_var' ) ) {
+			$id = function_exists( 'absint' ) ? absint( get_query_var( 'subscription-payment-method' ) ) : (int) get_query_var( 'subscription-payment-method' );
+			if ( $id > 0 ) {
+				return $id;
+			}
+		}
+		return 0;
 	}
 
 	/**
@@ -204,14 +309,22 @@ class RWGCM_Price_Book_Currency {
 			return $renewal;
 		}
 
+		$change_currency = self::change_payment_currency();
+		if ( '' !== $change_currency ) {
+			return $change_currency;
+		}
+
 		$base = self::base_currency();
 		if ( '' === $base ) {
 			$base = RWGCM_Price_Book::normalize_currency( $fallback );
 		}
 		$decision = RWGCM_Price_Book::resolve_context(
-			self::explicit_billing_country(),
+			self::entered_billing_country(),
 			self::geo_country(),
-			$base
+			$base,
+			null,
+			null,
+			RWGCM_Price_Book::configured_fallback_currency( $base )
 		);
 		$preferred = $decision['currency'];
 		if ( function_exists( 'apply_filters' ) ) {
@@ -265,39 +378,107 @@ class RWGCM_Price_Book_Currency {
 	}
 
 	/**
-	 * Billing country the shopper has actually supplied. The store default
-	 * copied onto a guest session is not treated as a decision, so geo IP can
-	 * still choose the currency before checkout.
+	 * Saved account country. Used on cart and checkout only, never for catalog HTML.
 	 *
 	 * @return string
 	 */
-	private static function explicit_billing_country() {
-		$posted = self::posted_billing_country();
-		if ( '' !== $posted ) {
-			self::remember_billing_country( $posted );
-			return $posted;
-		}
-		if ( function_exists( 'WC' ) && WC() && WC()->session && method_exists( WC()->session, 'get' ) ) {
-			$saved = WC()->session->get( self::SESSION_BILLING );
-			$saved = RWGCM_Price_Book::normalize_country( is_string( $saved ) ? $saved : '' );
-			if ( '' !== $saved ) {
-				return $saved;
-			}
-		}
+	private static function account_billing_country() {
 		$user_id = function_exists( 'get_current_user_id' ) ? (int) get_current_user_id() : 0;
-		if ( $user_id > 0 && function_exists( 'get_user_meta' ) ) {
-			$profile = get_user_meta( $user_id, 'billing_country', true );
-			$profile = RWGCM_Price_Book::normalize_country( is_string( $profile ) ? $profile : '' );
-			if ( '' !== $profile ) {
-				return $profile;
-			}
+		if ( $user_id <= 0 || ! function_exists( 'get_user_meta' ) ) {
+			return '';
 		}
-		$at_checkout = ( function_exists( 'is_checkout' ) && is_checkout() && ( ! function_exists( 'is_order_received_page' ) || ! is_order_received_page() ) )
-			|| ( defined( 'WOOCOMMERCE_CHECKOUT' ) && WOOCOMMERCE_CHECKOUT );
-		if ( $at_checkout ) {
-			return self::customer_billing_country();
+		$profile = get_user_meta( $user_id, 'billing_country', true );
+		return RWGCM_Price_Book::normalize_country( is_string( $profile ) ? $profile : '' );
+	}
+
+	/**
+	 * @return string
+	 */
+	private static function session_billing_country() {
+		if ( ! function_exists( 'WC' ) ) {
+			return '';
 		}
-		return '';
+		$wc = WC();
+		if ( ! $wc || ! $wc->session || ! method_exists( $wc->session, 'get' ) ) {
+			return '';
+		}
+		$saved = $wc->session->get( self::SESSION_BILLING );
+		return RWGCM_Price_Book::normalize_country( is_string( $saved ) ? $saved : '' );
+	}
+
+	/**
+	 * Cart, checkout, checkout AJAX, and Store API cart or checkout.
+	 *
+	 * @return bool
+	 */
+	private static function billing_context_active() {
+		if ( self::checkout_form_active() ) {
+			return true;
+		}
+		if ( function_exists( 'is_cart' ) && is_cart() ) {
+			return true;
+		}
+		return self::is_store_api_cart_or_checkout( false );
+	}
+
+	/**
+	 * Checkout form, including checkout AJAX and the Store API checkout route.
+	 * The customer billing country is read only here, not on the catalog.
+	 *
+	 * @return bool
+	 */
+	private static function checkout_form_active() {
+		if ( function_exists( 'is_checkout' ) && is_checkout() && ( ! function_exists( 'is_order_received_page' ) || ! is_order_received_page() ) ) {
+			return true;
+		}
+		if ( defined( 'WOOCOMMERCE_CHECKOUT' ) && WOOCOMMERCE_CHECKOUT ) {
+			return true;
+		}
+		if ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() && isset( $_REQUEST['wc-ajax'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			return true;
+		}
+		if ( self::change_payment_subscription_id() > 0 ) {
+			return true;
+		}
+		return self::is_store_api_cart_or_checkout( true );
+	}
+
+	/**
+	 * @param bool $checkout_only When true, a cart route does not count.
+	 * @return bool
+	 */
+	private static function is_store_api_cart_or_checkout( $checkout_only ) {
+		if ( ! defined( 'REST_REQUEST' ) || ! REST_REQUEST ) {
+			return false;
+		}
+		$uri = isset( $_SERVER['REQUEST_URI'] ) ? (string) $_SERVER['REQUEST_URI'] : '';
+		if ( false === strpos( $uri, '/wc/store/' ) ) {
+			return false;
+		}
+		if ( false !== strpos( $uri, '/checkout' ) ) {
+			return true;
+		}
+		if ( $checkout_only ) {
+			return false;
+		}
+		return false !== strpos( $uri, '/cart' );
+	}
+
+	/**
+	 * Changing the payment method keeps the subscription currency.
+	 *
+	 * @return string
+	 */
+	private static function change_payment_currency() {
+		$id = self::change_payment_subscription_id();
+		if ( $id <= 0 || ! function_exists( 'wcs_get_subscription' ) ) {
+			return '';
+		}
+		$subscription = wcs_get_subscription( $id );
+		if ( ! is_object( $subscription ) || ! method_exists( $subscription, 'get_currency' ) ) {
+			return '';
+		}
+		return RWGCM_Price_Book::normalize_currency( $subscription->get_currency() );
 	}
 
 	/**
@@ -349,14 +530,12 @@ class RWGCM_Price_Book_Currency {
 
 	/**
 	 * Geo Core visitor country. Not used once a billing country is known.
+	 * Does not read $_COOKIE['rwgc_cc'].
 	 *
 	 * @return string
 	 */
 	private static function geo_country() {
-		if ( function_exists( 'rwgc_get_visitor_country' ) ) {
-			return RWGCM_Price_Book::normalize_country( rwgc_get_visitor_country() );
-		}
-		return '';
+		return self::visitor_country();
 	}
 
 	/**

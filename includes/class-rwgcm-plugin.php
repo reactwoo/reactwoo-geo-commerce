@@ -89,6 +89,7 @@ class RWGCM_Plugin {
 		require_once RWGCM_PATH . 'includes/class-rwgcm-price-book-currency.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-price-book-apply.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-price-book-order.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-gateway-availability.php';
 		RWGCM_Price_Book::maybe_migrate_base_adjustments();
 		require_once RWGCM_PATH . 'includes/class-rwgcm-pricing-rules.php';
 		// Migration builds a translated label; defer to `init` to avoid WP 6.7 early-textdomain notices.
@@ -128,6 +129,7 @@ class RWGCM_Plugin {
 		RWGCM_Price_Book_Currency::init();
 		RWGCM_Price_Book_Apply::init();
 		RWGCM_Price_Book_Order::init();
+		RWGCM_Gateway_Availability::init();
 		RWGCM_Pricing_Apply::init();
 		RWGCM_Catalog_Price::init();
 		RWGCM_Catalog_Price_Variable::init();

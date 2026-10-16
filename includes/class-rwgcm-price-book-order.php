@@ -46,7 +46,13 @@ class RWGCM_Price_Book_Order {
 		if ( is_array( $data ) && isset( $data['billing_country'] ) ) {
 			$billing = (string) $data['billing_country'];
 		}
-		$decision = RWGCM_Price_Book::resolve_charge( $billing, '', $base, $renewal );
+		$decision = RWGCM_Price_Book::resolve_charge(
+			$billing,
+			'',
+			$base,
+			$renewal,
+			RWGCM_Price_Book::configured_fallback_currency( $base )
+		);
 		$currency = '' !== $renewal ? $renewal : ( function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : $decision['currency'] );
 		$currency = RWGCM_Price_Book::normalize_currency( $currency );
 		if ( '' === $currency ) {

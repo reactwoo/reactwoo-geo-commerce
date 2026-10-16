@@ -33,8 +33,20 @@ if ( ! function_exists( 'apply_filters' ) ) {
 	}
 }
 
+if ( ! function_exists( 'rwgc_get_visitor_country' ) ) {
+	/**
+	 * Geo Core stand-in. Ignores any client cookie.
+	 *
+	 * @return string
+	 */
+	function rwgc_get_visitor_country() { // phpcs:ignore
+		return 'ZA';
+	}
+}
+
 require_once dirname( __DIR__ ) . '/includes/class-rwgcm-price-book.php';
 require_once dirname( __DIR__ ) . '/includes/class-rwgcm-price-book-currency.php';
+require_once dirname( __DIR__ ) . '/includes/class-rwgcm-gateway-availability.php';
 
 $passed = 0;
 $failed = 0;
@@ -194,6 +206,206 @@ $notes = RWGCM_Price_Book_Currency::revolut_constraint_notes();
 assert_true(
 	'Revolut notes name checkout currency and renewal order currency',
 	false !== strpos( $notes, 'get_woocommerce_currency()' ) && false !== strpos( $notes, 'renewal order currency' )
+);
+
+$defaults = RWGCM_Price_Book::map_from_storage( null );
+assert_true( 'missing map uses ZA ZAR', isset( $defaults['ZA'] ) && 'ZAR' === $defaults['ZA'] );
+assert_true( 'missing map uses GB GBP', isset( $defaults['GB'] ) && 'GBP' === $defaults['GB'] );
+assert_true( 'missing map uses US USD', isset( $defaults['US'] ) && 'USD' === $defaults['US'] );
+assert_true( 'missing map uses DE EUR', isset( $defaults['DE'] ) && 'EUR' === $defaults['DE'] );
+assert_true( 'saved empty map is not the defaults', array() === RWGCM_Price_Book::map_from_storage( array() ) );
+assert_true(
+	'stored map override is normalized',
+	array( 'FR' => 'EUR' ) === RWGCM_Price_Book::map_from_storage( array( 'fr' => 'eur' ) )
+);
+
+$parsed = RWGCM_Price_Book::parse_country_map_text( "za zar\n# comment\nDE EUR\nbad line\nGB:GBP\n" );
+assert_true(
+	'country map text parses CC and currency',
+	array(
+		'ZA' => 'ZAR',
+		'DE' => 'EUR',
+		'GB' => 'GBP',
+	) === $parsed
+);
+assert_true(
+	'country map text round-trips in country order',
+	"DE EUR\nGB GBP\nZA ZAR" === RWGCM_Price_Book::format_country_map_text( $parsed )
+);
+
+$fallback_billing = RWGCM_Price_Book::resolve_context( 'JP', 'ZA', 'GBP', null, null, 'EUR' );
+assert_true(
+	'unmapped billing uses the fallback and ignores geo',
+	'EUR' === $fallback_billing['currency'] && 'fallback' === $fallback_billing['source'] && 'billing_unmapped' === $fallback_billing['reason']
+);
+$fallback_geo = RWGCM_Price_Book::resolve_context( '', 'JP', 'GBP', null, null, 'EUR' );
+assert_true(
+	'unmapped visitor country uses the fallback',
+	'EUR' === $fallback_geo['currency'] && 'fallback' === $fallback_geo['source'] && 'geo_unmapped' === $fallback_geo['reason']
+);
+$fallback_unknown = RWGCM_Price_Book::resolve_context( 'JP', 'ZA', 'GBP', null, null, 'CAD' );
+assert_true(
+	'fallback outside the currency list stays on the store currency',
+	'GBP' === $fallback_unknown['currency'] && 'base' === $fallback_unknown['source']
+);
+
+assert_true(
+	'catalog ignores a remembered billing country',
+	'' === RWGCM_Price_Book::effective_billing_country( '', 'ZA', false )
+);
+assert_true(
+	'checkout keeps a remembered billing country',
+	'ZA' === RWGCM_Price_Book::effective_billing_country( '', 'ZA', true )
+);
+assert_true(
+	'a posted billing country decides even off checkout',
+	'GB' === RWGCM_Price_Book::effective_billing_country( 'GB', 'ZA', false )
+);
+
+$_COOKIE['rwgc_cc'] = 'US';
+assert_true(
+	'visitor country comes from Geo Core and ignores rwgc_cc',
+	'ZA' === RWGCM_Price_Book_Currency::visitor_country() && 'US' === $_COOKIE['rwgc_cc']
+);
+$cache_notes = RWGCM_Price_Book_Currency::cache_compatibility_notes();
+assert_true(
+	'cache notes name Geo Core country and the vary cookie',
+	false !== strpos( $cache_notes, 'rwgc_get_visitor_country' ) && false !== strpos( $cache_notes, 'rwgc_cc' )
+);
+
+$gateways = array(
+	'revolut_cc' => 'card',
+	'bacs'       => 'bank',
+	'paypal'     => 'paypal',
+);
+$country_rule = array(
+	'countries' => array(
+		'ZA' => array( 'revolut_cc' ),
+	),
+	'groups'    => array(
+		'eu' => array( 'bacs', 'paypal' ),
+	),
+);
+assert_true(
+	'unset country keeps every enabled gateway',
+	null === RWGCM_Gateway_Availability::resolve_allowed_ids( 'JP', $country_rule, array() )
+);
+assert_true(
+	'country rule intersects the gateway list',
+	array( 'revolut_cc' ) === array_keys( RWGCM_Gateway_Availability::select_gateway_ids( $gateways, RWGCM_Gateway_Availability::resolve_allowed_ids( 'ZA', $country_rule, array( array( 'bacs' ) ) ) ) )
+);
+$group_lists = RWGCM_Gateway_Availability::gateway_lists_for_country(
+	'DE',
+	$country_rule,
+	array(
+		'eu'  => array( 'DE', 'FR' ),
+		'row' => array( 'ZA' ),
+	)
+);
+$group_allowed = RWGCM_Gateway_Availability::resolve_allowed_ids( 'DE', $country_rule, $group_lists );
+assert_true(
+	'a matching country group limits gateways',
+	array( 'bacs', 'paypal' ) === array_keys( RWGCM_Gateway_Availability::select_gateway_ids( $gateways, $group_allowed ) )
+);
+$union_rule = array(
+	'countries' => array(),
+	'groups'    => array(
+		'eu'    => array( 'bacs' ),
+		'cards' => array( 'revolut_cc' ),
+	),
+);
+$union_lists = RWGCM_Gateway_Availability::gateway_lists_for_country(
+	'DE',
+	$union_rule,
+	array(
+		'eu'    => array( 'DE' ),
+		'cards' => array( 'DE' ),
+	)
+);
+assert_true(
+	'matching groups are combined',
+	array( 'bacs', 'revolut_cc' ) === RWGCM_Gateway_Availability::resolve_allowed_ids( 'DE', $union_rule, $union_lists )
+);
+assert_true(
+	'a country rule replaces a group rule',
+	array( 'revolut_cc' ) === RWGCM_Gateway_Availability::resolve_allowed_ids( 'ZA', $country_rule, array( array( 'bacs' ) ) )
+);
+assert_true(
+	'an explicit empty country rule allows no gateways',
+	array() === RWGCM_Gateway_Availability::resolve_allowed_ids(
+		'ZA',
+		array(
+			'countries' => array( 'ZA' => array() ),
+			'groups'    => array(),
+		),
+		array( array( 'bacs' ) )
+	)
+);
+assert_true(
+	'saving drops an empty gateway selection',
+	array() === RWGCM_Gateway_Availability::sanitize_rules(
+		array(
+			'countries' => array( 'ZA' => array() ),
+			'groups'    => array( 'eu' => array( '' ) ),
+		)
+	)['countries']
+);
+assert_true(
+	'empty billing country does not restrict gateways',
+	! RWGCM_Gateway_Availability::should_restrict(
+		array(
+			'checkout'        => true,
+			'billing_country' => '',
+		)
+	)
+);
+assert_true(
+	'checkout with a billing country restricts gateways',
+	RWGCM_Gateway_Availability::should_restrict(
+		array(
+			'checkout'        => true,
+			'billing_country' => 'ZA',
+		)
+	)
+);
+assert_true(
+	'a renewal does not restrict gateways',
+	! RWGCM_Gateway_Availability::should_restrict(
+		array(
+			'checkout'        => true,
+			'renewal'         => true,
+			'billing_country' => 'ZA',
+		)
+	)
+);
+assert_true(
+	'paying a renewal order does not restrict gateways',
+	! RWGCM_Gateway_Availability::should_restrict(
+		array(
+			'checkout'        => true,
+			'renewal_pay'     => true,
+			'billing_country' => 'ZA',
+		)
+	)
+);
+assert_true(
+	'changing the payment method still restricts by billing country',
+	RWGCM_Gateway_Availability::should_restrict(
+		array(
+			'change_payment'  => true,
+			'billing_country' => 'DE',
+		)
+	)
+);
+assert_true(
+	'wp-admin does not restrict gateways',
+	! RWGCM_Gateway_Availability::should_restrict(
+		array(
+			'admin'           => true,
+			'checkout'        => true,
+			'billing_country' => 'ZA',
+		)
+	)
 );
 
 echo "\n{$passed} passed, {$failed} failed\n";
