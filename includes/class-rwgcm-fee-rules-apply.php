@@ -32,6 +32,9 @@ class RWGCM_Fee_Rules_Apply {
 		if ( ! class_exists( 'RWGCM_Fee_Rules', false ) || ! RWGCM_Fee_Rules::is_enabled() ) {
 			return $fees;
 		}
+		if ( self::price_book_currency_is_not_base() ) {
+			return $fees;
+		}
 		$country = '';
 		if ( function_exists( 'rwgc_get_visitor_country' ) ) {
 			$country = strtoupper( substr( (string) rwgc_get_visitor_country(), 0, 2 ) );
@@ -56,5 +59,20 @@ class RWGCM_Fee_Rules_Apply {
 			$fees[] = $row;
 		}
 		return $fees;
+	}
+
+	/**
+	 * Geo fee amounts are store-currency figures. Skip them when the cart
+	 * currency is a price-book currency so they are not added without conversion.
+	 *
+	 * @return bool
+	 */
+	private static function price_book_currency_is_not_base() {
+		if ( ! class_exists( 'RWGCM_Price_Book_Currency', false ) || ! function_exists( 'get_woocommerce_currency' ) ) {
+			return false;
+		}
+		$base   = RWGCM_Price_Book_Currency::base_currency();
+		$active = RWGCM_Price_Book::normalize_currency( get_woocommerce_currency() );
+		return '' !== $active && $active !== $base;
 	}
 }

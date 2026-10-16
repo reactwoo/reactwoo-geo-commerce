@@ -7,8 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-16
+
 ### Added
-- **Rules UX (0.3.16 development):** Unified Pricing Rules and Product Overlays under shared Rules model with guided condition builder, multi-action rule builder, and human-readable summaries; legacy overlays/pricing deprecated with migration.
+- **Price books:** Admins can store fixed regular, sale, and (for subscriptions) sign-up prices per currency on simple products and variable-subscription variations. Default currencies are ZAR, GBP, EUR, and USD; `rwgcm_price_book_currencies` and `rwgcm_price_book_country_currencies` extend the lists.
+- **Currency selection:** Billing country decides the currency. Geo Core’s visitor country is the fallback only while billing country is unknown. Cart, checkout, and the order use that currency and the fixed price, with no conversion. A currency with no price falls back to the store currency.
+- **Subscription renewals:** Renewal orders keep the subscription currency and the price already stored on the subscription.
+- **Settings:** “Keep store-currency geo price adjustments” is migrated on, so existing GBP (store-currency) pricing rules still apply when a product has no fixed price in the store currency.
+
+### Notes
+- Revolut Gateway for WooCommerce reads `get_woocommerce_currency()` for the checkout charge and then requires the WooCommerce order currency to match. Price books set both. Card payments accept ZAR, GBP, EUR, and USD when the merchant has those currency accounts.
 
 ## [0.3.15] - 2026-06-06
 

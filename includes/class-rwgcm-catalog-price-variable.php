@@ -215,6 +215,9 @@ class RWGCM_Catalog_Price_Variable {
 	 * @return bool
 	 */
 	private static function guard( $variation ) {
+		if ( class_exists( 'RWGCM_Price_Book_Apply', false ) && ! RWGCM_Price_Book_Apply::allow_base_adjustment( $variation ) ) {
+			return false;
+		}
 		if ( ! class_exists( 'RWGCM_Pricing_Resolution', false ) || ! RWGCM_Pricing_Resolution::is_pricing_effective() ) {
 			return false;
 		}

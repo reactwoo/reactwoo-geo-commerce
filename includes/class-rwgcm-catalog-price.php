@@ -47,6 +47,9 @@ class RWGCM_Catalog_Price {
 		if ( ! apply_filters( 'rwgcm_apply_catalog_price', true, $product ) ) {
 			return $price;
 		}
+		if ( class_exists( 'RWGCM_Price_Book_Apply', false ) && ! RWGCM_Price_Book_Apply::allow_base_adjustment( $product ) ) {
+			return $price;
+		}
 
 		$rule = RWGCM_Pricing_Resolution::find_price_adjustment( $product );
 		if ( null === $rule ) {

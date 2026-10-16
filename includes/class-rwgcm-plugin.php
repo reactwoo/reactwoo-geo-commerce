@@ -85,6 +85,11 @@ class RWGCM_Plugin {
 			RWGCM_DB::install();
 		}
 
+		require_once RWGCM_PATH . 'includes/class-rwgcm-price-book.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-price-book-currency.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-price-book-apply.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-price-book-order.php';
+		RWGCM_Price_Book::maybe_migrate_base_adjustments();
 		require_once RWGCM_PATH . 'includes/class-rwgcm-pricing-rules.php';
 		// Migration builds a translated label; defer to `init` to avoid WP 6.7 early-textdomain notices.
 		add_action( 'init', array( 'RWGCM_Rule_Migration', 'maybe_migrate_all' ), 1 );
@@ -104,6 +109,9 @@ class RWGCM_Plugin {
 		require_once RWGCM_PATH . 'includes/class-rwgcm-coupon-geo.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-attribution.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-admin.php';
+		if ( is_admin() ) {
+			require_once RWGCM_PATH . 'includes/class-rwgcm-price-book-admin.php';
+		}
 		require_once RWGCM_PATH . 'includes/class-rwgcm-admin-pricing.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-admin-rules.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-admin-fees.php';
@@ -117,6 +125,9 @@ class RWGCM_Plugin {
 		RWGCM_Cart_Fees::init();
 		RWGCM_Shipping::init();
 		RWGCM_Coupon_Geo::init();
+		RWGCM_Price_Book_Currency::init();
+		RWGCM_Price_Book_Apply::init();
+		RWGCM_Price_Book_Order::init();
 		RWGCM_Pricing_Apply::init();
 		RWGCM_Catalog_Price::init();
 		RWGCM_Catalog_Price_Variable::init();
@@ -125,6 +136,9 @@ class RWGCM_Plugin {
 		require_once RWGCM_PATH . 'includes/class-rwgcm-platform-capabilities.php';
 		RWGCM_Platform_Capabilities::init();
 		RWGCM_Admin::init();
+		if ( is_admin() ) {
+			RWGCM_Price_Book_Admin::init();
+		}
 		RWGCM_Admin_Pricing::init();
 		RWGCM_Admin_Rules::init();
 		RWGCM_Admin_Fees::init();
