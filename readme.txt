@@ -20,6 +20,7 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 == Changelog ==
 
 = 0.4.5 =
+* **Checkout currency:** A visitor's checkout billing and shipping country default to their geo country when the store sells there, and a pre-filled billing country no longer switches the cart to the store currency. Only a billing country the customer chose (or a logged-in customer's saved one) changes the currency.
 * **Currency:** Store API product data (block product grids, single product, cart cross-sells, batch) and product JSON-LD no longer label a store-currency amount with the visitor's currency. A product without a price-book entry in the active currency reports the store currency, matching the classic price HTML. Checkout refuses an order whose currency has no price-book amount for one of its lines.
 
 = 0.4.4 =

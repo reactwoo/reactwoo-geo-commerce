@@ -10,11 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.5] - 2026-10-17
 
 ### Fixed
+- **Checkout flipped a geo visitor to the store currency (live, classic checkout).** A ZA guest saw R699 on `/cart/` and £39 on `/checkout/`. WooCommerce pre-fills billing with the store base country (GB), and `entered_billing_country()` fell back to `WC()->customer->get_billing_country()`, so the pre-filled default overrode the geo currency. Now:
+  - Checkout billing and shipping (`default_checkout_billing_country`, `default_checkout_shipping_country`) and a new guest's default location (`woocommerce_customer_default_location_array`) default to the Geo Core visitor country when the customer has chosen none and the store sells there (`get_allowed_countries()` / `get_shipping_countries()`). Otherwise WooCommerce's default is kept.
+  - Only a billing country the customer actually set overrides geo: posted this request (`update_order_review`, checkout), remembered from a checkout or Store API cart/checkout update-customer, or a logged-in customer's saved billing country. The WooCommerce customer-object fallback is removed (`RWGCM_Price_Book::chosen_billing_country()`).
+  - A ZA guest who switches billing to GB still gets GBP. The whole cart still follows `currency_for_lines()`, and the order currency and checkout guard are unchanged.
 - **Store API currency mislabel.** In 0.4.4, `/wc/store/v1/products` (and block product grids, cart `cross_sells`, and batch sub-responses) built `prices` from the unconverted store-currency amount but took `currency_code` and the symbol from `get_woocommerce_currency()`. A ZA visitor therefore got `currency_code=ZAR, price=2300` for a £23 product with no ZAR price book, which a block storefront renders as R23.00. A new `RWGCM_Price_Book_Store_Api` (`rest_post_dispatch`, `/wc/store/` routes only) rewrites the currency fields of any product node that has no book price in the active currency to the store currency. Amounts are unchanged. A variable product counts as priced only when every variation has a book price. Cart line items are not rewritten, because the whole cart already follows `currency_for_lines()`.
 - **Product JSON-LD.** `offers[].priceCurrency` (including `priceSpecification`) reports the store currency for products without a book price in the active currency.
 
 ### Added
 - **Checkout currency guard (defence in depth).** On `woocommerce_checkout_create_order` and `woocommerce_store_api_checkout_update_order_meta`, the plugin refuses an order whose currency is not the store currency while a line has no book price in that currency, and logs to `rwgcm-price-book`. `currency_for_lines()` should make this unreachable. The guard stops a gateway from ever charging a store-currency number as another currency.
+- `tests/test-checkout-country.php`: a ZA guest defaults to ZA and ZAR, an explicit GB choice gives GBP (posted and Store API), a saved GB account gives GBP, a geo country not sold to keeps the WooCommerce default, and mixed carts stay GBP while the guard agrees.
 - `tests/test-store-api-currency.php`: Store API product and cart payloads for ZA, with and without a ZAR book, plus a mixed cart, cross-sells, the guard, and JSON-LD.
 
 ## [0.4.4] - 2026-10-17

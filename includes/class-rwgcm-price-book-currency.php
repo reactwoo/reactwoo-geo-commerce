@@ -45,6 +45,13 @@ class RWGCM_Price_Book_Currency {
 	private static $resolving = false;
 
 	/**
+	 * Re-entrancy guard for checkout country defaults.
+	 *
+	 * @var bool
+	 */
+	private static $defaulting = false;
+
+	/**
 	 * True while this class is reading the cart, so price filters cannot load it again.
 	 *
 	 * @var bool
@@ -63,6 +70,9 @@ class RWGCM_Price_Book_Currency {
 	 */
 	public static function init() {
 		add_filter( 'woocommerce_currency', array( __CLASS__, 'filter_currency' ), 20 );
+		add_filter( 'default_checkout_billing_country', array( __CLASS__, 'filter_default_checkout_country' ), 20, 2 );
+		add_filter( 'default_checkout_shipping_country', array( __CLASS__, 'filter_default_checkout_country' ), 20, 2 );
+		add_filter( 'woocommerce_customer_default_location_array', array( __CLASS__, 'filter_default_location' ), 20 );
 		add_action( 'woocommerce_scheduled_subscription_payment', array( __CLASS__, 'flag_scheduled_renewal' ), 0, 1 );
 		add_action( 'woocommerce_checkout_update_customer', array( __CLASS__, 'remember_checkout_billing' ), 10, 2 );
 		add_action( 'woocommerce_store_api_checkout_update_customer_from_request', array( __CLASS__, 'remember_store_api_billing' ), 10, 2 );
@@ -219,18 +229,102 @@ class RWGCM_Price_Book_Currency {
 		if ( '' !== $posted ) {
 			self::remember_billing_country( $posted );
 		}
-		$remembered = self::session_billing_country();
-		if ( '' === $remembered && self::billing_context_active() ) {
-			$remembered = self::account_billing_country();
+		$context = self::billing_context_active();
+		return RWGCM_Price_Book::chosen_billing_country(
+			$posted,
+			self::session_billing_country(),
+			$context ? self::account_billing_country() : '',
+			$context
+		);
+	}
+
+	/**
+	 * default_checkout_billing_country / default_checkout_shipping_country:
+	 * a customer with no chosen country gets the geo country (if allowed).
+	 *
+	 * @param mixed  $value Value WooCommerce would pre-fill.
+	 * @param string $input Field key.
+	 * @return mixed
+	 */
+	public static function filter_default_checkout_country( $value, $input = '' ) {
+		if ( '' !== self::chosen_country_for_defaults() ) {
+			return $value;
 		}
-		$country = RWGCM_Price_Book::effective_billing_country( $posted, $remembered, self::billing_context_active() );
-		if ( '' !== $country ) {
-			return $country;
+		return self::geo_default_country( (string) $value, 'shipping_country' === $input );
+	}
+
+	/**
+	 * woocommerce_customer_default_location_array: the location a new
+	 * (guest) customer session starts with.
+	 *
+	 * @param mixed $location array( country, state ).
+	 * @return mixed
+	 */
+	public static function filter_default_location( $location ) {
+		if ( ! is_array( $location ) ) {
+			return $location;
 		}
-		if ( self::checkout_form_active() ) {
-			return self::customer_billing_country();
+		$current = isset( $location['country'] ) ? (string) $location['country'] : '';
+		$country = self::geo_default_country( $current, false );
+		if ( $country !== $current ) {
+			$location['country'] = $country;
+			$location['state']   = '';
 		}
-		return '';
+		return $location;
+	}
+
+	/**
+	 * @param string $wc_default WooCommerce default.
+	 * @param bool   $shipping   Use shipping countries.
+	 * @return string
+	 */
+	private static function geo_default_country( $wc_default, $shipping ) {
+		if ( self::$defaulting || self::forces_store_currency() ) {
+			return $wc_default;
+		}
+		self::$defaulting = true;
+		try {
+			$geo     = self::visitor_country();
+			$allowed = self::sell_countries( $shipping );
+		} finally {
+			self::$defaulting = false;
+		}
+		return RWGCM_Price_Book::default_checkout_country( $geo, $allowed, $wc_default );
+	}
+
+	/**
+	 * @param bool $shipping Shipping list instead of selling list.
+	 * @return array<int|string>
+	 */
+	private static function sell_countries( $shipping ) {
+		if ( ! function_exists( 'WC' ) ) {
+			return array();
+		}
+		$wc = WC();
+		if ( ! $wc || empty( $wc->countries ) || ! is_object( $wc->countries ) ) {
+			return array();
+		}
+		$method = $shipping && method_exists( $wc->countries, 'get_shipping_countries' ) ? 'get_shipping_countries' : 'get_allowed_countries';
+		if ( ! method_exists( $wc->countries, $method ) ) {
+			return array();
+		}
+		$list = $wc->countries->$method();
+		return is_array( $list ) ? $list : array();
+	}
+
+	/**
+	 * Chosen billing country without the cart/checkout context limit on the
+	 * saved account country (the form is pre-filled from it anyway).
+	 *
+	 * @return string
+	 */
+	private static function chosen_country_for_defaults() {
+		return RWGCM_Price_Book::chosen_billing_country(
+			self::posted_billing_country(),
+			self::session_billing_country(),
+			self::account_billing_country(),
+			true
+		);
 	}
 
 	/**
@@ -609,20 +703,6 @@ class RWGCM_Price_Book_Currency {
 			}
 		}
 		return '';
-	}
-
-	/**
-	 * @return string
-	 */
-	private static function customer_billing_country() {
-		if ( ! function_exists( 'WC' ) ) {
-			return '';
-		}
-		$wc = WC();
-		if ( ! $wc || ! $wc->customer || ! method_exists( $wc->customer, 'get_billing_country' ) ) {
-			return '';
-		}
-		return RWGCM_Price_Book::normalize_country( $wc->customer->get_billing_country() );
 	}
 
 	/**
