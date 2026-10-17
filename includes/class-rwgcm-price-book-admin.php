@@ -285,7 +285,29 @@ class RWGCM_Price_Book_Admin {
 			echo '<input type="hidden" name="rwgcm_gateway_country_rows[]" value="' . esc_attr( $code ) . '" />';
 		}
 
-		echo '<div style="overflow-x: auto;">';
+		$notice = RWGCM_Gateway_Availability::unregistered_checkout_notice(
+			RWGCM_Gateway_Availability::last_unregistered_gateway_ids(),
+			$choices
+		);
+		if ( '' !== $notice ) {
+			echo '<div class="notice notice-warning"><p>' . esc_html( $notice ) . '</p></div>';
+		}
+
+		$names = array();
+		foreach ( $choices as $id => $choice ) {
+			$label   = is_array( $choice ) && isset( $choice['title'] ) ? (string) $choice['title'] : (string) $id;
+			$names[] = empty( $choice['enabled'] ) ? sprintf( '%s (%s, %s)', $label, $id, __( 'disabled in WooCommerce', 'reactwoo-geo-commerce' ) ) : sprintf( '%s (%s)', $label, $id );
+		}
+		echo '<p class="description rwgcm-gateway-summary">' . esc_html(
+			sprintf(
+				/* translators: 1: number of gateways, 2: gateway list. */
+				_n( '%1$d gateway found: %2$s. Scroll the table sideways to reach every column.', '%1$d gateways found: %2$s. Scroll the table sideways to reach every column.', count( $names ), 'reactwoo-geo-commerce' ),
+				count( $names ),
+				implode( ', ', $names )
+			)
+		) . '</p>';
+
+		echo '<div class="rwgcm-gateway-matrix" style="overflow-x: auto;">';
 		echo '<table class="widefat striped"><thead><tr><th>' . esc_html__( 'Billing country', 'reactwoo-geo-commerce' ) . '</th>';
 		foreach ( $choices as $id => $choice ) {
 			echo '<th>' . self::gateway_heading_html( $id, $choice ) . '</th>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the helper.

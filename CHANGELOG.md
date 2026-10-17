@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-10-17
+
+### Fixed
+- **Payments by country lists a gateway WooCommerce’s registry missed.** The screen re-reads the `woocommerce_payment_gateways` filter when it renders, skips gateways already loaded, and instantiates any missing gateway inside try/catch. Checkout still uses WooCommerce’s own list. A warning names each gateway found only that way, because checkout cannot offer it until WooCommerce registers it.
+- **The last gateway column is easier to find.** A summary above the country table names every gateway, and the country column stays on screen while the table scrolls. Unconfigured Paystack is usually that last column.
+
 ## [0.4.3] - 2026-10-17
 
 ### Changed

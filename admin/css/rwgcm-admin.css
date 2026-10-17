@@ -356,3 +356,12 @@
     padding: 8px;
   }
 }
+
+/* Keep the country column visible while scrolling to gateways on the right (Paystack is usually last). */
+.rwgcm-gateway-matrix table th:first-child,
+.rwgcm-gateway-matrix table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: #fff;
+}

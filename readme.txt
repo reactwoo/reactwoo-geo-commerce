@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.4.3
+Stable tag: 0.4.4
 
 WooCommerce rules and personalization on ReactWoo Geo Core.
 
@@ -18,6 +18,9 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 2. Activate this plugin.
 
 == Changelog ==
+
+= 0.4.4 =
+* **Gateways:** Payments by country lists a gateway even when WooCommerce’s own registry missed it, and warns that checkout cannot offer that gateway until WooCommerce registers it. A summary above the table names every gateway, and the country column stays visible while the table scrolls.
 
 = 0.4.3 =
 * **Navigation:** Price books and Payments by country are their own Commerce screens. The Commerce hub leads with Rules, Price books, Configure payment gateways, and Settings. WooCommerce → Settings → Payments links to the per-country screen from the checkout settings output, because WooCommerce 11.2 removes third-party admin notices on the React Payments page.
