@@ -657,5 +657,104 @@ assert_true(
 		&& 'billing' === $store_order->meta[ RWGCM_Price_Book_Order::META_SOURCE ]
 );
 
+$paystack = new class() {
+	public $enabled = false;
+	public $id      = 'paystack';
+
+	/**
+	 * @return string
+	 */
+	public function get_method_title() {
+		return 'Paystack';
+	}
+};
+$paystack_one = new class() {
+	public $enabled = false;
+	public $id      = 'paystack-one';
+
+	/**
+	 * @return string
+	 */
+	public function get_title() {
+		return 'Paystack One';
+	}
+};
+$bacs = new class() {
+	public $enabled = 'yes';
+	public $id      = 'bacs';
+
+	/**
+	 * @return string
+	 */
+	public function get_method_title() {
+		return 'Direct bank transfer';
+	}
+};
+$choices = RWGCM_Gateway_Availability::choices_from_gateways(
+	array(
+		'bacs'         => $bacs,
+		'paystack'     => $paystack,
+		'paystack-one' => $paystack_one,
+	)
+);
+assert_true( 'a disabled Paystack gateway is still listed', isset( $choices['paystack'] ) && 'Paystack' === $choices['paystack']['title'] && false === $choices['paystack']['enabled'] );
+assert_true( 'paystack-one is listed when it is registered and switched off', isset( $choices['paystack-one'] ) && false === $choices['paystack-one']['enabled'] );
+assert_true( 'an enabled gateway stays enabled in the list', isset( $choices['bacs'] ) && true === $choices['bacs']['enabled'] );
+$availability_src = file_get_contents( dirname( __DIR__ ) . '/includes/class-rwgcm-gateway-availability.php' );
+assert_true(
+	'gateway choices read the registered gateway list',
+	is_string( $availability_src ) && false !== strpos( $availability_src, '->payment_gateways()' ) && false === strpos( $availability_src, 'get_available_payment_gateways(' )
+);
+assert_true(
+	'Paystack on a GBP store is explained without changing the store currency',
+	'Paystack shows as disabled in WooCommerce because the store currency is GBP; ReactWoo Geo enables it for ZAR checkouts.' === RWGCM_Gateway_Availability::disabled_currency_hint( 'Paystack', 'GBP', array( 'ZAR' ) )
+);
+assert_true( 'a Paystack family gateway gets that hint before a currency is saved', RWGCM_Gateway_Availability::explain_disabled_gateway( 'paystack-five', array() ) );
+assert_true( 'a disabled gateway with no currency list and no Paystack id is only badged', ! RWGCM_Gateway_Availability::explain_disabled_gateway( 'cheque', array() ) );
+
+$kept = RWGCM_Gateway_Availability::merge_posted_rules(
+	array(
+		'countries' => array(
+			'ZA' => array( 'cheque', 'paystack' ),
+			'DE' => array( 'bacs' ),
+		),
+		'groups'    => array(),
+	),
+	array(
+		'countries' => array(
+			'ZA' => array( 'cheque' ),
+		),
+		'groups'    => array(),
+	),
+	array( 'bacs', 'cheque', 'square_credit_card' ),
+	array( 'ZA' ),
+	array()
+);
+assert_true(
+	'saving without a Paystack column keeps Paystack on ZA',
+	isset( $kept['countries']['ZA'] ) && in_array( 'paystack', $kept['countries']['ZA'], true ) && in_array( 'cheque', $kept['countries']['ZA'], true )
+);
+assert_true( 'a country row that was not on the form is kept', isset( $kept['countries']['DE'] ) && array( 'bacs' ) === $kept['countries']['DE'] );
+
+$unchecked = RWGCM_Gateway_Availability::merge_posted_rules(
+	array(
+		'countries' => array(
+			'ZA' => array( 'cheque', 'paystack' ),
+		),
+	),
+	array(
+		'countries' => array(
+			'ZA' => array( 'cheque' ),
+		),
+	),
+	array( 'cheque', 'paystack' ),
+	array( 'ZA' ),
+	array()
+);
+assert_true(
+	'unchecking a gateway that was on the form removes only that gateway',
+	isset( $unchecked['countries']['ZA'] ) && array( 'cheque' ) === $unchecked['countries']['ZA']
+);
+
 echo "\n{$passed} passed, {$failed} failed\n";
 exit( $failed > 0 ? 1 : 0 );

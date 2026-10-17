@@ -220,39 +220,208 @@ class RWGCM_Gateway_Availability {
 	}
 
 	/**
-	 * Enabled WooCommerce gateways for the settings checkboxes.
+	 * Every registered WooCommerce gateway, including ones the gateway has switched off.
 	 *
-	 * @return array<string, string> Id => title.
+	 * Uses WC()->payment_gateways()->payment_gateways(), the full registry.
+	 * The available-gateway list hides Paystack when its constructor sets enabled
+	 * to false because the store currency is unsupported.
+	 *
+	 * @return array<string, array{title: string, enabled: bool}>
 	 */
 	public static function gateway_choices() {
-		$choices = array();
 		if ( ! function_exists( 'WC' ) ) {
-			return $choices;
+			return array();
 		}
 		$wc = WC();
 		if ( ! $wc || ! method_exists( $wc, 'payment_gateways' ) ) {
-			return $choices;
+			return array();
 		}
 		$controller = $wc->payment_gateways();
 		if ( ! is_object( $controller ) || ! method_exists( $controller, 'payment_gateways' ) ) {
-			return $choices;
+			return array();
 		}
 		$all = $controller->payment_gateways();
-		if ( ! is_array( $all ) ) {
-			return $choices;
-		}
-		foreach ( $all as $id => $gateway ) {
+		return self::choices_from_gateways( is_array( $all ) ? $all : array() );
+	}
+
+	/**
+	 * @param array<string, mixed> $gateways Gateway id => gateway object.
+	 * @return array<string, array{title: string, enabled: bool}>
+	 */
+	public static function choices_from_gateways( array $gateways ) {
+		$choices = array();
+		foreach ( $gateways as $id => $gateway ) {
 			if ( ! is_object( $gateway ) ) {
 				continue;
 			}
-			$enabled = isset( $gateway->enabled ) && 'yes' === $gateway->enabled;
-			if ( ! $enabled ) {
+			$key     = isset( $gateway->id ) && is_string( $gateway->id ) && '' !== $gateway->id ? $gateway->id : (string) $id;
+			$key     = preg_replace( '/[^A-Za-z0-9_\-]/', '', $key );
+			$key     = is_string( $key ) ? $key : '';
+			if ( '' === $key ) {
 				continue;
 			}
-			$title = method_exists( $gateway, 'get_title' ) ? (string) $gateway->get_title() : (string) $id;
-			$choices[ (string) $id ] = '' !== $title ? $title : (string) $id;
+			$title = method_exists( $gateway, 'get_method_title' ) ? (string) $gateway->get_method_title() : '';
+			if ( '' === $title && method_exists( $gateway, 'get_title' ) ) {
+				$title = (string) $gateway->get_title();
+			}
+			$choices[ $key ] = array(
+				'title'   => '' !== $title ? $title : $key,
+				'enabled' => self::gateway_enabled_in_woocommerce( $gateway ),
+			);
 		}
 		return $choices;
+	}
+
+	/**
+	 * WooCommerce stores enabled as yes/no. Paystack sets the property to boolean false
+	 * when is_valid_for_use() fails.
+	 *
+	 * @param object $gateway Gateway instance.
+	 * @return bool
+	 */
+	public static function gateway_enabled_in_woocommerce( $gateway ) {
+		if ( ! is_object( $gateway ) || ! isset( $gateway->enabled ) ) {
+			return false;
+		}
+		$value = $gateway->enabled;
+		if ( is_bool( $value ) ) {
+			return $value;
+		}
+		$normalized = strtolower( trim( (string) $value ) );
+		return in_array( $normalized, array( 'yes', 'true', '1' ), true );
+	}
+
+	/**
+	 * Hint for a gateway WooCommerce has switched off because of the store currency.
+	 *
+	 * @param string             $title       Gateway title.
+	 * @param string             $store_currency Store currency code.
+	 * @param array<int, string> $currencies  Currencies ReactWoo Geo will offer.
+	 * @return string
+	 */
+	public static function disabled_currency_hint( $title, $store_currency, array $currencies ) {
+		$store = strtoupper( preg_replace( '/[^A-Za-z]/', '', (string) $store_currency ) );
+		$store = is_string( $store ) && '' !== $store ? $store : __( 'the store currency', 'reactwoo-geo-commerce' );
+		$codes = array();
+		foreach ( $currencies as $code ) {
+			$code = strtoupper( preg_replace( '/[^A-Za-z]/', '', (string) $code ) );
+			if ( is_string( $code ) && '' !== $code && ! in_array( $code, $codes, true ) ) {
+				$codes[] = $code;
+			}
+		}
+		if ( empty( $codes ) ) {
+			return sprintf(
+				/* translators: 1: gateway title, 2: store currency code. */
+				__( '%1$s shows as disabled in WooCommerce because the store currency is %2$s. Add the currencies it can charge. ReactWoo Geo then offers it on those checkouts. WooCommerce can still show Action needed.', 'reactwoo-geo-commerce' ),
+				$title,
+				$store
+			);
+		}
+		return sprintf(
+			/* translators: 1: gateway title, 2: store currency code, 3: checkout currency codes. */
+			__( '%1$s shows as disabled in WooCommerce because the store currency is %2$s; ReactWoo Geo enables it for %3$s checkouts.', 'reactwoo-geo-commerce' ),
+			$title,
+			$store,
+			implode( ', ', $codes )
+		);
+	}
+
+	/**
+	 * Paystack and its extra instances disable themselves when the store currency is unsupported.
+	 *
+	 * @param string             $gateway_id Gateway id.
+	 * @param array<int, string> $currencies Saved currency list.
+	 * @return bool
+	 */
+	public static function explain_disabled_gateway( $gateway_id, array $currencies ) {
+		$id = strtolower( (string) $gateway_id );
+		if ( 'paystack' === $id || 0 === strpos( $id, 'paystack-' ) ) {
+			return true;
+		}
+		return ! empty( $currencies );
+	}
+
+	/**
+	 * Keep saved gateway ids the form did not render. Submitted rows replace only the gateways that were shown.
+	 *
+	 * @param array<string, mixed> $existing            Stored rules.
+	 * @param array<string, mixed> $posted              Posted countries and groups.
+	 * @param array<int, string>   $shown_gateway_ids   Gateway columns on the form.
+	 * @param array<int, string>   $shown_countries     Country rows on the form.
+	 * @param array<int, string>   $shown_groups        Group rows on the form.
+	 * @return array{countries: array<string, array<int, string>>, groups: array<string, array<int, string>>}
+	 */
+	public static function merge_posted_rules( array $existing, array $posted, array $shown_gateway_ids, array $shown_countries, array $shown_groups ) {
+		$existing  = self::normalize_rules( $existing );
+		$posted    = self::normalize_rules( $posted );
+		$shown_ids = self::normalize_ids( $shown_gateway_ids );
+		$countries = array();
+		foreach ( $shown_countries as $country ) {
+			$country = RWGCM_Price_Book::normalize_country( $country );
+			if ( '' !== $country && ! in_array( $country, $countries, true ) ) {
+				$countries[] = $country;
+			}
+		}
+		$groups = array();
+		foreach ( $shown_groups as $slug ) {
+			$slug = self::normalize_slug( $slug );
+			if ( '' !== $slug && ! in_array( $slug, $groups, true ) ) {
+				$groups[] = $slug;
+			}
+		}
+		return array(
+			'countries' => self::merge_rule_bucket( $existing['countries'], $posted['countries'], $shown_ids, $countries ),
+			'groups'    => self::merge_rule_bucket( $existing['groups'], $posted['groups'], $shown_ids, $groups ),
+		);
+	}
+
+	/**
+	 * @param array<string, array<int, string>> $existing  Stored bucket.
+	 * @param array<string, array<int, string>> $posted    Posted bucket.
+	 * @param array<int, string>                $shown_ids Gateway ids rendered as inputs.
+	 * @param array<int, string>                $shown_keys Row keys rendered on the form.
+	 * @return array<string, array<int, string>>
+	 */
+	private static function merge_rule_bucket( array $existing, array $posted, array $shown_ids, array $shown_keys ) {
+		$out  = $existing;
+		$keys = $shown_keys;
+		foreach ( array_keys( $posted ) as $key ) {
+			if ( ! in_array( $key, $keys, true ) ) {
+				$keys[] = $key;
+			}
+		}
+		foreach ( $keys as $key ) {
+			$previous = isset( $existing[ $key ] ) && is_array( $existing[ $key ] ) ? $existing[ $key ] : array();
+			$kept     = array();
+			foreach ( $previous as $id ) {
+				if ( ! in_array( $id, $shown_ids, true ) && ! in_array( $id, $kept, true ) ) {
+					$kept[] = $id;
+				}
+			}
+			$submitted = isset( $posted[ $key ] ) && is_array( $posted[ $key ] ) ? $posted[ $key ] : array();
+			if ( ! empty( $shown_ids ) ) {
+				$submitted = array_values(
+					array_filter(
+						$submitted,
+						static function ( $id ) use ( $shown_ids ) {
+							return in_array( $id, $shown_ids, true );
+						}
+					)
+				);
+			}
+			$merged = $kept;
+			foreach ( $submitted as $id ) {
+				if ( ! in_array( $id, $merged, true ) ) {
+					$merged[] = $id;
+				}
+			}
+			if ( empty( $merged ) ) {
+				unset( $out[ $key ] );
+			} else {
+				$out[ $key ] = $merged;
+			}
+		}
+		return $out;
 	}
 
 	/**

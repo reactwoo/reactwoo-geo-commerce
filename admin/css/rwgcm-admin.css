@@ -183,12 +183,26 @@
   --rwgcm-suite-border: var(--rw-suite-border, #e5e7eb);
 }
 
+.rwgcm-wrap,
+.rwgcm-wrap *,
+.rwgcm-wrap *::before,
+.rwgcm-wrap *::after {
+  box-sizing: border-box;
+}
+
+.rwgcm-panel {
+  max-width: none;
+  margin-top: 16px;
+}
+
 .rwgcm-rule-step {
-  border: 1px solid var(--rwgcm-suite-border, #e5e7eb);
-  border-radius: 10px;
-  padding: 16px 18px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--rwgcm-suite-border, #e5e7eb);
+  border-radius: 0;
+  padding: 0 0 8px;
   margin-bottom: 18px;
-  background: #fff;
+  background: transparent;
+  box-shadow: none;
 }
 
 .rwgcm-rule-step h2 {
@@ -262,4 +276,83 @@
 
 .rwgcm-rule-summary-cell {
   max-width: 360px;
+}
+
+.rwgcm-currency-code {
+  width: 6em;
+  max-width: 100%;
+}
+
+.rwgcm-gateway-badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+@media (max-width: 782px) {
+  .rwgcm-wrap .rwgc-card,
+  .rwgcm-wrap .rwgcm-hero,
+  .rwgcm-wrap .rwgcm-panel {
+    padding: 12px;
+    max-width: none;
+  }
+
+  .rwgcm-wrap .rwgc-suite-page-header {
+    padding-top: 12px;
+    scroll-margin-top: 96px;
+  }
+
+  .rwgcm-wrap .rwgc-suite-page-header__subtitle {
+    overflow: visible;
+    white-space: normal;
+  }
+
+  .rwgcm-wrap input.regular-text,
+  .rwgcm-wrap input[type="text"],
+  .rwgcm-wrap input[type="number"],
+  .rwgcm-wrap input[type="search"],
+  .rwgcm-wrap input[type="email"],
+  .rwgcm-wrap input[type="url"],
+  .rwgcm-wrap select,
+  .rwgcm-wrap textarea,
+  .rwgcm-wrap .large-text {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .rwgcm-wrap .form-table th,
+  .rwgcm-wrap .form-table td {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .rwgcm-wrap .rwgcm-rule-card__title {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .rwgcm-wrap .rwgc-card,
+  .rwgcm-wrap .rwgcm-hero,
+  .rwgcm-wrap .rwgcm-panel {
+    padding: 8px;
+  }
+
+  .rwgcm-wrap .rwgc-suite-page-header {
+    padding-top: 8px;
+  }
+
+  .rwgcm-rule-card__head,
+  .rwgcm-fee-card__head,
+  .rwgcm-rule-card__body,
+  .rwgcm-fee-card .rwgcm-rule-card__body {
+    padding: 8px;
+  }
 }

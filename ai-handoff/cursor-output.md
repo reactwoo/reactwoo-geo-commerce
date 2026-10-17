@@ -6,43 +6,43 @@ needs-review
 
 ## Summary
 
-0.4.1 fixes three live 0.4.0 bugs. Variable and variable-subscription From/range HTML uses price-book amounts only when every variation has that currency; otherwise the store currency and its symbol are shown. REST (except Store API storefront), cron, WP-CLI, wp-admin, and variation sync stay on the store currency. Block checkout writes `_rwgcm_price_book_currency` and `_rwgcm_price_book_source`.
+Staging QA on 0.4.2 and 0.4.3 failed because Payments by country only listed enabled gateways, so Paystack (enabled false on a GBP store) could not be mapped, and saving then replaced the stored rules with the gateways the form did show. 0.4.3 now lists every registered gateway, merges saves, returns to the Payments screen, and puts the WooCommerce Payments link on surfaces WooCommerce 11.2 still renders. Version stays 0.4.3. Not merged.
 
 ## Files changed
 
 | File | Reason |
 |------|--------|
-| includes/class-rwgcm-price-book.php | Range decision and per-currency variation price hash |
-| includes/class-rwgcm-price-book-apply.php | From/range HTML and subscription price strings |
-| includes/class-rwgcm-price-book-currency.php | Force the store currency on writes and sync |
-| includes/class-rwgcm-price-book-order.php | Store API checkout meta |
-| includes/class-rwgcm-catalog-price.php | Do not geo-adjust prices while a write forces the store currency |
-| includes/class-rwgcm-catalog-price-variable.php | Same guard for variation prices |
-| tests/test-price-book.php | Range, hash, write-context, and Store API meta tests |
-| reactwoo-geo-commerce.php, readme.txt, CHANGELOG.md | Version 0.4.1 |
+| includes/class-rwgcm-gateway-availability.php | List every registered gateway, disabled badge data, merge country rules, Paystack disabled hint |
+| includes/class-rwgcm-gateway-currency.php | Merge currency lists instead of replacing them |
+| includes/class-rwgcm-price-book-admin.php | Render disabled gateways, post the rows that were shown, redirect from the form’s return field |
+| includes/class-rwgcm-admin.php | Payments link via checkout settings, admin footer banner, and classic gateway title field |
+| admin/css/rwgcm-admin.css | Disabled-in-WooCommerce badge |
+| tests/test-price-book.php, tests/test-gateway-currency.php, tests/test-admin-nav.php | List, merge, and redirect coverage |
+| CHANGELOG.md, readme.txt | 0.4.3 notes for the QA fixes |
 
 ## What was not changed
 
-- Gateway country rules
-- Geo Core detection
-- No tag until the tests on this branch pass and the release is merged
+- Version stays 0.4.3
+- Store currency is not forced on the WooCommerce Payments overview
+- 0.4.1 write lock and the 0.4.2 scoped currency override
+- No merge and no tag
 
 ## Commands run
 
 ```bash
-php -l includes/class-rwgcm-price-book.php
-php -l includes/class-rwgcm-price-book-currency.php
-php -l includes/class-rwgcm-price-book-apply.php
-php -l includes/class-rwgcm-price-book-order.php
-php -l includes/class-rwgcm-catalog-price.php
-php -l includes/class-rwgcm-catalog-price-variable.php
+php -l includes/class-rwgcm-gateway-availability.php
+php -l includes/class-rwgcm-gateway-currency.php
+php -l includes/class-rwgcm-price-book-admin.php
+php -l includes/class-rwgcm-admin.php
+php tests/test-admin-nav.php
+php tests/test-gateway-currency.php
 php tests/test-price-book.php
 php tests/test-rules-unified.php
 ```
 
 ## Build / test result
 
-pass — `tests/test-price-book.php` 86 passed; `tests/test-rules-unified.php` 8 passed.
+pass — admin nav 19 passed; gateway currency 36 passed; price book 96 passed; rules 8 passed.
 
 ## Remaining errors
 

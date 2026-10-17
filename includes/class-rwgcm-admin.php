@@ -57,6 +57,10 @@ class RWGCM_Admin {
 	public static function init() {
 		add_action( 'admin_menu', array( __CLASS__, 'register_menu' ), 26 );
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_assets' ) );
+		add_action( 'admin_footer', array( __CLASS__, 'render_wc_payments_banner' ) );
+		add_filter( 'woocommerce_get_settings_checkout', array( __CLASS__, 'filter_checkout_settings' ), 20, 2 );
+		add_action( 'admin_init', array( __CLASS__, 'register_gateway_settings_fields' ), 5 );
+		add_filter( 'rwgc_section_hub_cards', array( __CLASS__, 'filter_section_hub_cards' ), 20, 2 );
 		add_action( 'admin_init', array( __CLASS__, 'handle_license_actions' ) );
 		add_action( 'admin_post_rwgcm_save_dashboard', array( __CLASS__, 'handle_save_dashboard' ) );
 		add_action( 'rwgc_dashboard_satellite_panels', array( __CLASS__, 'render_geo_core_summary_card' ) );
@@ -194,18 +198,7 @@ class RWGCM_Admin {
 			return;
 		}
 
-		$items = array(
-			self::MENU_PARENT        => __( 'Dashboard', 'reactwoo-geo-commerce' ),
-			'rwgcm-pricing'          => __( 'Rules', 'reactwoo-geo-commerce' ),
-			'rwgcm-products'         => __( 'Products', 'reactwoo-geo-commerce' ),
-			'rwgcm-legacy-pricing'   => __( 'Legacy country rows', 'reactwoo-geo-commerce' ),
-			'rwgcm-fees'             => __( 'Cart fees', 'reactwoo-geo-commerce' ),
-			'rwgcm-attribution'      => __( 'Marketing attribution', 'reactwoo-geo-commerce' ),
-			'rwgcm-diagnostics'      => __( 'Logs', 'reactwoo-geo-commerce' ),
-			'rwgcm-settings'         => __( 'Settings', 'reactwoo-geo-commerce' ),
-			'rwgcm-license'          => __( 'License', 'reactwoo-geo-commerce' ),
-			'rwgcm-help'             => __( 'Help', 'reactwoo-geo-commerce' ),
-		);
+		$items = self::inner_nav_items();
 
 		if ( function_exists( 'rw_geo_render_inner_nav' ) ) {
 			rw_geo_render_inner_nav(
@@ -429,10 +422,17 @@ class RWGCM_Admin {
 	}
 
 	/**
-	 * @return void
+	 * Commerce hub page in the Geo Core app shell.
 	 */
-	public static function register_menu() {
-		$routes = array(
+	const COMMERCE_HUB_SLUG = 'rwgc-commerce-hub';
+
+	/**
+	 * Screens registered in the Commerce area. Not rule-builder IF/THEN rows.
+	 *
+	 * @return array<int, array<string, mixed>>
+	 */
+	public static function admin_routes() {
+		return array(
 			array(
 				'menu_slug' => self::MENU_PARENT,
 				'route'     => 'overview',
@@ -449,10 +449,31 @@ class RWGCM_Admin {
 				'callback'  => array( 'RWGCM_Admin_Rules', 'render' ),
 			),
 			array(
+				'menu_slug' => 'rwgcm-price-books',
+				'route'     => 'price-books',
+				'label'     => __( 'Price books', 'reactwoo-geo-commerce' ),
+				'order'     => 22,
+				'callback'  => array( __CLASS__, 'render_price_books' ),
+			),
+			array(
+				'menu_slug' => 'rwgcm-payments',
+				'route'     => 'payments',
+				'label'     => __( 'Payments by country', 'reactwoo-geo-commerce' ),
+				'order'     => 24,
+				'callback'  => array( __CLASS__, 'render_payments' ),
+			),
+			array(
+				'menu_slug' => 'rwgcm-settings',
+				'route'     => 'commerce-settings',
+				'label'     => __( 'Settings', 'reactwoo-geo-commerce' ),
+				'order'     => 26,
+				'callback'  => array( __CLASS__, 'render_settings' ),
+			),
+			array(
 				'menu_slug' => 'rwgcm-products',
 				'route'     => 'products',
 				'label'     => __( 'Products', 'reactwoo-geo-commerce' ),
-				'order'     => 25,
+				'order'     => 32,
 				'callback'  => array( __CLASS__, 'render_products' ),
 			),
 			array(
@@ -509,14 +530,6 @@ class RWGCM_Admin {
 				'callback'  => array( __CLASS__, 'render_diagnostics' ),
 			),
 			array(
-				'menu_slug' => 'rwgcm-settings',
-				'section'   => 'settings',
-				'route'     => 'commerce-settings',
-				'label'     => __( 'Commerce settings', 'reactwoo-geo-commerce' ),
-				'order'     => 70,
-				'callback'  => array( __CLASS__, 'render_settings' ),
-			),
-			array(
 				'menu_slug' => 'rwgcm-license',
 				'section'   => 'settings',
 				'route'     => 'commerce-license',
@@ -533,10 +546,296 @@ class RWGCM_Admin {
 				'callback'  => array( __CLASS__, 'render_help' ),
 			),
 		);
+	}
 
-		foreach ( $routes as $route ) {
+	/**
+	 * @return void
+	 */
+	public static function register_menu() {
+		foreach ( self::admin_routes() as $route ) {
 			self::register_app_route( $route );
 		}
+	}
+
+	/**
+	 * Fallback in-page links when the Geo Core app shell is off.
+	 *
+	 * @return array<string, string> Slug => label.
+	 */
+	public static function inner_nav_items() {
+		return array(
+			self::MENU_PARENT      => __( 'Dashboard', 'reactwoo-geo-commerce' ),
+			'rwgcm-pricing'        => __( 'Rules', 'reactwoo-geo-commerce' ),
+			'rwgcm-price-books'    => __( 'Price books', 'reactwoo-geo-commerce' ),
+			'rwgcm-payments'       => __( 'Payments by country', 'reactwoo-geo-commerce' ),
+			'rwgcm-settings'       => __( 'Settings', 'reactwoo-geo-commerce' ),
+			'rwgcm-products'       => __( 'Products', 'reactwoo-geo-commerce' ),
+			'rwgcm-legacy-pricing' => __( 'Legacy country rows', 'reactwoo-geo-commerce' ),
+			'rwgcm-fees'           => __( 'Cart fees', 'reactwoo-geo-commerce' ),
+			'rwgcm-attribution'    => __( 'Marketing attribution', 'reactwoo-geo-commerce' ),
+			'rwgcm-diagnostics'    => __( 'Logs', 'reactwoo-geo-commerce' ),
+			'rwgcm-license'        => __( 'License', 'reactwoo-geo-commerce' ),
+			'rwgcm-help'           => __( 'Help', 'reactwoo-geo-commerce' ),
+		);
+	}
+
+	/**
+	 * Cards pinned to the front of the Commerce hub (admin.php?page=rwgc-commerce-hub).
+	 *
+	 * @return array<int, array<string, string>>
+	 */
+	public static function commerce_hub_primary_cards() {
+		return array(
+			array(
+				'menu_slug'   => 'rwgcm-pricing',
+				'label'       => __( 'Rules', 'reactwoo-geo-commerce' ),
+				'description' => __( 'Conditions and actions for pricing, badges, notices, and overlays.', 'reactwoo-geo-commerce' ),
+			),
+			array(
+				'menu_slug'   => 'rwgcm-price-books',
+				'label'       => __( 'Price books', 'reactwoo-geo-commerce' ),
+				'description' => __( 'Country to currency map, fallback currency, and fixed prices per currency.', 'reactwoo-geo-commerce' ),
+			),
+			array(
+				'menu_slug'   => 'rwgcm-payments',
+				'label'       => __( 'Configure payment gateways', 'reactwoo-geo-commerce' ),
+				'description' => __( 'Payments by country: which gateways each billing country can use, and which currencies a gateway can charge.', 'reactwoo-geo-commerce' ),
+			),
+			array(
+				'menu_slug'   => 'rwgcm-settings',
+				'label'       => __( 'Settings', 'reactwoo-geo-commerce' ),
+				'description' => __( 'Links to Geo Core, WooCommerce, and the Geo Commerce licence.', 'reactwoo-geo-commerce' ),
+			),
+		);
+	}
+
+	/**
+	 * @param mixed  $cards      Hub cards.
+	 * @param string $section_id Goal section id.
+	 * @return mixed
+	 */
+	public static function filter_section_hub_cards( $cards, $section_id ) {
+		if ( 'commerce' !== $section_id || ! is_array( $cards ) ) {
+			return $cards;
+		}
+		return self::promote_hub_cards( $cards );
+	}
+
+	/**
+	 * Put Rules, Price books, Configure payment gateways, and Settings first.
+	 *
+	 * @param array<int, array<string, mixed>> $cards Existing hub cards.
+	 * @return array<int, array<string, mixed>>
+	 */
+	public static function promote_hub_cards( array $cards ) {
+		$by_slug = array();
+		foreach ( $cards as $card ) {
+			if ( ! is_array( $card ) || empty( $card['menu_slug'] ) ) {
+				continue;
+			}
+			$by_slug[ (string) $card['menu_slug'] ] = $card;
+		}
+		$primary = array();
+		foreach ( self::commerce_hub_primary_cards() as $spec ) {
+			$slug     = $spec['menu_slug'];
+			$existing = isset( $by_slug[ $slug ] ) && is_array( $by_slug[ $slug ] ) ? $by_slug[ $slug ] : array();
+			$url      = isset( $existing['url'] ) ? (string) $existing['url'] : '';
+			if ( '' === $url && function_exists( 'admin_url' ) ) {
+				$url = admin_url( 'admin.php?page=' . $slug );
+			}
+			$primary[] = array_merge(
+				$existing,
+				array(
+					'menu_slug'   => $slug,
+					'label'       => $spec['label'],
+					'description' => $spec['description'],
+					'url'         => $url,
+					'provider'    => isset( $existing['provider'] ) ? $existing['provider'] : 'geo_commerce',
+					'prominent'   => true,
+				)
+			);
+			unset( $by_slug[ $slug ] );
+		}
+		return array_merge( $primary, array_values( $by_slug ) );
+	}
+
+	/**
+	 * WooCommerce → Settings → Payments uses tab=checkout.
+	 *
+	 * @param array<string, mixed> $query page and tab.
+	 * @return bool
+	 */
+	public static function is_wc_payments_screen( array $query ) {
+		$page = isset( $query['page'] ) ? (string) $query['page'] : '';
+		$tab  = isset( $query['tab'] ) ? (string) $query['tab'] : '';
+		return 'wc-settings' === $page && 'checkout' === $tab;
+	}
+
+	/**
+	 * Where a price-book or payments settings form should return.
+	 * The payments form posts to itself, and wp_get_referer() is empty when the referer is the current URL.
+	 *
+	 * @param string $return_to payments or price-books.
+	 * @return string
+	 */
+	public static function settings_redirect_url( $return_to ) {
+		$slug = 'payments' === $return_to ? 'rwgcm-payments' : 'rwgcm-price-books';
+		$path = 'admin.php?page=' . $slug;
+		return function_exists( 'admin_url' ) ? admin_url( $path ) : $path;
+	}
+
+	/**
+	 * Visible label for the WooCommerce Payments link.
+	 *
+	 * @return string
+	 */
+	public static function payments_settings_link_text() {
+		return __( 'Set per-country availability in ReactWoo Geo', 'reactwoo-geo-commerce' );
+	}
+
+	/**
+	 * @return string
+	 */
+	public static function payments_settings_link_html() {
+		$url  = function_exists( 'admin_url' ) ? admin_url( 'admin.php?page=rwgcm-payments' ) : 'admin.php?page=rwgcm-payments';
+		$text = self::payments_settings_link_text();
+		if ( function_exists( 'esc_url' ) && function_exists( 'esc_html' ) ) {
+			return '<a href="' . esc_url( $url ) . '">' . esc_html( $text ) . '</a>';
+		}
+		return '<a href="' . $url . '">' . $text . '</a>';
+	}
+
+	/**
+	 * WooCommerce 11.2 renders Payments as a React mount
+	 * (#experimental_wc_settings_payments_main) and strips third-party admin_notices.
+	 * The checkout settings output still runs after that mount, so the link is a settings field.
+	 *
+	 * @param mixed  $settings   Checkout settings.
+	 * @param string $section_id Section id. Empty string is the Payments overview.
+	 * @return mixed
+	 */
+	public static function filter_checkout_settings( $settings, $section_id ) {
+		if ( ! is_array( $settings ) ) {
+			return $settings;
+		}
+		$section_id = is_string( $section_id ) ? $section_id : '';
+		if ( ! in_array( $section_id, array( '', 'main' ), true ) ) {
+			return $settings;
+		}
+		$settings[] = array(
+			'title' => __( 'Payments by country', 'reactwoo-geo-commerce' ),
+			'type'  => 'title',
+			'id'    => 'rwgcm_payments_by_country',
+			'desc'  => sprintf(
+				/* translators: %s: link to Payments by country. */
+				__( 'Country availability for these gateways is set in ReactWoo Geo, not on this screen. %s', 'reactwoo-geo-commerce' ),
+				self::payments_settings_link_html()
+			),
+		);
+		$settings[] = array(
+			'type' => 'sectionend',
+			'id'   => 'rwgcm_payments_by_country',
+		);
+		return $settings;
+	}
+
+	/**
+	 * Place the same link above the React payments list. admin_footer is outside the notice strip.
+	 *
+	 * @return void
+	 */
+	public static function render_wc_payments_banner() {
+		if ( ! self::can_manage() || ! isset( $_GET['page'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			return;
+		}
+		$query = array(
+			'page' => sanitize_key( wp_unslash( $_GET['page'] ) ), // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			'tab'  => isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : '', // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		);
+		if ( ! self::is_wc_payments_screen( $query ) ) {
+			return;
+		}
+		echo '<div id="rwgcm-wc-payments-link" class="notice notice-info"><p>';
+		echo esc_html__( 'Country availability for these gateways is set in ReactWoo Geo, not on this screen.', 'reactwoo-geo-commerce' );
+		echo ' ' . self::payments_settings_link_html(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- helper escapes the URL and text.
+		echo '</p></div>';
+		echo '<script>(function(){var banner=document.getElementById("rwgcm-wc-payments-link");if(!banner){return;}var mount=document.querySelector("[id^=\\"experimental_wc_settings_payments_\\"]");if(mount&&mount.parentNode){mount.parentNode.insertBefore(banner,mount);}})();</script>';
+	}
+
+	/**
+	 * Classic gateway settings pages (section=paystack is not a React payments section in WC 11.2)
+	 * still render form fields. Title fields are not saved into the gateway option.
+	 *
+	 * @return void
+	 */
+	public static function register_gateway_settings_fields() {
+		if ( ! function_exists( 'WC' ) ) {
+			return;
+		}
+		$wc = WC();
+		if ( ! $wc || ! method_exists( $wc, 'payment_gateways' ) ) {
+			return;
+		}
+		$controller = $wc->payment_gateways();
+		if ( ! is_object( $controller ) || ! method_exists( $controller, 'payment_gateways' ) ) {
+			return;
+		}
+		$all = $controller->payment_gateways();
+		if ( ! is_array( $all ) ) {
+			return;
+		}
+		foreach ( $all as $gateway ) {
+			if ( ! is_object( $gateway ) || empty( $gateway->id ) ) {
+				continue;
+			}
+			$id = preg_replace( '/[^A-Za-z0-9_\-]/', '', (string) $gateway->id );
+			if ( ! is_string( $id ) || '' === $id ) {
+				continue;
+			}
+			add_filter( 'woocommerce_settings_api_form_fields_' . $id, array( __CLASS__, 'append_gateway_settings_note' ) );
+		}
+	}
+
+	/**
+	 * @param mixed $fields Gateway form fields.
+	 * @return mixed
+	 */
+	public static function append_gateway_settings_note( $fields ) {
+		if ( ! is_array( $fields ) || isset( $fields['rwgcm_payments_by_country'] ) ) {
+			return $fields;
+		}
+		$fields['rwgcm_payments_by_country'] = array(
+			'title'       => __( 'Payments by country', 'reactwoo-geo-commerce' ),
+			'type'        => 'title',
+			'description' => sprintf(
+				/* translators: %s: link to Payments by country. */
+				__( 'Country availability for this gateway is set in ReactWoo Geo. %s', 'reactwoo-geo-commerce' ),
+				self::payments_settings_link_html()
+			),
+		);
+		return $fields;
+	}
+
+	/**
+	 * @return void
+	 */
+	public static function render_price_books() {
+		if ( ! self::can_manage() ) {
+			return;
+		}
+		$rwgc_nav_current = 'rwgcm-price-books';
+		include RWGCM_PATH . 'admin/views/price-books.php';
+	}
+
+	/**
+	 * @return void
+	 */
+	public static function render_payments() {
+		if ( ! self::can_manage() ) {
+			return;
+		}
+		$rwgc_nav_current = 'rwgcm-payments';
+		include RWGCM_PATH . 'admin/views/payments-by-country.php';
 	}
 
 	/**
