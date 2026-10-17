@@ -21,6 +21,13 @@ class RWGCM_Gateway_Availability {
 	const OPTION_KEY = 'rwgcm_gateway_rules';
 
 	/**
+	 * Gateway ids from the latest gateway_choices() call that were missing from WooCommerce's registry.
+	 *
+	 * @var array<int, string>
+	 */
+	private static $last_unregistered_ids = array();
+
+	/**
 	 * @return void
 	 */
 	public static function init() {
@@ -222,13 +229,15 @@ class RWGCM_Gateway_Availability {
 	/**
 	 * Every registered WooCommerce gateway, including ones the gateway has switched off.
 	 *
-	 * Uses WC()->payment_gateways()->payment_gateways(), the full registry.
-	 * The available-gateway list hides Paystack when its constructor sets enabled
-	 * to false because the store currency is unsupported.
+	 * Uses WC()->payment_gateways()->payment_gateways(), the full registry, then
+	 * any gateway the woocommerce_payment_gateways filter still adds. Checkout
+	 * does not use that fallback. The available-gateway list hides Paystack when
+	 * its constructor sets enabled to false because the store currency is unsupported.
 	 *
 	 * @return array<string, array{title: string, enabled: bool}>
 	 */
 	public static function gateway_choices() {
+		self::$last_unregistered_ids = array();
 		if ( ! function_exists( 'WC' ) ) {
 			return array();
 		}
@@ -240,8 +249,102 @@ class RWGCM_Gateway_Availability {
 		if ( ! is_object( $controller ) || ! method_exists( $controller, 'payment_gateways' ) ) {
 			return array();
 		}
-		$all = $controller->payment_gateways();
-		return self::choices_from_gateways( is_array( $all ) ? $all : array() );
+		$all                         = $controller->payment_gateways();
+		$all                         = is_array( $all ) ? $all : array();
+		$missing                     = self::unregistered_gateway_instances( $all );
+		self::$last_unregistered_ids = array_keys( $missing );
+		foreach ( $missing as $id => $gateway ) {
+			$all[ $id ] = $gateway;
+		}
+		return self::choices_from_gateways( $all );
+	}
+
+	/**
+	 * Ids missing from WooCommerce's own list on the last gateway_choices() call.
+	 * Checkout does not use these instances.
+	 *
+	 * @return array<int, string>
+	 */
+	public static function last_unregistered_gateway_ids() {
+		return self::$last_unregistered_ids;
+	}
+
+	/**
+	 * Warning when the admin list had to instantiate a gateway WooCommerce never registered.
+	 *
+	 * @param array<int, string>                              $ids     Gateway ids from the fallback.
+	 * @param array<string, array{title?: string, enabled?: bool}> $choices Choices shown on the screen.
+	 * @return string Empty when every listed gateway is in WooCommerce's registry.
+	 */
+	public static function unregistered_checkout_notice( array $ids, array $choices ) {
+		$labels = array();
+		foreach ( $ids as $id ) {
+			$id = is_string( $id ) ? $id : '';
+			if ( '' === $id ) {
+				continue;
+			}
+			$title    = isset( $choices[ $id ]['title'] ) ? (string) $choices[ $id ]['title'] : $id;
+			$labels[] = sprintf( '%s (%s)', $title, $id );
+		}
+		$count = count( $labels );
+		if ( 0 === $count ) {
+			return '';
+		}
+		return sprintf(
+			/* translators: %s: gateway titles and ids, for example "Paystack (paystack)". */
+			_n(
+				'WooCommerce did not register %s; it will not show at checkout until that is fixed.',
+				'WooCommerce did not register %s; they will not show at checkout until that is fixed.',
+				$count,
+				'reactwoo-geo-commerce'
+			),
+			implode( ', ', $labels )
+		);
+	}
+
+	/**
+	 * Gateways a plugin adds through woocommerce_payment_gateways that the WooCommerce
+	 * registry does not hold. That happens when WC_Payment_Gateways was built before the
+	 * plugin hooked in (Paystack 5.8.5 adds its filter on plugins_loaded at priority 99),
+	 * or when two gateways share a woocommerce_gateway_order position and one overwrites
+	 * the other. Admin listing only: checkout still uses the WooCommerce registry.
+	 *
+	 * @param array<string, mixed> $registered Gateway id => gateway from payment_gateways().
+	 * @return array<string, object> Gateway id => instance, for ids not already registered.
+	 */
+	public static function unregistered_gateway_instances( array $registered ) {
+		if ( ! function_exists( 'apply_filters' ) || ! class_exists( 'WC_Payment_Gateway' ) ) {
+			return array();
+		}
+		$known_classes = array();
+		foreach ( $registered as $gateway ) {
+			if ( is_object( $gateway ) ) {
+				$known_classes[ strtolower( get_class( $gateway ) ) ] = true;
+			}
+		}
+		$entries = apply_filters( 'woocommerce_payment_gateways', array() );
+		$out     = array();
+		foreach ( is_array( $entries ) ? $entries : array() as $entry ) {
+			$gateway = null;
+			if ( is_object( $entry ) ) {
+				$gateway = $entry;
+			} elseif ( is_string( $entry ) && '' !== $entry && ! isset( $known_classes[ strtolower( $entry ) ] ) && class_exists( $entry ) && is_subclass_of( $entry, 'WC_Payment_Gateway' ) ) {
+				try {
+					$gateway = new $entry();
+				} catch ( \Throwable $e ) {
+					continue;
+				}
+			}
+			if ( ! is_object( $gateway ) || ! is_a( $gateway, 'WC_Payment_Gateway' ) || empty( $gateway->id ) || ! is_string( $gateway->id ) ) {
+				continue;
+			}
+			$id = $gateway->id;
+			if ( isset( $registered[ $id ] ) || isset( $out[ $id ] ) ) {
+				continue;
+			}
+			$out[ $id ] = $gateway;
+		}
+		return $out;
 	}
 
 	/**

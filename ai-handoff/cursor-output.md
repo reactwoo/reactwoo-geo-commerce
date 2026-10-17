@@ -6,53 +6,39 @@ needs-review
 
 ## Summary
 
-Staging QA on 0.4.2 and 0.4.3 failed because Payments by country only listed enabled gateways, so Paystack (enabled false on a GBP store) could not be mapped, and saving then replaced the stored rules with the gateways the form did show. 0.4.3 now lists every registered gateway, merges saves, returns to the Payments screen, and puts the WooCommerce Payments link on surfaces WooCommerce 11.2 still renders. Version stays 0.4.3. Not merged.
+Payments by country in 0.4.4 re-reads `woocommerce_payment_gateways` when the admin screen renders, lists any gateway WooCommerce’s registry missed, and warns that checkout cannot offer that gateway until WooCommerce registers it. A summary names every gateway, and the country column stays visible while the table scrolls. Checkout still uses WooCommerce’s own list. Not merged and not tagged.
 
 ## Files changed
 
 | File | Reason |
 |------|--------|
-| includes/class-rwgcm-gateway-availability.php | List every registered gateway, disabled badge data, merge country rules, Paystack disabled hint |
-| includes/class-rwgcm-gateway-currency.php | Merge currency lists instead of replacing them |
-| includes/class-rwgcm-price-book-admin.php | Render disabled gateways, post the rows that were shown, redirect from the form’s return field |
-| includes/class-rwgcm-admin.php | Payments link via checkout settings, admin footer banner, and classic gateway title field |
-| admin/css/rwgcm-admin.css | Disabled-in-WooCommerce badge |
-| tests/test-price-book.php, tests/test-gateway-currency.php, tests/test-admin-nav.php | List, merge, and redirect coverage |
-| CHANGELOG.md, readme.txt | 0.4.3 notes for the QA fixes |
+| includes/class-rwgcm-gateway-availability.php | Admin-only fallback instances, recorded fallback ids, checkout warning text |
+| includes/class-rwgcm-price-book-admin.php | Gateway summary, matrix wrapper, warning notice |
+| admin/css/rwgcm-admin.css | Sticky country column |
+| tests/test-gateway-fallback.php | Filter-only gateway is listed, and the warning names it |
+| reactwoo-geo-commerce.php, readme.txt, CHANGELOG.md | Version 0.4.4 |
 
 ## What was not changed
 
-- Version stays 0.4.3
-- Store currency is not forced on the WooCommerce Payments overview
-- 0.4.1 write lock and the 0.4.2 scoped currency override
+- Checkout `filter_gateways()` still only sees the gateways WooCommerce passes in
+- Store currency is not forced, and the matrix is not transposed
+- No diagnostic for `wc_payment_gateways_initialized` before `plugins_loaded`
 - No merge and no tag
 
 ## Commands run
 
 ```bash
 php -l includes/class-rwgcm-gateway-availability.php
-php -l includes/class-rwgcm-gateway-currency.php
 php -l includes/class-rwgcm-price-book-admin.php
-php -l includes/class-rwgcm-admin.php
+php tests/test-gateway-fallback.php
 php tests/test-admin-nav.php
 php tests/test-gateway-currency.php
 php tests/test-price-book.php
 php tests/test-rules-unified.php
 ```
 
-## Build / test result
-
-pass — admin nav 19 passed; gateway currency 36 passed; price book 96 passed; rules 8 passed.
+php -l: no syntax errors. Tests: gateway fallback 17, admin nav 19, gateway currency 36, price book 96, rules 8. No phpcs config in the repo.
 
 ## Remaining errors
 
-```
-(none)
-```
-
-## If still blocked (do not guess again)
-
-1. **Suspected root cause:**
-2. **Evidence:**
-3. **Next file to inspect:**
-4. **Exact log needed:**
+None.
