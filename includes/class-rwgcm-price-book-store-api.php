@@ -23,10 +23,28 @@ class RWGCM_Price_Book_Store_Api {
 	 * @return void
 	 */
 	public static function init() {
-		add_filter( 'rest_post_dispatch', array( __CLASS__, 'filter_rest_response' ), 20, 3 );
+		// rest_request_after_callbacks runs inside WP_REST_Server::dispatch(), so it covers
+		// HTTP requests, batch sub-requests and rest_do_request()/preloading. Block hydration
+		// calls the Store API controller directly and fires its own twin filter.
+		add_filter( 'rest_request_after_callbacks', array( __CLASS__, 'filter_after_callbacks' ), 20, 3 );
+		add_filter( 'woocommerce_hydration_request_after_callbacks', array( __CLASS__, 'filter_after_callbacks' ), 20, 3 );
 		add_filter( 'woocommerce_structured_data_product', array( __CLASS__, 'filter_structured_data' ), 20, 2 );
+		add_filter( 'rank_math/json_ld', array( __CLASS__, 'filter_rank_math_json_ld' ), 99, 2 );
 		add_action( 'woocommerce_checkout_create_order', array( __CLASS__, 'guard_order_currency' ), 30, 1 );
 		add_action( 'woocommerce_store_api_checkout_update_order_meta', array( __CLASS__, 'guard_order_currency' ), 30, 1 );
+	}
+
+	/**
+	 * rest_request_after_callbacks( $response, $handler, $request ).
+	 *
+	 * @param mixed $response Response.
+	 * @param mixed $handler  Handler.
+	 * @param mixed $request  Request.
+	 * @return mixed
+	 */
+	public static function filter_after_callbacks( $response, $handler, $request ) {
+		unset( $handler );
+		return self::filter_rest_response( $response, null, $request );
 	}
 
 	/**
@@ -48,7 +66,7 @@ class RWGCM_Price_Book_Store_Api {
 			return $response;
 		}
 		$data = $response->get_data();
-		if ( ! is_array( $data ) ) {
+		if ( ! is_array( $data ) && ! ( $data instanceof stdClass ) ) {
 			return $response;
 		}
 		$active = self::active_currency();
@@ -76,23 +94,46 @@ class RWGCM_Price_Book_Store_Api {
 	 * @param array<string, mixed> $base_fields Store API currency fields for the base currency.
 	 * @return array<mixed>
 	 */
-	public static function relabel_payload( array $data, $active, $base, $priced_in, array $base_fields ) {
+	public static function relabel_payload( $data, $active, $base, $priced_in, array $base_fields ) {
 		$active = RWGCM_Price_Book::normalize_currency( $active );
 		$base   = RWGCM_Price_Book::normalize_currency( $base );
 		if ( '' === $active || $active === $base ) {
 			return $data;
 		}
-		if ( self::is_product_node( $data ) ) {
-			if ( isset( $data['prices']['currency_code'] ) && $active === $data['prices']['currency_code'] && ! call_user_func( $priced_in, (int) $data['id'], $active ) ) {
-				$data['prices'] = array_merge( $data['prices'], $base_fields );
+		return self::walk( $data, $active, $priced_in, $base_fields );
+	}
+
+	/**
+	 * Recursive walk over arrays and objects. WooCommerce's ProductSchema
+	 * returns `prices` (and other nested parts) as stdClass, so both shapes
+	 * must be handled and kept as they were.
+	 *
+	 * @param mixed                $node        Node.
+	 * @param string               $active      Active currency.
+	 * @param callable             $priced_in   Callback.
+	 * @param array<string, mixed> $base_fields Base currency fields.
+	 * @return mixed
+	 */
+	private static function walk( $node, $active, $priced_in, array $base_fields ) {
+		$is_object = $node instanceof stdClass;
+		if ( ! $is_object && ! is_array( $node ) ) {
+			return $node;
+		}
+		$arr = $is_object ? get_object_vars( $node ) : $node;
+		if ( self::is_product_node( $arr ) ) {
+			$prices_obj = $arr['prices'] instanceof stdClass;
+			$prices     = $prices_obj ? get_object_vars( $arr['prices'] ) : $arr['prices'];
+			if ( $active === $prices['currency_code'] && ! call_user_func( $priced_in, (int) $arr['id'], $active ) ) {
+				$prices        = array_merge( $prices, $base_fields );
+				$arr['prices'] = $prices_obj ? (object) $prices : $prices;
 			}
 		}
-		foreach ( $data as $key => $value ) {
-			if ( is_array( $value ) && 'prices' !== $key ) {
-				$data[ $key ] = self::relabel_payload( $value, $active, $base, $priced_in, $base_fields );
+		foreach ( $arr as $key => $value ) {
+			if ( 'prices' !== $key && ( is_array( $value ) || $value instanceof stdClass ) ) {
+				$arr[ $key ] = self::walk( $value, $active, $priced_in, $base_fields );
 			}
 		}
-		return $data;
+		return $is_object ? (object) $arr : $arr;
 	}
 
 	/**
@@ -100,13 +141,14 @@ class RWGCM_Price_Book_Store_Api {
 	 * @return bool
 	 */
 	public static function is_product_node( array $node ) {
-		if ( ! isset( $node['id'] ) || ! is_numeric( $node['id'] ) || ! isset( $node['prices'] ) || ! is_array( $node['prices'] ) ) {
+		if ( ! isset( $node['id'] ) || ! is_numeric( $node['id'] ) || ! isset( $node['prices'] ) ) {
 			return false;
 		}
 		if ( isset( $node['key'] ) && isset( $node['quantity'] ) ) {
 			return false;
 		}
-		return isset( $node['prices']['currency_code'] );
+		$prices = $node['prices'] instanceof stdClass ? get_object_vars( $node['prices'] ) : $node['prices'];
+		return is_array( $prices ) && isset( $prices['currency_code'] );
 	}
 
 	/**
@@ -225,6 +267,49 @@ class RWGCM_Price_Book_Store_Api {
 		}
 		$markup['offers'] = self::replace_currency_key( $markup['offers'], $active, $base );
 		return $markup;
+	}
+
+	/**
+	 * Rank Math replaces WooCommerce's JSON-LD with its own graph
+	 * (rank_math/json_ld). Its Product entity takes priceCurrency from
+	 * get_woocommerce_currency(), so relabel it the same way.
+	 *
+	 * @param mixed $data   Entities keyed by id.
+	 * @param mixed $jsonld Rank Math JsonLD instance.
+	 * @return mixed
+	 */
+	public static function filter_rank_math_json_ld( $data, $jsonld = null ) {
+		unset( $jsonld );
+		if ( ! is_array( $data ) || ! function_exists( 'is_product' ) || ! is_product() || ! function_exists( 'get_queried_object_id' ) ) {
+			return $data;
+		}
+		$active = self::active_currency();
+		$base   = RWGCM_Price_Book_Currency::base_currency();
+		return self::relabel_json_ld_entities( $data, (int) get_queried_object_id(), $active, $base, array( __CLASS__, 'product_priced_in' ) );
+	}
+
+	/**
+	 * @param array<mixed> $data       Rank Math entities.
+	 * @param int          $product_id Product being viewed.
+	 * @param string       $active     Active currency.
+	 * @param string       $base       Base currency.
+	 * @param callable     $priced_in  Callback.
+	 * @return array<mixed>
+	 */
+	public static function relabel_json_ld_entities( array $data, $product_id, $active, $base, $priced_in ) {
+		if ( $product_id <= 0 || '' === $active || $active === $base || call_user_func( $priced_in, $product_id, $active ) ) {
+			return $data;
+		}
+		foreach ( $data as $key => $entity ) {
+			if ( ! is_array( $entity ) || ! isset( $entity['@type'] ) ) {
+				continue;
+			}
+			$types = (array) $entity['@type'];
+			if ( in_array( 'Product', $types, true ) || in_array( 'ProductGroup', $types, true ) ) {
+				$data[ $key ] = self::replace_currency_key( $entity, $active, $base );
+			}
+		}
+		return $data;
 	}
 
 	/**
