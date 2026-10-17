@@ -52,6 +52,13 @@ class RWGCM_Price_Book_Currency {
 	private static $reading_cart = false;
 
 	/**
+	 * Nested product save / variation sync depth. Prices stay in the store currency.
+	 *
+	 * @var int
+	 */
+	private static $store_currency_writes = 0;
+
+	/**
 	 * @return void
 	 */
 	public static function init() {
@@ -62,6 +69,57 @@ class RWGCM_Price_Book_Currency {
 		add_action( 'woocommerce_store_api_cart_update_customer_from_request', array( __CLASS__, 'remember_store_api_billing' ), 10, 2 );
 		add_action( 'litespeed_init', array( __CLASS__, 'register_litespeed_vary' ), 20 );
 		add_action( 'wp', array( __CLASS__, 'mark_transactional_pages_uncached' ) );
+		add_action( 'woocommerce_before_product_object_save', array( __CLASS__, 'begin_store_currency_write' ), 0 );
+		add_action( 'woocommerce_after_product_object_save', array( __CLASS__, 'end_store_currency_write' ), 999 );
+		add_action( 'woocommerce_variable_product_sync', array( __CLASS__, 'begin_store_currency_write' ), 0 );
+		add_action( 'woocommerce_variable_product_sync', array( __CLASS__, 'end_store_currency_write' ), 9999 );
+		add_action( 'woocommerce_variable_product_sync_data', array( __CLASS__, 'begin_store_currency_write' ), 0 );
+		add_action( 'woocommerce_variable_product_sync_data', array( __CLASS__, 'end_store_currency_write' ), 9999 );
+	}
+
+	/**
+	 * Hold the store currency across a product save or variation sync.
+	 *
+	 * @return void
+	 */
+	public static function begin_store_currency_write() {
+		++self::$store_currency_writes;
+	}
+
+	/**
+	 * @return void
+	 */
+	public static function end_store_currency_write() {
+		if ( self::$store_currency_writes > 0 ) {
+			--self::$store_currency_writes;
+		}
+	}
+
+	/**
+	 * REST (except the Store API storefront), cron, WP-CLI, wp-admin, and product
+	 * sync must not switch currency or apply a price book. Store API cart and
+	 * checkout keep the visitor currency.
+	 *
+	 * @param array<string, mixed>|null $flags Optional request flags for tests.
+	 * @return bool
+	 */
+	public static function forces_store_currency( $flags = null ) {
+		if ( null === $flags ) {
+			$flags = self::request_flags();
+		}
+		if ( ! is_array( $flags ) ) {
+			return false;
+		}
+		if ( ! empty( $flags['syncing'] ) || ! empty( $flags['cron'] ) || ! empty( $flags['cli'] ) ) {
+			return true;
+		}
+		if ( ! empty( $flags['rest'] ) && empty( $flags['store_api'] ) ) {
+			return true;
+		}
+		if ( ! empty( $flags['admin'] ) && empty( $flags['front_ajax'] ) ) {
+			return true;
+		}
+		return false;
 	}
 
 	/**
@@ -346,13 +404,43 @@ class RWGCM_Price_Book_Currency {
 	 * @return bool
 	 */
 	private static function skip_request() {
-		if ( ! function_exists( 'is_admin' ) || ! is_admin() ) {
-			return false;
-		}
-		if ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() && isset( $_REQUEST['wc-ajax'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-			return false;
-		}
-		return true;
+		return self::forces_store_currency();
+	}
+
+	/**
+	 * @return array<string, bool>
+	 */
+	private static function request_flags() {
+		$rest = ( defined( 'REST_REQUEST' ) && REST_REQUEST ) || self::is_rest_request_uri();
+		return array(
+			'syncing'    => self::$store_currency_writes > 0,
+			'cron'       => ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) || ( defined( 'DOING_CRON' ) && DOING_CRON ),
+			'cli'        => defined( 'WP_CLI' ) && WP_CLI,
+			'rest'       => $rest,
+			'store_api'  => $rest && self::is_store_api_request_uri(),
+			'admin'      => function_exists( 'is_admin' ) && is_admin(),
+			'front_ajax' => function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() && isset( $_REQUEST['wc-ajax'] ), // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		);
+	}
+
+	/**
+	 * @return bool
+	 */
+	private static function is_rest_request_uri() {
+		$uri = isset( $_SERVER['REQUEST_URI'] ) ? (string) $_SERVER['REQUEST_URI'] : '';
+		return false !== strpos( $uri, '/wp-json/' ) || false !== strpos( $uri, 'rest_route=' );
+	}
+
+	/**
+	 * Store API storefront routes (/wc/store/), including cart, checkout, and batch.
+	 *
+	 * @return bool
+	 */
+	private static function is_store_api_request_uri() {
+		$uri = isset( $_SERVER['REQUEST_URI'] ) ? (string) $_SERVER['REQUEST_URI'] : '';
+		return false !== strpos( $uri, '/wc/store/' )
+			|| false !== strpos( $uri, 'rest_route=/wc/store/' )
+			|| false !== strpos( $uri, 'rest_route=%2Fwc%2Fstore%2F' );
 	}
 
 	/**

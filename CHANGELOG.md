@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-17
+
+### Fixed
+- **Variable price HTML:** Variable and variable-subscription From/range text uses the price book when every variation has the visitor currency. Otherwise the range stays in the store currency, with the store-currency symbol. The variation price hash is per currency, and product saves do not cache a visitor currency.
+- **Product saves:** WooCommerce REST (except Store API storefront routes), cron, WP-CLI, wp-admin, and variation sync no longer run in the visitor currency. Subscription variation sync cannot write a switched amount into `_subscription_price` or the min/max variation price meta.
+- **Block checkout orders:** `woocommerce_store_api_checkout_update_order_meta` stores `_rwgcm_price_book_currency` and `_rwgcm_price_book_source`, the same meta classic checkout already stored.
+
 ## [0.4.0] - 2026-10-16
 
 ### Added

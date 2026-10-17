@@ -29,6 +29,9 @@ class RWGCM_Price_Book_Apply {
 		add_filter( 'woocommerce_variation_prices_sale_price', array( __CLASS__, 'filter_variation_cache_sale' ), 100, 3 );
 		add_filter( 'woocommerce_get_variation_prices_hash', array( __CLASS__, 'filter_prices_hash' ), 20, 3 );
 		add_filter( 'woocommerce_subscriptions_product_sign_up_fee', array( __CLASS__, 'filter_signup_fee' ), 20, 2 );
+		add_filter( 'woocommerce_variable_price_html', array( __CLASS__, 'filter_variable_price_html' ), 100, 2 );
+		add_filter( 'woocommerce_variable_subscription_price_html', array( __CLASS__, 'filter_variable_price_html' ), 100, 2 );
+		add_filter( 'woocommerce_subscriptions_product_price_string', array( __CLASS__, 'filter_subscription_price_string' ), 100, 3 );
 		add_filter( 'woocommerce_get_price_html', array( __CLASS__, 'filter_price_html' ), 100, 2 );
 		add_filter( 'woocommerce_available_variation', array( __CLASS__, 'filter_available_variation' ), 20, 3 );
 		add_action( 'rwgcm_before_cart_totals', array( __CLASS__, 'apply_cart_prices' ), 5, 1 );
@@ -141,14 +144,9 @@ class RWGCM_Price_Book_Apply {
 	 */
 	public static function filter_prices_hash( $hash, $product, $for_display ) {
 		unset( $product, $for_display );
-		if ( ! is_array( $hash ) ) {
-			$hash = array();
-		}
-		if ( function_exists( 'is_admin' ) && is_admin() && ( ! function_exists( 'wp_doing_ajax' ) || ! wp_doing_ajax() ) ) {
-			return $hash;
-		}
-		$hash['rwgcm_price_book_currency'] = function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : '';
-		return $hash;
+		$currency = function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : '';
+		$force    = class_exists( 'RWGCM_Price_Book_Currency', false ) && RWGCM_Price_Book_Currency::forces_store_currency();
+		return RWGCM_Price_Book::variation_prices_hash( $hash, $currency, $force );
 	}
 
 	/**
@@ -192,8 +190,8 @@ class RWGCM_Price_Book_Apply {
 		if ( self::skip_product_filters() || ! is_object( $product ) || ! method_exists( $product, 'get_price' ) ) {
 			return $html;
 		}
-		if ( method_exists( $product, 'is_type' ) && ( $product->is_type( 'variable' ) || $product->is_type( 'variable-subscription' ) ) ) {
-			return $html;
+		if ( self::is_variable_product( $product ) ) {
+			return self::filter_variable_price_html( $html, $product );
 		}
 		$active = get_woocommerce_currency();
 		$base   = RWGCM_Price_Book_Currency::base_currency();
@@ -209,6 +207,82 @@ class RWGCM_Price_Book_Apply {
 			return $html;
 		}
 		return wc_price( $raw, array( 'currency' => $base ) );
+	}
+
+	/**
+	 * Variable and variable-subscription From/range HTML.
+	 *
+	 * @param string     $html    Existing HTML.
+	 * @param WC_Product $product Parent product.
+	 * @return string
+	 */
+	public static function filter_variable_price_html( $html, $product ) {
+		if ( self::skip_product_filters() || ! is_object( $product ) || ! self::is_variable_product( $product ) ) {
+			return $html;
+		}
+		if ( ! function_exists( 'get_woocommerce_currency' ) ) {
+			return $html;
+		}
+		$active = get_woocommerce_currency();
+		$base   = RWGCM_Price_Book_Currency::base_currency();
+		$range  = RWGCM_Price_Book::variable_range( self::variation_rows( $product, $active ), $active, $base );
+		if ( null === $range ) {
+			return $html;
+		}
+		$subscription = method_exists( $product, 'is_type' ) && $product->is_type( 'variable-subscription' );
+		return self::format_variable_range_html( (string) $html, $range, $subscription );
+	}
+
+	/**
+	 * Keep the billing-period tail and replace the amount inside a subscription string.
+	 *
+	 * @param string     $string  Subscription price string.
+	 * @param WC_Product $product Product.
+	 * @param array      $include Included parts. `price` is the inner HTML when WCS built the string.
+	 * @return string
+	 */
+	public static function filter_subscription_price_string( $string, $product, $include = array() ) {
+		if ( ! self::is_variable_product( $product ) ) {
+			return $string;
+		}
+		$inner = ( is_array( $include ) && isset( $include['price'] ) ) ? (string) $include['price'] : (string) $string;
+		$html  = self::filter_variable_price_html( '' !== $inner ? $inner : (string) $string, $product );
+		if ( $html === $inner ) {
+			return $string;
+		}
+		if ( '' !== $inner && false !== strpos( (string) $string, $inner ) ) {
+			return str_replace( $inner, $html, (string) $string );
+		}
+		return $html;
+	}
+
+	/**
+	 * @param string                               $existing_html Existing price HTML.
+	 * @param array{currency: string, min: string, max: string, mode: string} $range Range decision.
+	 * @param bool                                 $subscription  Variable subscription layout (From + period).
+	 * @return string
+	 */
+	public static function format_variable_range_html( $existing_html, array $range, $subscription ) {
+		$currency = $range['currency'];
+		$min      = $range['min'];
+		$max      = $range['max'];
+		$from     = self::leading_from_label( $existing_html );
+		$tail     = self::subscription_tail( $existing_html );
+		$min_html = function_exists( 'wc_price' ) ? wc_price( $min, array( 'currency' => $currency ) ) : $currency . ' ' . $min;
+		if ( (float) $min !== (float) $max ) {
+			if ( $subscription || '' !== $from ) {
+				if ( '' === $from ) {
+					$from = __( 'From:', 'reactwoo-geo-commerce' ) . ' ';
+				}
+				return $from . $min_html . $tail;
+			}
+			$max_html = function_exists( 'wc_price' ) ? wc_price( $max, array( 'currency' => $currency ) ) : $currency . ' ' . $max;
+			if ( function_exists( 'wc_format_price_range' ) ) {
+				return wc_format_price_range( $min_html, $max_html );
+			}
+			return $min_html . ' – ' . $max_html;
+		}
+		return $from . $min_html . $tail;
 	}
 
 	/**
@@ -295,9 +369,100 @@ class RWGCM_Price_Book_Apply {
 		if ( class_exists( 'RWGCM_Price_Book_Currency', false ) && RWGCM_Price_Book_Currency::is_renewal_request() ) {
 			return true;
 		}
-		if ( function_exists( 'is_admin' ) && is_admin() && ( ! function_exists( 'wp_doing_ajax' ) || ! wp_doing_ajax() ) ) {
+		if ( class_exists( 'RWGCM_Price_Book_Currency', false ) && RWGCM_Price_Book_Currency::forces_store_currency() ) {
 			return true;
 		}
 		return false;
+	}
+
+	/**
+	 * @param object $product Product.
+	 * @return bool
+	 */
+	private static function is_variable_product( $product ) {
+		return is_object( $product ) && method_exists( $product, 'is_type' ) && ( $product->is_type( 'variable' ) || $product->is_type( 'variable-subscription' ) );
+	}
+
+	/**
+	 * @param object $product Parent product.
+	 * @param string $active  Active currency.
+	 * @return array<int, array{raw: string, book: string}>
+	 */
+	private static function variation_rows( $product, $active ) {
+		$rows = array();
+		if ( ! is_object( $product ) ) {
+			return $rows;
+		}
+		$ids = array();
+		if ( method_exists( $product, 'get_visible_children' ) ) {
+			$ids = $product->get_visible_children();
+		} elseif ( method_exists( $product, 'get_children' ) ) {
+			$ids = $product->get_children();
+		}
+		if ( ! is_array( $ids ) ) {
+			return $rows;
+		}
+		foreach ( $ids as $child_id ) {
+			$child = function_exists( 'wc_get_product' ) ? wc_get_product( $child_id ) : null;
+			if ( ! is_object( $child ) || ! method_exists( $child, 'get_id' ) ) {
+				continue;
+			}
+			$raw  = method_exists( $child, 'get_price' ) ? $child->get_price( 'edit' ) : '';
+			$book = RWGCM_Price_Book_Currency::get_book( $child->get_id() );
+			$book_amount = '';
+			if ( RWGCM_Price_Book::has_price( $book, $active ) ) {
+				$resolved = RWGCM_Price_Book::resolve_prices( $book[ RWGCM_Price_Book::normalize_currency( $active ) ] );
+				if ( is_array( $resolved ) ) {
+					$book_amount = $resolved['active'];
+				}
+			}
+			$rows[] = array(
+				'raw'  => (string) $raw,
+				'book' => (string) $book_amount,
+			);
+		}
+		return $rows;
+	}
+
+	/**
+	 * @param string $html Price HTML.
+	 * @return string
+	 */
+	private static function leading_from_label( $html ) {
+		$text = self::plain_text( $html );
+		if ( preg_match( '/^(from:?)\s*/i', $text, $matches ) ) {
+			$label = $matches[1];
+			if ( ':' !== substr( $label, -1 ) ) {
+				$label .= ':';
+			}
+			return $label . ' ';
+		}
+		return '';
+	}
+
+	/**
+	 * Billing period left on a subscription price string, such as " / month".
+	 *
+	 * @param string $html Price HTML.
+	 * @return string
+	 */
+	private static function subscription_tail( $html ) {
+		$text = self::plain_text( $html );
+		if ( preg_match( '/(\s+\/\s+\S.*)$/', $text, $matches ) ) {
+			return $matches[1];
+		}
+		return '';
+	}
+
+	/**
+	 * @param string $html HTML or plain text.
+	 * @return string
+	 */
+	private static function plain_text( $html ) {
+		$html = (string) $html;
+		if ( function_exists( 'wp_strip_all_tags' ) ) {
+			return trim( wp_strip_all_tags( $html ) );
+		}
+		return trim( strip_tags( $html ) );
 	}
 }

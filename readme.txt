@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.4.0
+Stable tag: 0.4.1
 
 WooCommerce rules and personalization on ReactWoo Geo Core.
 
@@ -18,6 +18,11 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 2. Activate this plugin.
 
 == Changelog ==
+
+= 0.4.1 =
+* **Variable prices:** The From/range on variable and variable-subscription products uses price-book amounts only when every variation has that currency. Otherwise it keeps the store-currency amount and the store-currency symbol.
+* **Saved prices:** REST (except the Store API storefront), cron, WP-CLI, wp-admin, and variation sync stay on the store currency, so a visitor currency is not written into variation or subscription price meta.
+* **Block checkout:** Store API orders store the price-book currency and source meta.
 
 = 0.4.0 =
 * **Price books:** Fixed prices per currency (ZAR, GBP, EUR, USD, filterable) on simple products and variable-subscription variations, including recurring price, sale price, and subscription sign-up fee.
