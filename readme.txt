@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.4.4
+Stable tag: 0.4.5
 
 WooCommerce rules and personalization on ReactWoo Geo Core.
 
@@ -18,6 +18,12 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 2. Activate this plugin.
 
 == Changelog ==
+
+= 0.4.5 =
+* **Shipping:** A cart that needs shipping stays in the store currency, because shipping rates are store-currency amounts. Use the `rwgcm_price_book_shipping_priced` filter if your rates are entered in another currency.
+* **Rank Math:** Product JSON-LD from Rank Math reports the store currency for products without a price-book entry in the visitor's currency.
+* **Checkout currency:** A visitor's checkout billing and shipping country default to their geo country when the store sells there, and a pre-filled billing country no longer switches the cart to the store currency. Only a billing country the customer chose (or a logged-in customer's saved one) changes the currency.
+* **Currency:** Store API product data (block product grids, single product, cart cross-sells, batch) and product JSON-LD no longer label a store-currency amount with the visitor's currency. A product without a price-book entry in the active currency reports the store currency, matching the classic price HTML. Checkout refuses an order whose currency has no price-book amount for one of its lines.
 
 = 0.4.4 =
 * **Gateways:** Payments by country lists a gateway even when WooCommerce’s own registry missed it, and warns that checkout cannot offer that gateway until WooCommerce registers it. A summary above the table names every gateway, and the country column stays visible while the table scrolls.
