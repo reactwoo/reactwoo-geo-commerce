@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.4.1
+Stable tag: 0.4.2
 
 WooCommerce rules and personalization on ReactWoo Geo Core.
 
@@ -18,6 +18,9 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 2. Activate this plugin.
 
 == Changelog ==
+
+= 0.4.2 =
+* **Gateway currencies:** Optional per-gateway currency list. A gateway’s own settings screen can see a mapped currency when the store currency is not one it accepts. Checkout offers that gateway only when the cart or order currency is in the list. Paystack keeps charging the order currency.
 
 = 0.4.1 =
 * **Variable prices:** The From/range on variable and variable-subscription products uses price-book amounts only when every variation has that currency. Otherwise it keeps the store-currency amount and the store-currency symbol.

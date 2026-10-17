@@ -170,6 +170,13 @@ class RWGCM_Price_Book_Admin {
 			}
 			update_option( RWGCM_Gateway_Availability::OPTION_KEY, RWGCM_Gateway_Availability::sanitize_rules( $gateway_raw ), false );
 		}
+		if ( isset( $_POST['rwgcm_gateway_currencies_present'] ) ) {
+			$currency_raw = array();
+			if ( isset( $_POST['rwgcm_gateway_currencies'] ) && is_array( $_POST['rwgcm_gateway_currencies'] ) ) {
+				$currency_raw = wp_unslash( $_POST['rwgcm_gateway_currencies'] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			}
+			update_option( RWGCM_Gateway_Currency::OPTION_KEY, RWGCM_Gateway_Currency::sanitize_lists( $currency_raw ), false );
+		}
 		$redirect = wp_get_referer();
 		if ( ! is_string( $redirect ) || '' === $redirect ) {
 			$redirect = admin_url( 'admin.php?page=rwgcm-settings' );
@@ -211,6 +218,7 @@ class RWGCM_Price_Book_Admin {
 
 		echo '<h3>' . esc_html__( 'Payment gateways by country', 'reactwoo-geo-commerce' ) . '</h3>';
 		echo '<p class="description">' . esc_html__( 'Checked gateways are the only ones offered at checkout for that billing country. A country or group with nothing checked keeps every enabled gateway. Subscription renewals keep charging the gateway already on the subscription. Changing the payment method uses the subscription billing country.', 'reactwoo-geo-commerce' ) . '</p>';
+		echo '<p class="description">' . esc_html__( 'A gateway that cannot charge the store currency needs its own currency list below. Checking it for a country does not change the currency it sees.', 'reactwoo-geo-commerce' ) . '</p>';
 		self::render_gateway_rules();
 
 		submit_button( __( 'Save price book settings', 'reactwoo-geo-commerce' ) );
@@ -253,6 +261,8 @@ class RWGCM_Price_Book_Admin {
 		self::render_gateway_row( '', 'rwgcm_gateway_country_new_ids[]', $choices, array(), true );
 		echo '</tbody></table></div>';
 
+		self::render_gateway_currencies( $choices, $rules );
+
 		echo '<h4>' . esc_html__( 'Country groups', 'reactwoo-geo-commerce' ) . '</h4>';
 		if ( empty( $groups ) ) {
 			echo '<p class="description">' . esc_html__( 'Geo Core has no country groups yet. Assign gateways per country above. Groups from Geo Core’s country group registry show up here when they exist.', 'reactwoo-geo-commerce' ) . '</p>';
@@ -278,11 +288,42 @@ class RWGCM_Price_Book_Admin {
 	}
 
 	/**
-	 * @param string              $code     ISO2 or empty for the add row.
-	 * @param string              $name     Checkbox name.
 	 * @param array<string, string> $choices Gateway id => title.
-	 * @param array<int, string>  $selected Selected ids.
-	 * @param bool                $is_new   Editable country code.
+	 * @param array<string, mixed>  $rules   Country gateway rules, for the hint.
+	 * @return void
+	 */
+	private static function render_gateway_currencies( array $choices, array $rules ) {
+		$saved = RWGCM_Gateway_Currency::stored_currencies();
+		$map   = RWGCM_Price_Book::country_currency_map();
+		echo '<h4>' . esc_html__( 'Gateway currencies', 'reactwoo-geo-commerce' ) . '</h4>';
+		echo '<p class="description">' . esc_html__( 'Optional. Leave a gateway blank and Geo Commerce will not change it. Enter the currencies that gateway can charge, separated by spaces. On that gateway’s own WooCommerce settings screen, if the store currency is not in the list, its currency check sees one of these currencies so the settings can load. Checkout only offers the gateway when the cart or order currency is in the list. Paystack (id paystack) accepts NGN, GHS, USD, KES, RWF, ZAR, XOF, and EGP.', 'reactwoo-geo-commerce' ) . '</p>';
+		echo '<input type="hidden" name="rwgcm_gateway_currencies_present" value="1" />';
+		echo '<table class="widefat striped"><thead><tr><th>' . esc_html__( 'Gateway', 'reactwoo-geo-commerce' ) . '</th><th>' . esc_html__( 'Currencies it can charge', 'reactwoo-geo-commerce' ) . '</th></tr></thead><tbody>';
+		foreach ( $choices as $id => $title ) {
+			$list    = isset( $saved[ $id ] ) ? implode( ' ', $saved[ $id ] ) : '';
+			$covered = RWGCM_Gateway_Currency::currencies_covered_by_country_rules( $id, $rules, $map );
+			echo '<tr><th scope="row">' . esc_html( $title ) . '<br/><code>' . esc_html( $id ) . '</code></th><td>';
+			echo '<input type="text" class="regular-text" name="' . esc_attr( 'rwgcm_gateway_currencies[' . $id . ']' ) . '" value="' . esc_attr( $list ) . '" placeholder="' . esc_attr__( 'ZAR USD', 'reactwoo-geo-commerce' ) . '" />';
+			if ( ! empty( $covered ) ) {
+				echo '<p class="description">' . esc_html(
+					sprintf(
+						/* translators: %s: currency codes from the country rules. */
+						__( 'Country rules for this gateway use %s.', 'reactwoo-geo-commerce' ),
+						implode( ', ', $covered )
+					)
+				) . '</p>';
+			}
+			echo '</td></tr>';
+		}
+		echo '</tbody></table>';
+	}
+
+	/**
+	 * @param string                $code     ISO2 or empty for the add row.
+	 * @param string                $name     Checkbox name.
+	 * @param array<string, string> $choices  Gateway id => title.
+	 * @param array<int, string>    $selected Selected ids.
+	 * @param bool                  $is_new   Editable country code.
 	 * @return void
 	 */
 	private static function render_gateway_row( $code, $name, array $choices, array $selected, $is_new ) {

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-10-17
+
+### Added
+- **Gateway currencies:** Geo Commerce → Settings can list the currencies a payment gateway is allowed to charge. Leave a gateway blank and nothing about it changes. Paystack WooCommerce Payment Gateway 5.8.5 (`paystack`) accepts NGN, GHS, USD, KES, RWF, ZAR, XOF, and EGP. Its `woocommerce_paystack_supported_currencies` filter only widens that list, so a GBP store still fails `is_valid_for_use()` until the gateway’s own settings screen (`page=wc-settings&tab=checkout&section=paystack`) is shown a mapped currency such as ZAR. Product saves, REST, cron, and WP-CLI stay on the store currency.
+- **Checkout:** A configured gateway is offered only when the cart or order currency is one of its currencies. Paystack’s payment init and verify already send `$order->get_currency()` and the amount in minor units (`total * 100` for ZAR).
+
 ## [0.4.1] - 2026-10-17
 
 ### Fixed

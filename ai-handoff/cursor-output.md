@@ -6,43 +6,39 @@ needs-review
 
 ## Summary
 
-0.4.1 fixes three live 0.4.0 bugs. Variable and variable-subscription From/range HTML uses price-book amounts only when every variation has that currency; otherwise the store currency and its symbol are shown. REST (except Store API storefront), cron, WP-CLI, wp-admin, and variation sync stay on the store currency. Block checkout writes `_rwgcm_price_book_currency` and `_rwgcm_price_book_source`.
+0.4.2 adds an opt-in per-gateway currency list. Paystack WooCommerce Payment Gateway 5.8.5 (id `paystack`) disables its settings unless `get_woocommerce_currency()` is in `woocommerce_paystack_supported_currencies`. That filter only widens the allow-list, so the gateway settings screen uses a scoped `woocommerce_currency` filter. Product saves, REST, cron, and WP-CLI stay on the store currency. Checkout offers a configured gateway only when the cart or order currency is in its list.
 
 ## Files changed
 
 | File | Reason |
 |------|--------|
-| includes/class-rwgcm-price-book.php | Range decision and per-currency variation price hash |
-| includes/class-rwgcm-price-book-apply.php | From/range HTML and subscription price strings |
-| includes/class-rwgcm-price-book-currency.php | Force the store currency on writes and sync |
-| includes/class-rwgcm-price-book-order.php | Store API checkout meta |
-| includes/class-rwgcm-catalog-price.php | Do not geo-adjust prices while a write forces the store currency |
-| includes/class-rwgcm-catalog-price-variable.php | Same guard for variation prices |
-| tests/test-price-book.php | Range, hash, write-context, and Store API meta tests |
-| reactwoo-geo-commerce.php, readme.txt, CHANGELOG.md | Version 0.4.1 |
+| includes/class-rwgcm-gateway-currency.php | Allow-list, settings-screen currency, checkout filter, Paystack allow-list merge, minor units |
+| includes/class-rwgcm-price-book-admin.php | Gateway currency fields on the existing gateway rules screen |
+| includes/class-rwgcm-price-book-currency.php | Public product-sync flag so the settings override cannot run during a sync |
+| includes/class-rwgcm-plugin.php | Load and init the new class |
+| tests/test-gateway-currency.php | Settings scope, checkout offer, ZAR minor units |
+| reactwoo-geo-commerce.php, readme.txt, CHANGELOG.md | Version 0.4.2 |
 
 ## What was not changed
 
-- Gateway country rules
-- Geo Core detection
-- No tag until the tests on this branch pass and the release is merged
+- 0.4.1 store-currency enforcement for product saves, REST, cron, and WP-CLI
+- Country gateway rules
+- No merge and no tag
 
 ## Commands run
 
 ```bash
-php -l includes/class-rwgcm-price-book.php
-php -l includes/class-rwgcm-price-book-currency.php
-php -l includes/class-rwgcm-price-book-apply.php
-php -l includes/class-rwgcm-price-book-order.php
-php -l includes/class-rwgcm-catalog-price.php
-php -l includes/class-rwgcm-catalog-price-variable.php
+php -l includes/class-rwgcm-gateway-currency.php
+php -l includes/class-rwgcm-price-book-admin.php
+php -l includes/class-rwgcm-plugin.php
+php tests/test-gateway-currency.php
 php tests/test-price-book.php
 php tests/test-rules-unified.php
 ```
 
 ## Build / test result
 
-pass — `tests/test-price-book.php` 86 passed; `tests/test-rules-unified.php` 8 passed.
+pass — gateway currency 33 passed; price book 86 passed; rules 8 passed.
 
 ## Remaining errors
 

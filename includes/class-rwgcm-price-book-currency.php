@@ -96,6 +96,15 @@ class RWGCM_Price_Book_Currency {
 	}
 
 	/**
+	 * True while a product save or variation sync is holding the store currency.
+	 *
+	 * @return bool
+	 */
+	public static function is_product_sync() {
+		return self::$store_currency_writes > 0;
+	}
+
+	/**
 	 * REST (except the Store API storefront), cron, WP-CLI, wp-admin, and product
 	 * sync must not switch currency or apply a price book. Store API cart and
 	 * checkout keep the visitor currency.
