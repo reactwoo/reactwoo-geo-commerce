@@ -11,8 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Commerce navigation:** Price books (`admin.php?page=rwgcm-price-books`) and Payments by country (`admin.php?page=rwgcm-payments`) are first-class Commerce screens, not sections buried on Settings and not rules in the IF/THEN builder. The Commerce hub (`admin.php?page=rwgc-commerce-hub`) leads with Rules, Price books, Configure payment gateways, and Settings. The Commerce overview links to the same screens.
-- **WooCommerce payments:** WooCommerce → Settings → Payments shows “Set per-country availability in ReactWoo Geo”, linking to Payments by country.
+- **WooCommerce payments:** WooCommerce → Settings → Payments links to Payments by country. WooCommerce 11.2 strips third-party admin notices on the React Payments screen, so the link is a checkout settings field and a banner placed above `#experimental_wc_settings_payments_main`. Classic gateway settings (such as Paystack) get the same link as a title field, which WooCommerce does not save into the gateway option.
 - **Mobile admin:** Rule-builder steps no longer draw a second card inside the page card. Commerce screens use border-box, full-width inputs, and less padding at 782px and 600px so the page introduction is not clipped under the sticky shell header.
+
+### Fixed
+- **Payments by country lists every registered gateway**, including ones WooCommerce has switched off. Paystack sets `enabled` to false while the store currency is GBP, so it was missing from the screen and could not be mapped. The list now comes from `payment_gateways()` and marks those gateways “disabled in WooCommerce”, including `paystack-one` through `paystack-five` when they are registered. A hint says Paystack shows as disabled because the store currency is GBP, and ReactWoo Geo enables it for the currencies listed (for example ZAR). The store currency is not changed globally, so WooCommerce’s Payments list can still show Action needed.
+- **Saving no longer wipes mappings the form did not show.** Currency lists and country rules are merged. A blank currency field clears only that gateway, and an unchecked box removes only a gateway that was on the form.
+- **Saving Payments by country** returns to `admin.php?page=rwgcm-payments` and shows the saved notice. The form posts to itself, so the HTTP referer is not a usable redirect target.
 
 ## [0.4.2] - 2026-10-17
 

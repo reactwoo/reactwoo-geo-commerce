@@ -347,6 +347,34 @@ class RWGCM_Gateway_Currency {
 	}
 
 	/**
+	 * Replace only gateway ids present in the posted form. A blank value clears that gateway.
+	 * Ids the form did not submit stay as they were saved.
+	 *
+	 * @param array<string, mixed> $existing Stored lists.
+	 * @param mixed                $posted   Posted id => currency text or list.
+	 * @return array<string, array<int, string>>
+	 */
+	public static function merge_posted_lists( array $existing, $posted ) {
+		$out = self::sanitize_lists( $existing );
+		if ( ! is_array( $posted ) ) {
+			return $out;
+		}
+		foreach ( $posted as $id => $codes ) {
+			$id = self::normalize_gateway_id( $id );
+			if ( '' === $id ) {
+				continue;
+			}
+			$one = self::sanitize_lists( array( $id => $codes ) );
+			if ( isset( $one[ $id ] ) ) {
+				$out[ $id ] = $one[ $id ];
+			} else {
+				unset( $out[ $id ] );
+			}
+		}
+		return $out;
+	}
+
+	/**
 	 * @return array<string, array<int, string>>
 	 */
 	public static function stored_currencies() {

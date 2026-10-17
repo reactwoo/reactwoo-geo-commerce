@@ -223,5 +223,29 @@ $covered = RWGCM_Gateway_Currency::currencies_covered_by_country_rules(
 );
 assert_currency( 'a ZA Paystack country rule covers ZAR', array( 'ZAR' ) === $covered );
 
+$merged_lists = RWGCM_Gateway_Currency::merge_posted_lists(
+	array(
+		'paystack' => array( 'ZAR' ),
+		'cheque'   => array( 'GBP' ),
+	),
+	array(
+		'bacs'   => '   ',
+		'cheque' => 'GBP EUR',
+	)
+);
+assert_currency(
+	'saving without a Paystack currency field keeps the Paystack list',
+	isset( $merged_lists['paystack'] ) && array( 'ZAR' ) === $merged_lists['paystack']
+);
+assert_currency(
+	'a submitted currency field replaces only that gateway',
+	isset( $merged_lists['cheque'] ) && array( 'GBP', 'EUR' ) === $merged_lists['cheque'] && ! isset( $merged_lists['bacs'] )
+);
+$cleared = RWGCM_Gateway_Currency::merge_posted_lists(
+	array( 'paystack' => array( 'ZAR' ) ),
+	array( 'paystack' => '' )
+);
+assert_currency( 'a blank submitted currency field clears only that gateway', array() === $cleared );
+
 echo "\n{$passed} passed, {$failed} failed\n";
 exit( $failed > 0 ? 1 : 0 );

@@ -57,7 +57,9 @@ class RWGCM_Admin {
 	public static function init() {
 		add_action( 'admin_menu', array( __CLASS__, 'register_menu' ), 26 );
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_assets' ) );
-		add_action( 'admin_notices', array( __CLASS__, 'render_wc_payments_notice' ) );
+		add_action( 'admin_footer', array( __CLASS__, 'render_wc_payments_banner' ) );
+		add_filter( 'woocommerce_get_settings_checkout', array( __CLASS__, 'filter_checkout_settings' ), 20, 2 );
+		add_action( 'admin_init', array( __CLASS__, 'register_gateway_settings_fields' ), 5 );
 		add_filter( 'rwgc_section_hub_cards', array( __CLASS__, 'filter_section_hub_cards' ), 20, 2 );
 		add_action( 'admin_init', array( __CLASS__, 'handle_license_actions' ) );
 		add_action( 'admin_post_rwgcm_save_dashboard', array( __CLASS__, 'handle_save_dashboard' ) );
@@ -670,9 +672,79 @@ class RWGCM_Admin {
 	}
 
 	/**
+	 * Where a price-book or payments settings form should return.
+	 * The payments form posts to itself, and wp_get_referer() is empty when the referer is the current URL.
+	 *
+	 * @param string $return_to payments or price-books.
+	 * @return string
+	 */
+	public static function settings_redirect_url( $return_to ) {
+		$slug = 'payments' === $return_to ? 'rwgcm-payments' : 'rwgcm-price-books';
+		$path = 'admin.php?page=' . $slug;
+		return function_exists( 'admin_url' ) ? admin_url( $path ) : $path;
+	}
+
+	/**
+	 * Visible label for the WooCommerce Payments link.
+	 *
+	 * @return string
+	 */
+	public static function payments_settings_link_text() {
+		return __( 'Set per-country availability in ReactWoo Geo', 'reactwoo-geo-commerce' );
+	}
+
+	/**
+	 * @return string
+	 */
+	public static function payments_settings_link_html() {
+		$url  = function_exists( 'admin_url' ) ? admin_url( 'admin.php?page=rwgcm-payments' ) : 'admin.php?page=rwgcm-payments';
+		$text = self::payments_settings_link_text();
+		if ( function_exists( 'esc_url' ) && function_exists( 'esc_html' ) ) {
+			return '<a href="' . esc_url( $url ) . '">' . esc_html( $text ) . '</a>';
+		}
+		return '<a href="' . $url . '">' . $text . '</a>';
+	}
+
+	/**
+	 * WooCommerce 11.2 renders Payments as a React mount
+	 * (#experimental_wc_settings_payments_main) and strips third-party admin_notices.
+	 * The checkout settings output still runs after that mount, so the link is a settings field.
+	 *
+	 * @param mixed  $settings   Checkout settings.
+	 * @param string $section_id Section id. Empty string is the Payments overview.
+	 * @return mixed
+	 */
+	public static function filter_checkout_settings( $settings, $section_id ) {
+		if ( ! is_array( $settings ) ) {
+			return $settings;
+		}
+		$section_id = is_string( $section_id ) ? $section_id : '';
+		if ( ! in_array( $section_id, array( '', 'main' ), true ) ) {
+			return $settings;
+		}
+		$settings[] = array(
+			'title' => __( 'Payments by country', 'reactwoo-geo-commerce' ),
+			'type'  => 'title',
+			'id'    => 'rwgcm_payments_by_country',
+			'desc'  => sprintf(
+				/* translators: %s: link to Payments by country. */
+				__( 'Country availability for these gateways is set in ReactWoo Geo, not on this screen. %s', 'reactwoo-geo-commerce' ),
+				self::payments_settings_link_html()
+			),
+		);
+		$settings[] = array(
+			'type' => 'sectionend',
+			'id'   => 'rwgcm_payments_by_country',
+		);
+		return $settings;
+	}
+
+	/**
+	 * Place the same link above the React payments list. admin_footer is outside the notice strip.
+	 *
 	 * @return void
 	 */
-	public static function render_wc_payments_notice() {
+	public static function render_wc_payments_banner() {
 		if ( ! self::can_manage() || ! isset( $_GET['page'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 			return;
 		}
@@ -683,11 +755,65 @@ class RWGCM_Admin {
 		if ( ! self::is_wc_payments_screen( $query ) ) {
 			return;
 		}
-		$url = admin_url( 'admin.php?page=rwgcm-payments' );
-		echo '<div class="notice notice-info"><p>';
+		echo '<div id="rwgcm-wc-payments-link" class="notice notice-info"><p>';
 		echo esc_html__( 'Country availability for these gateways is set in ReactWoo Geo, not on this screen.', 'reactwoo-geo-commerce' );
-		echo ' <a href="' . esc_url( $url ) . '">' . esc_html__( 'Set per-country availability in ReactWoo Geo', 'reactwoo-geo-commerce' ) . '</a>';
+		echo ' ' . self::payments_settings_link_html(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- helper escapes the URL and text.
 		echo '</p></div>';
+		echo '<script>(function(){var banner=document.getElementById("rwgcm-wc-payments-link");if(!banner){return;}var mount=document.querySelector("[id^=\\"experimental_wc_settings_payments_\\"]");if(mount&&mount.parentNode){mount.parentNode.insertBefore(banner,mount);}})();</script>';
+	}
+
+	/**
+	 * Classic gateway settings pages (section=paystack is not a React payments section in WC 11.2)
+	 * still render form fields. Title fields are not saved into the gateway option.
+	 *
+	 * @return void
+	 */
+	public static function register_gateway_settings_fields() {
+		if ( ! function_exists( 'WC' ) ) {
+			return;
+		}
+		$wc = WC();
+		if ( ! $wc || ! method_exists( $wc, 'payment_gateways' ) ) {
+			return;
+		}
+		$controller = $wc->payment_gateways();
+		if ( ! is_object( $controller ) || ! method_exists( $controller, 'payment_gateways' ) ) {
+			return;
+		}
+		$all = $controller->payment_gateways();
+		if ( ! is_array( $all ) ) {
+			return;
+		}
+		foreach ( $all as $gateway ) {
+			if ( ! is_object( $gateway ) || empty( $gateway->id ) ) {
+				continue;
+			}
+			$id = preg_replace( '/[^A-Za-z0-9_\-]/', '', (string) $gateway->id );
+			if ( ! is_string( $id ) || '' === $id ) {
+				continue;
+			}
+			add_filter( 'woocommerce_settings_api_form_fields_' . $id, array( __CLASS__, 'append_gateway_settings_note' ) );
+		}
+	}
+
+	/**
+	 * @param mixed $fields Gateway form fields.
+	 * @return mixed
+	 */
+	public static function append_gateway_settings_note( $fields ) {
+		if ( ! is_array( $fields ) || isset( $fields['rwgcm_payments_by_country'] ) ) {
+			return $fields;
+		}
+		$fields['rwgcm_payments_by_country'] = array(
+			'title'       => __( 'Payments by country', 'reactwoo-geo-commerce' ),
+			'type'        => 'title',
+			'description' => sprintf(
+				/* translators: %s: link to Payments by country. */
+				__( 'Country availability for this gateway is set in ReactWoo Geo. %s', 'reactwoo-geo-commerce' ),
+				self::payments_settings_link_html()
+			),
+		);
+		return $fields;
 	}
 
 	/**

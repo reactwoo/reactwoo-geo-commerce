@@ -100,6 +100,25 @@ assert_nav(
 assert_nav( 'WooCommerce Payments tab is the checkout settings tab', RWGCM_Admin::is_wc_payments_screen( array( 'page' => 'wc-settings', 'tab' => 'checkout' ) ) );
 assert_nav( 'a product edit screen is not the WooCommerce payments screen', ! RWGCM_Admin::is_wc_payments_screen( array( 'page' => 'post', 'tab' => '' ) ) );
 assert_nav( 'Commerce settings is not the WooCommerce payments screen', ! RWGCM_Admin::is_wc_payments_screen( array( 'page' => 'rwgcm-payments', 'tab' => 'checkout' ) ) );
+assert_nav( 'a WooCommerce Payments section is still the Payments screen', RWGCM_Admin::is_wc_payments_screen( array( 'page' => 'wc-settings', 'tab' => 'checkout' ) ) );
+$payments_redirect = RWGCM_Admin::settings_redirect_url( 'payments' );
+$books_redirect    = RWGCM_Admin::settings_redirect_url( 'price-books' );
+assert_nav( 'saving Payments by country returns to rwgcm-payments', false !== strpos( $payments_redirect, 'page=rwgcm-payments' ) && false === strpos( $payments_redirect, 'rwgcm-price-books' ) );
+assert_nav( 'saving price books returns to rwgcm-price-books', false !== strpos( $books_redirect, 'page=rwgcm-price-books' ) );
+$checkout_settings = RWGCM_Admin::filter_checkout_settings( array(), '' );
+$checkout_desc     = isset( $checkout_settings[0]['desc'] ) ? (string) $checkout_settings[0]['desc'] : '';
+assert_nav(
+	'the WooCommerce Payments screen settings include the per-country link',
+	false !== strpos( $checkout_desc, 'Set per-country availability in ReactWoo Geo' ) && false !== strpos( $checkout_desc, 'page=rwgcm-payments' )
+);
+assert_nav( 'a gateway settings section does not gain the overview field', array() === RWGCM_Admin::filter_checkout_settings( array(), 'bacs' ) );
+$gateway_fields = RWGCM_Admin::append_gateway_settings_note( array( 'enabled' => array( 'type' => 'checkbox' ) ) );
+assert_nav(
+	'a classic gateway settings form links to Payments by country and is not a saved checkbox',
+	isset( $gateway_fields['rwgcm_payments_by_country'] )
+		&& 'title' === $gateway_fields['rwgcm_payments_by_country']['type']
+		&& false !== strpos( (string) $gateway_fields['rwgcm_payments_by_country']['description'], 'Set per-country availability in ReactWoo Geo' )
+);
 
 echo "\n{$passed} passed, {$failed} failed\n";
 exit( $failed > 0 ? 1 : 0 );

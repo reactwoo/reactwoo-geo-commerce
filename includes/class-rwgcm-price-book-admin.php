@@ -170,19 +170,28 @@ class RWGCM_Price_Book_Admin {
 			if ( isset( $_POST['rwgcm_gateway_group'] ) && is_array( $_POST['rwgcm_gateway_group'] ) ) {
 				$gateway_raw['groups'] = wp_unslash( $_POST['rwgcm_gateway_group'] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 			}
-			update_option( RWGCM_Gateway_Availability::OPTION_KEY, RWGCM_Gateway_Availability::sanitize_rules( $gateway_raw ), false );
+			$shown_gateways = isset( $_POST['rwgcm_gateway_shown'] ) && is_array( $_POST['rwgcm_gateway_shown'] ) ? wp_unslash( $_POST['rwgcm_gateway_shown'] ) : array(); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			$shown_countries = isset( $_POST['rwgcm_gateway_country_rows'] ) && is_array( $_POST['rwgcm_gateway_country_rows'] ) ? wp_unslash( $_POST['rwgcm_gateway_country_rows'] ) : array(); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			$shown_groups    = isset( $_POST['rwgcm_gateway_group_rows'] ) && is_array( $_POST['rwgcm_gateway_group_rows'] ) ? wp_unslash( $_POST['rwgcm_gateway_group_rows'] ) : array(); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			$merged          = RWGCM_Gateway_Availability::merge_posted_rules(
+				RWGCM_Gateway_Availability::stored_rules(),
+				$gateway_raw,
+				is_array( $shown_gateways ) ? $shown_gateways : array(),
+				is_array( $shown_countries ) ? $shown_countries : array(),
+				is_array( $shown_groups ) ? $shown_groups : array()
+			);
+			update_option( RWGCM_Gateway_Availability::OPTION_KEY, $merged, false );
 		}
 		if ( isset( $_POST['rwgcm_gateway_currencies_present'] ) ) {
 			$currency_raw = array();
 			if ( isset( $_POST['rwgcm_gateway_currencies'] ) && is_array( $_POST['rwgcm_gateway_currencies'] ) ) {
 				$currency_raw = wp_unslash( $_POST['rwgcm_gateway_currencies'] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 			}
-			update_option( RWGCM_Gateway_Currency::OPTION_KEY, RWGCM_Gateway_Currency::sanitize_lists( $currency_raw ), false );
+			$merged_currencies = RWGCM_Gateway_Currency::merge_posted_lists( RWGCM_Gateway_Currency::stored_currencies(), $currency_raw );
+			update_option( RWGCM_Gateway_Currency::OPTION_KEY, $merged_currencies, false );
 		}
-		$redirect = wp_get_referer();
-		if ( ! is_string( $redirect ) || '' === $redirect ) {
-			$redirect = admin_url( 'admin.php?page=rwgcm-price-books' );
-		}
+		$return_to = isset( $_POST['rwgcm_settings_return'] ) ? sanitize_key( wp_unslash( $_POST['rwgcm_settings_return'] ) ) : '';
+		$redirect  = RWGCM_Admin::settings_redirect_url( $return_to );
 		wp_safe_redirect( add_query_arg( 'rwgcm_price_book_saved', '1', $redirect ) );
 		exit;
 	}
@@ -201,6 +210,7 @@ class RWGCM_Price_Book_Admin {
 		echo '<form method="post" class="rwgcm-settings-form">';
 		wp_nonce_field( 'rwgcm_price_book_settings' );
 		echo '<input type="hidden" name="rwgcm_price_book_settings_save" value="1" />';
+		echo '<input type="hidden" name="rwgcm_settings_return" value="price-books" />';
 		echo '<input type="hidden" name="rwgcm_price_book_map_present" value="1" />';
 		echo '<label><input type="checkbox" name="rwgcm_price_book_base_adjustments" value="yes" ' . checked( $enabled, true, false ) . ' /> ';
 		echo esc_html__( 'Keep store-currency geo price adjustments', 'reactwoo-geo-commerce' );
@@ -229,7 +239,8 @@ class RWGCM_Price_Book_Admin {
 		echo '<form method="post" class="rwgcm-settings-form">';
 		wp_nonce_field( 'rwgcm_price_book_settings' );
 		echo '<input type="hidden" name="rwgcm_price_book_settings_save" value="1" />';
-		echo '<p>' . esc_html__( 'Checked gateways are the only ones offered at checkout for that billing country. A country or group with nothing checked keeps every enabled gateway. Subscription renewals keep charging the gateway already on the subscription. Changing the payment method uses the subscription billing country.', 'reactwoo-geo-commerce' ) . '</p>';
+		echo '<input type="hidden" name="rwgcm_settings_return" value="payments" />';
+		echo '<p>' . esc_html__( 'Checked gateways are the only ones offered at checkout for that billing country. A country or group with nothing checked keeps every enabled gateway. Gateways WooCommerce has switched off are still listed here so they can be mapped. Subscription renewals keep charging the gateway already on the subscription. Changing the payment method uses the subscription billing country.', 'reactwoo-geo-commerce' ) . '</p>';
 		echo '<p class="description">' . esc_html__( 'A gateway that cannot charge the store currency needs its own currency list below. Checking it for a country does not change the currency it sees.', 'reactwoo-geo-commerce' ) . '</p>';
 		self::render_gateway_rules();
 		submit_button( __( 'Save payment gateways', 'reactwoo-geo-commerce' ) );
@@ -253,10 +264,13 @@ class RWGCM_Price_Book_Admin {
 		$rules   = RWGCM_Gateway_Availability::stored_rules();
 		$groups  = RWGCM_Gateway_Availability::country_group_choices();
 		if ( empty( $choices ) ) {
-			echo '<p>' . esc_html__( 'No enabled WooCommerce payment gateways were found.', 'reactwoo-geo-commerce' ) . '</p>';
+			echo '<p>' . esc_html__( 'No WooCommerce payment gateways were found.', 'reactwoo-geo-commerce' ) . '</p>';
 			return;
 		}
 		echo '<input type="hidden" name="rwgcm_gateway_rules_present" value="1" />';
+		foreach ( array_keys( $choices ) as $id ) {
+			echo '<input type="hidden" name="rwgcm_gateway_shown[]" value="' . esc_attr( $id ) . '" />';
+		}
 
 		$codes = array_values(
 			array_unique(
@@ -267,11 +281,14 @@ class RWGCM_Price_Book_Admin {
 			)
 		);
 		sort( $codes );
+		foreach ( $codes as $code ) {
+			echo '<input type="hidden" name="rwgcm_gateway_country_rows[]" value="' . esc_attr( $code ) . '" />';
+		}
 
 		echo '<div style="overflow-x: auto;">';
 		echo '<table class="widefat striped"><thead><tr><th>' . esc_html__( 'Billing country', 'reactwoo-geo-commerce' ) . '</th>';
-		foreach ( $choices as $id => $title ) {
-			echo '<th>' . esc_html( $title ) . '<br/><code>' . esc_html( $id ) . '</code></th>';
+		foreach ( $choices as $id => $choice ) {
+			echo '<th>' . self::gateway_heading_html( $id, $choice ) . '</th>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the helper.
 		}
 		echo '</tr></thead><tbody>';
 		foreach ( $codes as $code ) {
@@ -289,17 +306,21 @@ class RWGCM_Price_Book_Admin {
 			return;
 		}
 		echo '<p class="description">' . esc_html__( 'A group applies when the billing country is in that Geo Core group and the country has no rule of its own. Several matching groups are combined.', 'reactwoo-geo-commerce' ) . '</p>';
+		foreach ( array_keys( $groups ) as $slug ) {
+			echo '<input type="hidden" name="rwgcm_gateway_group_rows[]" value="' . esc_attr( $slug ) . '" />';
+		}
 		echo '<div style="overflow-x: auto;">';
 		echo '<table class="widefat striped"><thead><tr><th>' . esc_html__( 'Group', 'reactwoo-geo-commerce' ) . '</th>';
-		foreach ( $choices as $id => $title ) {
+		foreach ( $choices as $id => $choice ) {
+			unset( $id );
+			$title = is_array( $choice ) && isset( $choice['title'] ) ? (string) $choice['title'] : '';
 			echo '<th>' . esc_html( $title ) . '</th>';
 		}
 		echo '</tr></thead><tbody>';
 		foreach ( $groups as $slug => $label ) {
 			$selected = isset( $rules['groups'][ $slug ] ) ? $rules['groups'][ $slug ] : array();
 			echo '<tr><th scope="row">' . esc_html( $label ) . '<br/><code>' . esc_html( $slug ) . '</code></th>';
-			foreach ( $choices as $id => $title ) {
-				unset( $title );
+			foreach ( array_keys( $choices ) as $id ) {
 				echo '<td><input type="checkbox" name="' . esc_attr( 'rwgcm_gateway_group[' . $slug . '][]' ) . '" value="' . esc_attr( $id ) . '" ' . checked( in_array( $id, $selected, true ), true, false ) . ' /></td>';
 			}
 			echo '</tr>';
@@ -308,21 +329,24 @@ class RWGCM_Price_Book_Admin {
 	}
 
 	/**
-	 * @param array<string, string> $choices Gateway id => title.
-	 * @param array<string, mixed>  $rules   Country gateway rules, for the hint.
+	 * @param array<string, array{title: string, enabled: bool}> $choices Gateway columns.
+	 * @param array<string, mixed>                               $rules   Country gateway rules, for the hint.
 	 * @return void
 	 */
 	private static function render_gateway_currencies( array $choices, array $rules ) {
 		$saved = RWGCM_Gateway_Currency::stored_currencies();
 		$map   = RWGCM_Price_Book::country_currency_map();
+		$store = function_exists( 'get_woocommerce_currency' ) ? RWGCM_Price_Book::normalize_currency( get_woocommerce_currency() ) : '';
 		echo '<h4>' . esc_html__( 'Gateway currencies', 'reactwoo-geo-commerce' ) . '</h4>';
-		echo '<p class="description">' . esc_html__( 'Optional. Leave a gateway blank and Geo Commerce will not change it. Enter the currencies that gateway can charge, separated by spaces. On that gateway’s own WooCommerce settings screen, if the store currency is not in the list, its currency check sees one of these currencies so the settings can load. Checkout only offers the gateway when the cart or order currency is in the list. Paystack (id paystack) accepts NGN, GHS, USD, KES, RWF, ZAR, XOF, and EGP.', 'reactwoo-geo-commerce' ) . '</p>';
+		echo '<p class="description">' . esc_html__( 'Optional. Leave a gateway blank and Geo Commerce will not change it. Enter the currencies that gateway can charge, separated by spaces. On that gateway’s own WooCommerce settings screen, if the store currency is not in the list, its currency check sees one of these currencies so the settings can load. Checkout only offers the gateway when the cart or order currency is in the list. Paystack (id paystack) accepts NGN, GHS, USD, KES, RWF, ZAR, XOF, and EGP. This does not change the store currency.', 'reactwoo-geo-commerce' ) . '</p>';
 		echo '<input type="hidden" name="rwgcm_gateway_currencies_present" value="1" />';
 		echo '<table class="widefat striped"><thead><tr><th>' . esc_html__( 'Gateway', 'reactwoo-geo-commerce' ) . '</th><th>' . esc_html__( 'Currencies it can charge', 'reactwoo-geo-commerce' ) . '</th></tr></thead><tbody>';
-		foreach ( $choices as $id => $title ) {
+		foreach ( $choices as $id => $choice ) {
+			$title   = is_array( $choice ) && isset( $choice['title'] ) ? (string) $choice['title'] : (string) $id;
+			$enabled = is_array( $choice ) && ! empty( $choice['enabled'] );
 			$list    = isset( $saved[ $id ] ) ? implode( ' ', $saved[ $id ] ) : '';
 			$covered = RWGCM_Gateway_Currency::currencies_covered_by_country_rules( $id, $rules, $map );
-			echo '<tr><th scope="row">' . esc_html( $title ) . '<br/><code>' . esc_html( $id ) . '</code></th><td>';
+			echo '<tr><th scope="row">' . self::gateway_heading_html( $id, $choice ) . '</th><td>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the helper.
 			echo '<input type="text" class="regular-text" name="' . esc_attr( 'rwgcm_gateway_currencies[' . $id . ']' ) . '" value="' . esc_attr( $list ) . '" placeholder="' . esc_attr__( 'ZAR USD', 'reactwoo-geo-commerce' ) . '" />';
 			if ( ! empty( $covered ) ) {
 				echo '<p class="description">' . esc_html(
@@ -333,15 +357,34 @@ class RWGCM_Price_Book_Admin {
 					)
 				) . '</p>';
 			}
+			$saved_codes = isset( $saved[ $id ] ) && is_array( $saved[ $id ] ) ? $saved[ $id ] : array();
+			if ( ! $enabled && RWGCM_Gateway_Availability::explain_disabled_gateway( $id, $saved_codes ) ) {
+				echo '<p class="description">' . esc_html( RWGCM_Gateway_Availability::disabled_currency_hint( $title, $store, $saved_codes ) ) . '</p>';
+			}
 			echo '</td></tr>';
 		}
 		echo '</tbody></table>';
 	}
 
 	/**
+	 * @param string                                   $id     Gateway id.
+	 * @param array{title?: string, enabled?: bool}|string $choice Choice row.
+	 * @return string
+	 */
+	private static function gateway_heading_html( $id, $choice ) {
+		$title   = is_array( $choice ) && isset( $choice['title'] ) ? (string) $choice['title'] : (string) $choice;
+		$enabled = ! is_array( $choice ) || ! empty( $choice['enabled'] );
+		$html    = esc_html( $title ) . '<br/><code>' . esc_html( (string) $id ) . '</code>';
+		if ( ! $enabled ) {
+			$html .= '<br/><span class="rwgcm-gateway-badge">' . esc_html__( 'disabled in WooCommerce', 'reactwoo-geo-commerce' ) . '</span>';
+		}
+		return $html;
+	}
+
+	/**
 	 * @param string                $code     ISO2 or empty for the add row.
 	 * @param string                $name     Checkbox name.
-	 * @param array<string, string> $choices  Gateway id => title.
+	 * @param array<string, array{title: string, enabled: bool}> $choices Gateway columns.
 	 * @param array<int, string>    $selected Selected ids.
 	 * @param bool                  $is_new   Editable country code.
 	 * @return void

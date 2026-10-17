@@ -20,7 +20,8 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 == Changelog ==
 
 = 0.4.3 =
-* **Navigation:** Price books and Payments by country are their own Commerce screens. The Commerce hub leads with Rules, Price books, Configure payment gateways, and Settings. WooCommerce → Settings → Payments links to the per-country screen.
+* **Navigation:** Price books and Payments by country are their own Commerce screens. The Commerce hub leads with Rules, Price books, Configure payment gateways, and Settings. WooCommerce → Settings → Payments links to the per-country screen from the checkout settings output, because WooCommerce 11.2 removes third-party admin notices on the React Payments page.
+* **Gateways:** Payments by country lists every registered gateway, including ones WooCommerce has disabled (Paystack on a GBP store). Saving keeps mappings for gateways the form did not show, and returns to the Payments screen.
 * **Mobile:** Rule steps are no longer cards inside cards. Inputs use the full width, and padding is tighter at 782px and 600px.
 
 = 0.4.2 =
