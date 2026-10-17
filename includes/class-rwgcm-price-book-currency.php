@@ -796,6 +796,45 @@ class RWGCM_Price_Book_Currency {
 			$book       = self::get_book( $item['data']->get_id() );
 			$supports[] = RWGCM_Price_Book::has_price( $book, $currency );
 		}
+		if ( ! empty( $supports ) ) {
+			$supports[] = RWGCM_Price_Book::shipping_supports_currency( $currency, self::base_currency(), self::cart_needs_shipping(), self::shipping_priced( $currency ) );
+		}
 		return $supports;
+	}
+
+	/**
+	 * @return bool
+	 */
+	private static function cart_needs_shipping() {
+		if ( ! self::cart_is_ready() || ! method_exists( WC()->cart, 'needs_shipping' ) ) {
+			return false;
+		}
+		self::$reading_cart = true;
+		try {
+			return (bool) WC()->cart->needs_shipping();
+		} finally {
+			self::$reading_cart = false;
+		}
+	}
+
+	/**
+	 * Whether shipping rates are priced in a currency. Off by default:
+	 * WooCommerce shipping rates are entered in the store currency.
+	 *
+	 * @param string $currency Currency.
+	 * @return bool
+	 */
+	public static function shipping_priced( $currency ) {
+		if ( ! function_exists( 'apply_filters' ) ) {
+			return false;
+		}
+		/**
+		 * Return true when every shipping rate this site offers is entered
+		 * in $currency (for example a zone used only by that currency).
+		 *
+		 * @param bool   $priced   Default false.
+		 * @param string $currency Currency code.
+		 */
+		return (bool) apply_filters( 'rwgcm_price_book_shipping_priced', false, $currency );
 	}
 }

@@ -39,7 +39,7 @@ function get_option( $k, $d = false ) { // phpcs:ignore
 }
 /** WC stand-ins. */
 class RW_Session { public function get( $k ) { return isset( $GLOBALS['rw']['session'][ $k ] ) ? $GLOBALS['rw']['session'][ $k ] : null; } public function set( $k, $v ) { $GLOBALS['rw']['session'][ $k ] = $v; } } // phpcs:ignore
-class RW_Cart { public function get_cart() { return $GLOBALS['rw']['cart']; } } // phpcs:ignore
+class RW_Cart { public function get_cart() { return $GLOBALS['rw']['cart']; } public function needs_shipping() { return ! empty( $GLOBALS['rw']['ship'] ); } } // phpcs:ignore
 class RW_Countries { public function get_allowed_countries() { return $GLOBALS['rw']['allowed']; } public function get_shipping_countries() { return $GLOBALS['rw']['allowed']; } } // phpcs:ignore
 /** Guest customer pre-filled from the store base country, as WooCommerce does. */
 class RW_Customer { public function get_billing_country() { return 'GB'; } } // phpcs:ignore
@@ -145,6 +145,30 @@ rw_cart( array( 3655, 3495 ) );
 $cur = rw_currency();
 assert_true( 'ZA guest two booked items: ZAR', 'ZAR' === $cur );
 assert_true( 'guard agrees with all-ZAR cart currency', RWGCM_Price_Book_Store_Api::lines_priced_in( array( 3655, 3495 ), $cur, 'GBP', array( 'RWGCM_Price_Book_Store_Api', 'line_priced_in' ) ) );
+
+// 7. Shipping: rates are store-currency amounts, so a cart that needs shipping stays GBP.
+assert_true( 'shipping helper: base currency always supported', RWGCM_Price_Book::shipping_supports_currency( 'GBP', 'GBP', true, false ) );
+assert_true( 'shipping helper: ZAR + needs shipping + not priced -> unsupported', ! RWGCM_Price_Book::shipping_supports_currency( 'ZAR', 'GBP', true, false ) );
+assert_true( 'shipping helper: ZAR + virtual cart -> supported', RWGCM_Price_Book::shipping_supports_currency( 'ZAR', 'GBP', false, false ) );
+assert_true( 'shipping helper: ZAR + shipping priced via filter -> supported', RWGCM_Price_Book::shipping_supports_currency( 'ZAR', 'GBP', true, true ) );
+rw_reset(); rw_books(); rw_cart( array( 3655 ) ); $GLOBALS['rw']['ship'] = true;
+assert_true( 'ZA guest, ZAR-priced physical item needing shipping: GBP (no R-labelled GBP shipping)', 'GBP' === rw_currency() );
+$GLOBALS['rw']['ship'] = false;
+assert_true( 'ZA guest, ZAR-priced item, no shipping needed: ZAR', 'ZAR' === rw_currency() );
+rw_cart( array() ); $GLOBALS['rw']['ship'] = true;
+assert_true( 'empty cart still shows the geo currency (catalog)', 'ZAR' === rw_currency() );
+
+/** Order stand-in with shipping. */
+class RW_ShipOrder { public $c; public $s; public function __construct( $c, $s ) { $this->c = $c; $this->s = $s; } public function get_currency() { return $this->c; } public function get_shipping_total() { return $this->s; } public function get_items( $t ) { unset( $t ); return array( new class() { public function get_product_id() { return 3655; } public function get_variation_id() { return 0; } public function get_meta( $k ) { unset( $k ); return ''; } } ); } } // phpcs:ignore
+$threw = false;
+try { RWGCM_Price_Book_Store_Api::guard_order_currency( new RW_ShipOrder( 'ZAR', '73.23' ) ); } catch ( Exception $e ) { $threw = true; } // phpcs:ignore
+assert_true( 'guard: ZAR order with store-currency shipping is refused', $threw );
+$threw = false;
+try { RWGCM_Price_Book_Store_Api::guard_order_currency( new RW_ShipOrder( 'ZAR', '0' ) ); } catch ( Exception $e ) { $threw = true; } // phpcs:ignore
+assert_true( 'guard: ZAR order without shipping passes', ! $threw );
+$threw = false;
+try { RWGCM_Price_Book_Store_Api::guard_order_currency( new RW_ShipOrder( 'GBP', '19.90' ) ); } catch ( Exception $e ) { $threw = true; } // phpcs:ignore
+assert_true( 'guard: GBP order with shipping passes', ! $threw );
 
 echo "\n{$passed} passed, {$failed} failed\n";
 exit( $failed > 0 ? 1 : 0 );

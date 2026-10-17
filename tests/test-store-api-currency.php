@@ -170,6 +170,31 @@ assert_true( 'mixed cart total is GBP 4600 (no ZAR amount leaks in)', '4600' ===
 assert_true( 'mixed cart lines are all GBP honest pairs', 'GBP' === $cart['items'][0]['prices']['currency_code'] && rw_honest( $cart['items'][0] ) && rw_honest( $cart['items'][1] ) );
 assert_true( 'mixed cart cross-sell stays honest in GBP', rw_honest( $cart['cross_sells'][0] ) );
 
+// 7b. Real WooCommerce shape: ProductSchema returns prices as stdClass (WC 11.2 ProductSchema.php:627).
+$GLOBALS['rw_currency'] = 'ZAR';
+$obj           = rw_product_node( 11883 );
+$obj['prices'] = (object) $obj['prices'];
+$out           = rw_dispatch( '/wc/store/v1/products/11883', $obj );
+assert_true( 'stdClass prices: unpriced product relabelled GBP', $out['prices'] instanceof stdClass && 'GBP' === $out['prices']->currency_code && '2300' === $out['prices']->price && '£' === $out['prices']->currency_prefix );
+$obj2           = rw_product_node( 500 );
+$obj2['prices'] = (object) $obj2['prices'];
+$out            = rw_dispatch( '/wc/store/v1/products', array( $obj, $obj2 ) );
+assert_true( 'stdClass prices in a list: unpriced GBP, priced ZAR', 'GBP' === $out[0]['prices']->currency_code && 'ZAR' === $out[1]['prices']->currency_code );
+$r = RWGCM_Price_Book_Store_Api::filter_after_callbacks( new RW_Response( $obj ), array(), new RW_Request( '/wc/store/v1/products/11883' ) );
+assert_true( 'rest_request_after_callbacks / hydration signature relabels', 'GBP' === $r->get_data()['prices']->currency_code );
+$src = file_get_contents( dirname( __DIR__ ) . '/includes/class-rwgcm-price-book-store-api.php' );
+assert_true( 'hooks rest_request_after_callbacks and woocommerce_hydration_request_after_callbacks', false !== strpos( $src, "'rest_request_after_callbacks'" ) && false !== strpos( $src, "'woocommerce_hydration_request_after_callbacks'" ) && false !== strpos( $src, "'rank_math/json_ld'" ) );
+
+// 7c. Rank Math JSON-LD graph (staging runs Rank Math Pro, which replaces WooCommerce's JSON-LD).
+$rm = array(
+	'WebPage'     => array( '@type' => 'ItemPage', 'name' => 'x' ),
+	'richSnippet' => array( '@type' => 'Product', 'offers' => array( '@type' => 'Offer', 'price' => '8.00', 'priceCurrency' => 'ZAR', 'priceSpecification' => array( 'price' => '8.00', 'priceCurrency' => 'ZAR' ) ) ),
+);
+$rmo = RWGCM_Price_Book_Store_Api::relabel_json_ld_entities( $rm, 11883, 'ZAR', 'GBP', array( 'RWGCM_Price_Book_Store_Api', 'product_priced_in' ) );
+assert_true( 'Rank Math Product offer for unpriced product says GBP', 'GBP' === $rmo['richSnippet']['offers']['priceCurrency'] && 'GBP' === $rmo['richSnippet']['offers']['priceSpecification']['priceCurrency'] );
+$rmo = RWGCM_Price_Book_Store_Api::relabel_json_ld_entities( $rm, 500, 'ZAR', 'GBP', array( 'RWGCM_Price_Book_Store_Api', 'product_priced_in' ) );
+assert_true( 'Rank Math Product offer for ZAR-priced product stays ZAR', 'ZAR' === $rmo['richSnippet']['offers']['priceCurrency'] );
+
 // 8. Checkout guard: order currency must match line prices.
 $base = 'GBP';
 $p    = array( 'RWGCM_Price_Book_Store_Api', 'line_priced_in' );

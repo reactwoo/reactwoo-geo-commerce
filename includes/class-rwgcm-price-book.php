@@ -396,6 +396,27 @@ class RWGCM_Price_Book {
 	}
 
 	/**
+	 * Shipping rates are entered in the store currency (flat rate, Royal
+	 * Mail, and so on) and Commerce has no per-currency shipping prices. A
+	 * cart that needs shipping therefore cannot be charged in another
+	 * currency unless the site says its shipping is priced in it
+	 * (filter rwgcm_price_book_shipping_priced).
+	 *
+	 * @param string $currency        Preferred currency.
+	 * @param string $base            Store currency.
+	 * @param bool   $needs_shipping  Cart needs shipping.
+	 * @param bool   $shipping_priced Shipping is priced in $currency.
+	 * @return bool True when shipping supports $currency.
+	 */
+	public static function shipping_supports_currency( $currency, $base, $needs_shipping, $shipping_priced ) {
+		$currency = self::normalize_currency( $currency );
+		if ( '' === $currency || $currency === self::normalize_currency( $base ) ) {
+			return true;
+		}
+		return ! $needs_shipping || (bool) $shipping_priced;
+	}
+
+	/**
 	 * @param array<string, mixed> $book     Stored book.
 	 * @param string               $currency Currency code.
 	 * @return bool
