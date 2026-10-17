@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-10-17
+
+### Fixed
+- **Store API currency mislabel.** In 0.4.4, `/wc/store/v1/products` (and block product grids, cart `cross_sells`, and batch sub-responses) built `prices` from the unconverted store-currency amount but took `currency_code` and the symbol from `get_woocommerce_currency()`. A ZA visitor therefore got `currency_code=ZAR, price=2300` for a £23 product with no ZAR price book, which a block storefront renders as R23.00. A new `RWGCM_Price_Book_Store_Api` (`rest_post_dispatch`, `/wc/store/` routes only) rewrites the currency fields of any product node that has no book price in the active currency to the store currency. Amounts are unchanged. A variable product counts as priced only when every variation has a book price. Cart line items are not rewritten, because the whole cart already follows `currency_for_lines()`.
+- **Product JSON-LD.** `offers[].priceCurrency` (including `priceSpecification`) reports the store currency for products without a book price in the active currency.
+
+### Added
+- **Checkout currency guard (defence in depth).** On `woocommerce_checkout_create_order` and `woocommerce_store_api_checkout_update_order_meta`, the plugin refuses an order whose currency is not the store currency while a line has no book price in that currency, and logs to `rwgcm-price-book`. `currency_for_lines()` should make this unreachable. The guard stops a gateway from ever charging a store-currency number as another currency.
+- `tests/test-store-api-currency.php`: Store API product and cart payloads for ZA, with and without a ZAR book, plus a mixed cart, cross-sells, the guard, and JSON-LD.
+
 ## [0.4.4] - 2026-10-17
 
 ### Fixed
