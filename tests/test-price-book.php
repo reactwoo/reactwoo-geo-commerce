@@ -46,6 +46,8 @@ if ( ! function_exists( 'rwgc_get_visitor_country' ) ) {
 
 require_once dirname( __DIR__ ) . '/includes/class-rwgcm-price-book.php';
 require_once dirname( __DIR__ ) . '/includes/class-rwgcm-price-book-currency.php';
+require_once dirname( __DIR__ ) . '/includes/class-rwgcm-price-book-apply.php';
+require_once dirname( __DIR__ ) . '/includes/class-rwgcm-price-book-order.php';
 require_once dirname( __DIR__ ) . '/includes/class-rwgcm-gateway-availability.php';
 
 $passed = 0;
@@ -434,6 +436,225 @@ assert_true(
 			'billing_country' => 'ZA',
 		)
 	)
+);
+
+$no_book = RWGCM_Price_Book::variable_range(
+	array(
+		array( 'raw' => '39', 'book' => '' ),
+		array( 'raw' => '49', 'book' => '' ),
+	),
+	'ZAR',
+	'GBP'
+);
+assert_true(
+	'a variable product with no price book keeps GBP amounts',
+	is_array( $no_book ) && 'GBP' === $no_book['currency'] && 'base' === $no_book['mode'] && '39.00' === $no_book['min'] && '49.00' === $no_book['max']
+);
+$partial_book = RWGCM_Price_Book::variable_range(
+	array(
+		array( 'raw' => '39', 'book' => '699' ),
+		array( 'raw' => '79', 'book' => '' ),
+	),
+	'ZAR',
+	'GBP'
+);
+assert_true(
+	'one variation without a book keeps the whole range in GBP',
+	is_array( $partial_book ) && 'GBP' === $partial_book['currency'] && 'base' === $partial_book['mode'] && '39.00' === $partial_book['min']
+);
+$full_book = RWGCM_Price_Book::variable_range(
+	array(
+		array( 'raw' => '39', 'book' => '699' ),
+		array( 'raw' => '79', 'book' => '849' ),
+	),
+	'ZAR',
+	'GBP'
+);
+assert_true(
+	'every variation with a book uses those amounts',
+	is_array( $full_book ) && 'ZAR' === $full_book['currency'] && 'book' === $full_book['mode'] && '699.00' === $full_book['min'] && '849.00' === $full_book['max']
+);
+assert_true(
+	'store currency does not rewrite a variable range',
+	null === RWGCM_Price_Book::variable_range(
+		array(
+			array( 'raw' => '39', 'book' => '699' ),
+		),
+		'GBP',
+		'GBP'
+	)
+);
+
+if ( ! function_exists( 'wc_price' ) ) {
+	/**
+	 * @param string|float         $price Amount.
+	 * @param array<string, mixed> $args  Args.
+	 * @return string
+	 */
+	function wc_price( $price, $args = array() ) { // phpcs:ignore
+		$currency = ( is_array( $args ) && isset( $args['currency'] ) ) ? (string) $args['currency'] : 'CUR';
+		return $currency . number_format( (float) $price, 2, '.', '' );
+	}
+}
+if ( ! function_exists( 'wc_format_price_range' ) ) {
+	/**
+	 * @param string $from From HTML.
+	 * @param string $to   To HTML.
+	 * @return string
+	 */
+	function wc_format_price_range( $from, $to ) { // phpcs:ignore
+		return $from . ' – ' . $to;
+	}
+}
+
+$gbp_html = RWGCM_Price_Book_Apply::format_variable_range_html( 'From: R39.00 / month', $no_book, true );
+assert_true(
+	'a missing price book formats the From price in GBP',
+	'From: GBP39.00 / month' === $gbp_html
+);
+$zar_html = RWGCM_Price_Book_Apply::format_variable_range_html( 'From: R39.00 / month', $full_book, true );
+assert_true(
+	'a complete price book formats the From price from the book',
+	'From: ZAR699.00 / month' === $zar_html
+);
+$range_html = RWGCM_Price_Book_Apply::format_variable_range_html(
+	'£39.00',
+	array(
+		'currency' => 'GBP',
+		'min'      => '39.00',
+		'max'      => '79.00',
+		'mode'     => 'base',
+	),
+	false
+);
+assert_true(
+	'a variable product range keeps both amounts in one currency',
+	'GBP39.00 – GBP79.00' === $range_html
+);
+
+$hash = RWGCM_Price_Book::variation_prices_hash( array( 'tax' => '1' ), 'ZAR', false );
+assert_true(
+	'the variation price hash is per currency',
+	isset( $hash['rwgcm_price_book_currency'] ) && 'ZAR' === $hash['rwgcm_price_book_currency']
+);
+$stored_hash = RWGCM_Price_Book::variation_prices_hash( array( 'tax' => '1' ), 'ZAR', true );
+assert_true(
+	'a product save does not add the visitor currency to the price hash',
+	! isset( $stored_hash['rwgcm_price_book_currency'] ) && isset( $stored_hash['tax'] )
+);
+
+assert_true(
+	'WooCommerce REST stays on the store currency',
+	RWGCM_Price_Book_Currency::forces_store_currency(
+		array(
+			'rest'      => true,
+			'store_api' => false,
+		)
+	)
+);
+assert_true(
+	'Store API storefront routes keep the visitor currency',
+	! RWGCM_Price_Book_Currency::forces_store_currency(
+		array(
+			'rest'      => true,
+			'store_api' => true,
+		)
+	)
+);
+assert_true( 'cron stays on the store currency', RWGCM_Price_Book_Currency::forces_store_currency( array( 'cron' => true ) ) );
+assert_true( 'WP-CLI stays on the store currency', RWGCM_Price_Book_Currency::forces_store_currency( array( 'cli' => true ) ) );
+assert_true(
+	'wp-admin stays on the store currency',
+	RWGCM_Price_Book_Currency::forces_store_currency(
+		array(
+			'admin'      => true,
+			'front_ajax' => false,
+		)
+	)
+);
+assert_true(
+	'storefront wc-ajax keeps the visitor currency',
+	! RWGCM_Price_Book_Currency::forces_store_currency(
+		array(
+			'admin'      => true,
+			'front_ajax' => true,
+		)
+	)
+);
+assert_true( 'variation sync stays on the store currency', RWGCM_Price_Book_Currency::forces_store_currency( array( 'syncing' => true ) ) );
+assert_true( 'a normal storefront request can switch currency', ! RWGCM_Price_Book_Currency::forces_store_currency( array() ) );
+RWGCM_Price_Book_Currency::begin_store_currency_write();
+assert_true( 'a product save forces the store currency', RWGCM_Price_Book_Currency::forces_store_currency() );
+RWGCM_Price_Book_Currency::end_store_currency_write();
+assert_true( 'ending the product save allows the visitor currency again', ! RWGCM_Price_Book_Currency::forces_store_currency() );
+
+$meta = RWGCM_Price_Book_Order::checkout_meta( 'ZA', 'ZAR' );
+assert_true(
+	'checkout meta records the price-book currency and billing source',
+	'ZAR' === $meta['currency'] && 'billing' === $meta['source']
+);
+
+/**
+ * Stand-in for a Store API order.
+ */
+class RWGCM_Test_Store_Order {
+	/**
+	 * @var array<string, string>
+	 */
+	public $meta = array();
+
+	/**
+	 * @var bool
+	 */
+	public $saved = false;
+
+	/**
+	 * @return string
+	 */
+	public function get_billing_country() {
+		return 'ZA';
+	}
+
+	/**
+	 * @return string
+	 */
+	public function get_currency() {
+		return 'ZAR';
+	}
+
+	/**
+	 * @param string $key Meta key.
+	 * @param string $value Meta value.
+	 * @return void
+	 */
+	public function update_meta_data( $key, $value ) {
+		$this->meta[ $key ] = $value;
+	}
+
+	/**
+	 * @return int
+	 */
+	public function get_id() {
+		return 13876;
+	}
+
+	/**
+	 * @return void
+	 */
+	public function save() {
+		$this->saved = true;
+	}
+}
+
+$store_order = new RWGCM_Test_Store_Order();
+RWGCM_Price_Book_Order::on_store_api_checkout_update_order_meta( $store_order );
+assert_true(
+	'a Store API order stores the price-book currency and source',
+	$store_order->saved
+		&& isset( $store_order->meta[ RWGCM_Price_Book_Order::META_CURRENCY ] )
+		&& 'ZAR' === $store_order->meta[ RWGCM_Price_Book_Order::META_CURRENCY ]
+		&& isset( $store_order->meta[ RWGCM_Price_Book_Order::META_SOURCE ] )
+		&& 'billing' === $store_order->meta[ RWGCM_Price_Book_Order::META_SOURCE ]
 );
 
 echo "\n{$passed} passed, {$failed} failed\n";

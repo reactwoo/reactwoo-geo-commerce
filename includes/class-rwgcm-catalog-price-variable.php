@@ -67,7 +67,7 @@ class RWGCM_Catalog_Price_Variable {
 		if ( ! is_a( $product, 'WC_Product' ) || ! $product->is_type( 'variable' ) ) {
 			return $price_hash;
 		}
-		if ( is_admin() && ! wp_doing_ajax() ) {
+		if ( ( is_admin() && ! wp_doing_ajax() ) || ( class_exists( 'RWGCM_Price_Book_Currency', false ) && RWGCM_Price_Book_Currency::forces_store_currency() ) ) {
 			return $price_hash;
 		}
 		if ( class_exists( 'RWGCM_Diagnostics', false ) && RWGCM_Diagnostics::uses_generic_pricing_rules() ) {
@@ -221,7 +221,7 @@ class RWGCM_Catalog_Price_Variable {
 		if ( ! class_exists( 'RWGCM_Pricing_Resolution', false ) || ! RWGCM_Pricing_Resolution::is_pricing_effective() ) {
 			return false;
 		}
-		if ( is_admin() && ! wp_doing_ajax() ) {
+		if ( ( is_admin() && ! wp_doing_ajax() ) || ( class_exists( 'RWGCM_Price_Book_Currency', false ) && RWGCM_Price_Book_Currency::forces_store_currency() ) ) {
 			return false;
 		}
 		if ( ! is_a( $variation, 'WC_Product_Variation' ) ) {

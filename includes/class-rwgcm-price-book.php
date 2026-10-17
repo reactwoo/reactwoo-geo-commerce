@@ -531,6 +531,104 @@ class RWGCM_Price_Book {
 	 * @param array<int, string> $currencies        Enabled currencies.
 	 * @return string
 	 */
+	/**
+	 * From/range for a variable product.
+	 *
+	 * Every priced variation must have a book amount before the active currency
+	 * is used. Otherwise the raw store-currency amounts stay in the store currency,
+	 * so a local symbol is never placed on a store-currency number.
+	 *
+	 * @param array<int, array{raw?: string, book?: string}> $variations Variation rows.
+	 * @param string                                        $active     Visitor currency.
+	 * @param string                                        $base       Store currency.
+	 * @return array{currency: string, min: string, max: string, mode: string}|null Null when the active currency is already the store currency.
+	 */
+	public static function variable_range( array $variations, $active, $base ) {
+		$active = self::normalize_currency( $active );
+		$base   = self::normalize_currency( $base );
+		if ( '' === $base ) {
+			$base = 'GBP';
+		}
+		if ( '' === $active || $active === $base || empty( $variations ) ) {
+			return null;
+		}
+		$raws    = array();
+		$books   = array();
+		$priced  = 0;
+		$missing = false;
+		foreach ( $variations as $row ) {
+			if ( ! is_array( $row ) ) {
+				continue;
+			}
+			$raw      = isset( $row['raw'] ) ? $row['raw'] : '';
+			$book     = isset( $row['book'] ) ? $row['book'] : '';
+			$has_raw  = self::amount_is_set( $raw );
+			$has_book = self::amount_is_set( $book );
+			if ( ! $has_raw && ! $has_book ) {
+				continue;
+			}
+			++$priced;
+			if ( $has_raw ) {
+				$raws[] = (float) str_replace( ',', '.', trim( (string) $raw ) );
+			}
+			if ( $has_book ) {
+				$books[] = (float) str_replace( ',', '.', trim( (string) $book ) );
+			} else {
+				$missing = true;
+			}
+		}
+		if ( $priced < 1 ) {
+			return null;
+		}
+		if ( ! $missing && count( $books ) === $priced ) {
+			return array(
+				'currency' => $active,
+				'min'      => self::format_amount( min( $books ) ),
+				'max'      => self::format_amount( max( $books ) ),
+				'mode'     => 'book',
+			);
+		}
+		if ( empty( $raws ) ) {
+			return null;
+		}
+		return array(
+			'currency' => $base,
+			'min'      => self::format_amount( min( $raws ) ),
+			'max'      => self::format_amount( max( $raws ) ),
+			'mode'     => 'base',
+		);
+	}
+
+	/**
+	 * Variation price transients are keyed by this hash. One entry per currency
+	 * on the storefront. Writes stay on the unscoped store-currency entry.
+	 *
+	 * @param array  $hash        Existing hash payload.
+	 * @param string $currency    Active currency.
+	 * @param bool   $force_store True when prices must not switch.
+	 * @return array
+	 */
+	public static function variation_prices_hash( $hash, $currency, $force_store ) {
+		if ( ! is_array( $hash ) ) {
+			$hash = array();
+		}
+		if ( $force_store ) {
+			return $hash;
+		}
+		$code = self::normalize_currency( $currency );
+		if ( '' === $code ) {
+			return $hash;
+		}
+		$hash['rwgcm_price_book_currency'] = $code;
+		return $hash;
+	}
+
+	/**
+	 * @param string             $fallback_currency Requested fallback.
+	 * @param string             $base              Store currency.
+	 * @param array<int, string> $currencies        Enabled currencies.
+	 * @return string
+	 */
 	private static function resolve_fallback_currency( $fallback_currency, $base, array $currencies ) {
 		$fallback = self::normalize_currency( $fallback_currency );
 		if ( '' === $fallback || ( $fallback !== $base && ! in_array( $fallback, $currencies, true ) ) ) {

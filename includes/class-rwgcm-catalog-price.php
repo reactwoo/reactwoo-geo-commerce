@@ -28,7 +28,7 @@ class RWGCM_Catalog_Price {
 		if ( ! class_exists( 'RWGCM_Pricing_Resolution', false ) || ! RWGCM_Pricing_Resolution::is_pricing_effective() ) {
 			return $price;
 		}
-		if ( is_admin() && ! wp_doing_ajax() ) {
+		if ( ( function_exists( 'is_admin' ) && is_admin() && ( ! function_exists( 'wp_doing_ajax' ) || ! wp_doing_ajax() ) ) || ( class_exists( 'RWGCM_Price_Book_Currency', false ) && RWGCM_Price_Book_Currency::forces_store_currency() ) ) {
 			return $price;
 		}
 		if ( ! is_a( $product, 'WC_Product' ) ) {
