@@ -11,7 +11,7 @@ $wc_settings      = admin_url( 'admin.php?page=wc-settings' );
 		<?php
 		RWGC_Admin_UI::render_page_header(
 			__( 'Settings', 'reactwoo-geo-commerce' ),
-			__( 'Geo Commerce builds on Geo Core targeting and WooCommerce. Geo Core resolves the visitor country. Price-book currencies and checkout gateways are configured below. Tax stays in WooCommerce.', 'reactwoo-geo-commerce' )
+			__( 'Geo Commerce builds on Geo Core targeting and WooCommerce. Geo Core resolves the visitor country. Price books and payment gateways have their own screens. Tax stays in WooCommerce.', 'reactwoo-geo-commerce' )
 		);
 		?>
 	<?php else : ?>
@@ -20,7 +20,7 @@ $wc_settings      = admin_url( 'admin.php?page=wc-settings' );
 
 	<?php RWGCM_Admin::render_inner_nav( $rwgc_nav_current ); ?>
 
-	<div class="rwgc-card" style="max-width: 560px;">
+	<div class="rwgc-card rwgcm-panel">
 		<ul class="ul-disc">
 			<li><a href="<?php echo esc_url( $rwgc_settings ); ?>"><?php esc_html_e( 'ReactWoo Geo Core — Settings', 'reactwoo-geo-commerce' ); ?></a></li>
 			<li><a href="<?php echo esc_url( $wc_settings ); ?>"><?php esc_html_e( 'WooCommerce — Settings', 'reactwoo-geo-commerce' ); ?></a></li>
@@ -28,9 +28,12 @@ $wc_settings      = admin_url( 'admin.php?page=wc-settings' );
 		</ul>
 	</div>
 
-	<?php
-	if ( class_exists( 'RWGCM_Price_Book_Admin', false ) ) {
-		RWGCM_Price_Book_Admin::render_settings_card();
-	}
-	?>
+	<div class="rwgc-card rwgcm-panel">
+		<h2><?php esc_html_e( 'Price books and payments', 'reactwoo-geo-commerce' ); ?></h2>
+		<p><?php esc_html_e( 'Currencies and checkout gateways are their own screens, not rules in the rule builder.', 'reactwoo-geo-commerce' ); ?></p>
+		<p>
+			<a class="button button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=rwgcm-price-books' ) ); ?>"><?php esc_html_e( 'Price books', 'reactwoo-geo-commerce' ); ?></a>
+			<a class="button button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=rwgcm-payments' ) ); ?>"><?php esc_html_e( 'Configure payment gateways', 'reactwoo-geo-commerce' ); ?></a>
+		</p>
+	</div>
 </div>

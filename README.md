@@ -72,11 +72,14 @@ npm run package:zip   # development packaging
 
 | Area | Location |
 |------|----------|
-| License | Commerce → Settings |
-| Rules | Commerce → Rules (unified builder) |
+| Commerce hub | ReactWoo Geo → Commerce (`admin.php?page=rwgc-commerce-hub`). Cards lead with Rules, Price books, Configure payment gateways, and Settings. |
+| License | Commerce → Settings, or Commerce license |
+| Rules | Commerce → Rules (unified builder). Payment gateways are not a rule. |
+| Price books | Commerce → Price books (`admin.php?page=rwgcm-price-books`) |
+| Payments by country | Commerce → Payments by country (`admin.php?page=rwgcm-payments`). Hub card label: Configure payment gateways. |
 | Product assignments | Commerce → Products |
-| Attribution | Insights (when shell active) or Commerce settings |
-| Diagnostics | Commerce → Logs / Settings |
+| Attribution | Insights (when shell active) or Commerce performance |
+| Diagnostics | Commerce → Logs |
 
 Filters: `rwgcm_apply_catalog_price`, `rwgcm_cart_fees`, `rwgcm_package_rates`, `rwgcm_coupon_allowed_for_visitor`, `rwgcm_skip_pricing_for_cart_item`.
 

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-10-17
+
+### Changed
+- **Commerce navigation:** Price books (`admin.php?page=rwgcm-price-books`) and Payments by country (`admin.php?page=rwgcm-payments`) are first-class Commerce screens, not sections buried on Settings and not rules in the IF/THEN builder. The Commerce hub (`admin.php?page=rwgc-commerce-hub`) leads with Rules, Price books, Configure payment gateways, and Settings. The Commerce overview links to the same screens.
+- **WooCommerce payments:** WooCommerce → Settings → Payments shows “Set per-country availability in ReactWoo Geo”, linking to Payments by country.
+- **Mobile admin:** Rule-builder steps no longer draw a second card inside the page card. Commerce screens use border-box, full-width inputs, and less padding at 782px and 600px so the page introduction is not clipped under the sticky shell header.
+
 ## [0.4.2] - 2026-10-17
 
 ### Added

@@ -120,6 +120,7 @@ if ( class_exists( 'RWGCM_DB', false ) && RWGCM_DB::rules_table_exists() && clas
 		<h2><?php esc_html_e( 'Next steps', 'reactwoo-geo-commerce' ); ?></h2>
 		<ol class="rwgcm-steps">
 			<li><?php esc_html_e( 'Add Rules (Geo Core targets) or edit Legacy country rows if you still rely on the old list.', 'reactwoo-geo-commerce' ); ?></li>
+			<li><?php esc_html_e( 'Set price books and which payment gateways each country can use.', 'reactwoo-geo-commerce' ); ?></li>
 			<li><?php esc_html_e( 'Add cart fees for countries that need surcharges or labels.', 'reactwoo-geo-commerce' ); ?></li>
 			<li><?php esc_html_e( 'Turn on attribution if you want UTM and click IDs stored on orders.', 'reactwoo-geo-commerce' ); ?></li>
 		</ol>
@@ -131,6 +132,14 @@ if ( class_exists( 'RWGCM_DB', false ) && RWGCM_DB::rules_table_exists() && clas
 						'url'     => admin_url( 'admin.php?page=rwgcm-pricing&rwgcm_edit=new' ),
 						'label'   => __( 'Add rule', 'reactwoo-geo-commerce' ),
 						'primary' => true,
+					),
+					array(
+						'url'   => admin_url( 'admin.php?page=rwgcm-price-books' ),
+						'label' => __( 'Price books', 'reactwoo-geo-commerce' ),
+					),
+					array(
+						'url'   => admin_url( 'admin.php?page=rwgcm-payments' ),
+						'label' => __( 'Configure payment gateways', 'reactwoo-geo-commerce' ),
 					),
 					array(
 						'url'   => admin_url( 'admin.php?page=rwgcm-fees' ),
@@ -147,7 +156,11 @@ if ( class_exists( 'RWGCM_DB', false ) && RWGCM_DB::rules_table_exists() && clas
 				)
 			);
 		} else {
-			echo '<p><a class="button button-primary" href="' . esc_url( admin_url( 'admin.php?page=rwgcm-pricing&rwgcm_edit=new' ) ) . '">' . esc_html__( 'Add rule', 'reactwoo-geo-commerce' ) . '</a></p>';
+			echo '<p>';
+			echo '<a class="button button-primary" href="' . esc_url( admin_url( 'admin.php?page=rwgcm-pricing&rwgcm_edit=new' ) ) . '">' . esc_html__( 'Add rule', 'reactwoo-geo-commerce' ) . '</a> ';
+			echo '<a class="button" href="' . esc_url( admin_url( 'admin.php?page=rwgcm-price-books' ) ) . '">' . esc_html__( 'Price books', 'reactwoo-geo-commerce' ) . '</a> ';
+			echo '<a class="button" href="' . esc_url( admin_url( 'admin.php?page=rwgcm-payments' ) ) . '">' . esc_html__( 'Configure payment gateways', 'reactwoo-geo-commerce' ) . '</a>';
+			echo '</p>';
 		}
 		?>
 	</div>

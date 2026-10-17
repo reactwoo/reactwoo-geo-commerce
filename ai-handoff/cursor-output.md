@@ -6,31 +6,40 @@ needs-review
 
 ## Summary
 
-0.4.2 adds an opt-in per-gateway currency list. Paystack WooCommerce Payment Gateway 5.8.5 (id `paystack`) disables its settings unless `get_woocommerce_currency()` is in `woocommerce_paystack_supported_currencies`. That filter only widens the allow-list, so the gateway settings screen uses a scoped `woocommerce_currency` filter. Product saves, REST, cron, and WP-CLI stay on the store currency. Checkout offers a configured gateway only when the cart or order currency is in its list.
+0.4.3 splits price books and payments by country into their own Commerce screens and pins them on the Commerce hub. `admin.php?page=rwgc-commerce-hub` leads with Rules, Price books, Configure payment gateways, and Settings. The payments card opens `admin.php?page=rwgcm-payments`. WooCommerce → Settings → Payments links to that screen. Rule-builder steps are no longer a second card, and Commerce admin inputs go full width below 782px. Not merged and not tagged.
 
 ## Files changed
 
 | File | Reason |
 |------|--------|
-| includes/class-rwgcm-gateway-currency.php | Allow-list, settings-screen currency, checkout filter, Paystack allow-list merge, minor units |
-| includes/class-rwgcm-price-book-admin.php | Gateway currency fields on the existing gateway rules screen |
-| includes/class-rwgcm-price-book-currency.php | Public product-sync flag so the settings override cannot run during a sync |
-| includes/class-rwgcm-plugin.php | Load and init the new class |
-| tests/test-gateway-currency.php | Settings scope, checkout offer, ZAR minor units |
-| reactwoo-geo-commerce.php, readme.txt, CHANGELOG.md | Version 0.4.2 |
+| includes/class-rwgcm-admin.php | Price books and Payments by country routes, hub card order and “Configure payment gateways” label, WooCommerce Payments notice |
+| includes/class-rwgcm-price-book-admin.php | Separate price-book and payments forms so one save does not wipe the other |
+| admin/views/price-books.php | Price books screen |
+| admin/views/payments-by-country.php | Payments by country screen |
+| admin/views/settings-commerce.php | Links to those screens |
+| admin/views/dashboard.php | Overview links, including Configure payment gateways |
+| admin/css/rwgcm-admin.css | Single card level, border-box, full-width inputs, tighter padding at 782px and 600px |
+| tests/test-admin-nav.php | Hub order, route labels, WooCommerce payments screen detection |
+| reactwoo-geo-commerce.php, readme.txt, CHANGELOG.md, README.md | Version 0.4.3 and the new admin paths |
 
 ## What was not changed
 
-- 0.4.1 store-currency enforcement for product saves, REST, cron, and WP-CLI
-- Country gateway rules
+- 0.4.1 store-currency enforcement
+- 0.4.2 gateway currency behaviour (settings override, checkout offer, Paystack allow-list)
+- Payment gateway country rules are still not an IF/THEN rule
 - No merge and no tag
 
 ## Commands run
 
 ```bash
-php -l includes/class-rwgcm-gateway-currency.php
+php -l includes/class-rwgcm-admin.php
 php -l includes/class-rwgcm-price-book-admin.php
-php -l includes/class-rwgcm-plugin.php
+php -l admin/views/payments-by-country.php
+php -l admin/views/price-books.php
+php -l admin/views/settings-commerce.php
+php -l admin/views/dashboard.php
+php -l reactwoo-geo-commerce.php
+php tests/test-admin-nav.php
 php tests/test-gateway-currency.php
 php tests/test-price-book.php
 php tests/test-rules-unified.php
@@ -38,7 +47,7 @@ php tests/test-rules-unified.php
 
 ## Build / test result
 
-pass — gateway currency 33 passed; price book 86 passed; rules 8 passed.
+pass — admin nav 13 passed; gateway currency 33 passed; price book 86 passed; rules 8 passed.
 
 ## Remaining errors
 

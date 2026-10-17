@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.4.2
+Stable tag: 0.4.3
 
 WooCommerce rules and personalization on ReactWoo Geo Core.
 
@@ -18,6 +18,10 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 2. Activate this plugin.
 
 == Changelog ==
+
+= 0.4.3 =
+* **Navigation:** Price books and Payments by country are their own Commerce screens. The Commerce hub leads with Rules, Price books, Configure payment gateways, and Settings. WooCommerce → Settings → Payments links to the per-country screen.
+* **Mobile:** Rule steps are no longer cards inside cards. Inputs use the full width, and padding is tighter at 782px and 600px.
 
 = 0.4.2 =
 * **Gateway currencies:** Optional per-gateway currency list. A gateway’s own settings screen can see a mapped currency when the store currency is not one it accepts. Checkout offers that gateway only when the cart or order currency is in the list. Paystack keeps charging the order currency.

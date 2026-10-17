@@ -46,7 +46,7 @@ class RWGCM_Price_Book_Admin {
 	public static function render_panel() {
 		echo '<div id="rwgcm_price_book_product_data" class="panel woocommerce_options_panel hidden">';
 		echo '<div class="options_group">';
-		echo '<p class="form-field" style="padding: 0 12px;">' . esc_html__( 'Fixed prices in each currency. Before checkout the currency follows Geo Core’s visitor country. Once a billing country is entered, that country decides. The country map is edited under Geo Commerce → Settings. These amounts are not converted.', 'reactwoo-geo-commerce' ) . '</p>';
+		echo '<p class="form-field" style="padding: 0 12px;">' . esc_html__( 'Fixed prices in each currency. Before checkout the currency follows Geo Core’s visitor country. Once a billing country is entered, that country decides. The country map is edited under Commerce → Price books. These amounts are not converted.', 'reactwoo-geo-commerce' ) . '</p>';
 		echo '<input type="hidden" name="rwgcm_price_book_present" value="1" />';
 		self::render_currency_inputs( 'rwgcm_price_book', self::product_book_from_global(), true );
 		echo '</div></div>';
@@ -140,18 +140,20 @@ class RWGCM_Price_Book_Admin {
 		if ( ! current_user_can( 'manage_woocommerce' ) ) {
 			return;
 		}
-		$enabled = isset( $_POST['rwgcm_price_book_base_adjustments'] ) && 'yes' === sanitize_text_field( wp_unslash( $_POST['rwgcm_price_book_base_adjustments'] ) );
-		update_option( RWGCM_Price_Book::OPTION_BASE_ADJUSTMENTS, $enabled ? 'yes' : 'no' );
+		if ( isset( $_POST['rwgcm_price_book_map_present'] ) ) {
+			$enabled = isset( $_POST['rwgcm_price_book_base_adjustments'] ) && 'yes' === sanitize_text_field( wp_unslash( $_POST['rwgcm_price_book_base_adjustments'] ) );
+			update_option( RWGCM_Price_Book::OPTION_BASE_ADJUSTMENTS, $enabled ? 'yes' : 'no' );
 
-		$map_text = isset( $_POST['rwgcm_country_map_text'] ) ? wp_unslash( $_POST['rwgcm_country_map_text'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-		update_option( RWGCM_Price_Book::OPTION_COUNTRY_MAP, RWGCM_Price_Book::parse_country_map_text( $map_text ), false );
+			$map_text = isset( $_POST['rwgcm_country_map_text'] ) ? wp_unslash( $_POST['rwgcm_country_map_text'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			update_option( RWGCM_Price_Book::OPTION_COUNTRY_MAP, RWGCM_Price_Book::parse_country_map_text( $map_text ), false );
 
-		$fallback = isset( $_POST['rwgcm_price_book_fallback_currency'] ) ? RWGCM_Price_Book::normalize_currency( wp_unslash( $_POST['rwgcm_price_book_fallback_currency'] ) ) : '';
-		$base     = function_exists( 'get_option' ) ? RWGCM_Price_Book::normalize_currency( get_option( 'woocommerce_currency', '' ) ) : '';
-		if ( '' !== $fallback && $fallback !== $base && ! in_array( $fallback, RWGCM_Price_Book::currencies(), true ) ) {
-			$fallback = '';
+			$fallback = isset( $_POST['rwgcm_price_book_fallback_currency'] ) ? RWGCM_Price_Book::normalize_currency( wp_unslash( $_POST['rwgcm_price_book_fallback_currency'] ) ) : '';
+			$base     = function_exists( 'get_option' ) ? RWGCM_Price_Book::normalize_currency( get_option( 'woocommerce_currency', '' ) ) : '';
+			if ( '' !== $fallback && $fallback !== $base && ! in_array( $fallback, RWGCM_Price_Book::currencies(), true ) ) {
+				$fallback = '';
+			}
+			update_option( RWGCM_Price_Book::OPTION_FALLBACK_CURRENCY, $fallback, false );
 		}
-		update_option( RWGCM_Price_Book::OPTION_FALLBACK_CURRENCY, $fallback, false );
 
 		if ( isset( $_POST['rwgcm_gateway_rules_present'] ) ) {
 			$gateway_raw = array(
@@ -179,7 +181,7 @@ class RWGCM_Price_Book_Admin {
 		}
 		$redirect = wp_get_referer();
 		if ( ! is_string( $redirect ) || '' === $redirect ) {
-			$redirect = admin_url( 'admin.php?page=rwgcm-settings' );
+			$redirect = admin_url( 'admin.php?page=rwgcm-price-books' );
 		}
 		wp_safe_redirect( add_query_arg( 'rwgcm_price_book_saved', '1', $redirect ) );
 		exit;
@@ -190,39 +192,57 @@ class RWGCM_Price_Book_Admin {
 	 *
 	 * @return void
 	 */
-	public static function render_settings_card() {
+	public static function render_price_books_form() {
 		$enabled  = RWGCM_Price_Book::base_adjustments_enabled();
 		$map_text = RWGCM_Price_Book::format_country_map_text( RWGCM_Price_Book::country_currency_map() );
 		$fallback = function_exists( 'get_option' ) ? RWGCM_Price_Book::normalize_currency( get_option( RWGCM_Price_Book::OPTION_FALLBACK_CURRENCY, '' ) ) : '';
-		if ( isset( $_GET['rwgcm_price_book_saved'] ) && '1' === $_GET['rwgcm_price_book_saved'] ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-			echo '<div class="notice notice-success"><p>' . esc_html__( 'Price book settings saved.', 'reactwoo-geo-commerce' ) . '</p></div>';
-		}
-		echo '<div class="rwgc-card" style="max-width: 960px; margin-top: 16px;">';
-		echo '<h2>' . esc_html__( 'Price books', 'reactwoo-geo-commerce' ) . '</h2>';
-		echo '<p>' . esc_html__( 'Set fixed ZAR, GBP, EUR, and USD prices on each product. The list can be extended with the rwgcm_price_book_currencies filter. Before checkout, Geo Core’s visitor country selects the currency. Once a billing country is entered at cart or checkout, that country decides.', 'reactwoo-geo-commerce' ) . '</p>';
-		echo '<form method="post">';
+		self::render_saved_notice();
+		echo '<div class="rwgc-card rwgcm-panel">';
+		echo '<form method="post" class="rwgcm-settings-form">';
 		wp_nonce_field( 'rwgcm_price_book_settings' );
 		echo '<input type="hidden" name="rwgcm_price_book_settings_save" value="1" />';
+		echo '<input type="hidden" name="rwgcm_price_book_map_present" value="1" />';
 		echo '<label><input type="checkbox" name="rwgcm_price_book_base_adjustments" value="yes" ' . checked( $enabled, true, false ) . ' /> ';
 		echo esc_html__( 'Keep store-currency geo price adjustments', 'reactwoo-geo-commerce' );
 		echo '</label>';
 		echo '<p class="description">' . esc_html__( 'On for existing sites. Pricing rules still adjust the store currency (for example GBP) when a product has no fixed price in that currency. Fixed price-book prices are not adjusted and are not converted.', 'reactwoo-geo-commerce' ) . '</p>';
 
-		echo '<h3>' . esc_html__( 'Country to currency', 'reactwoo-geo-commerce' ) . '</h3>';
+		echo '<h2>' . esc_html__( 'Country to currency', 'reactwoo-geo-commerce' ) . '</h2>';
 		echo '<p class="description">' . esc_html__( 'One country and currency per line, for example ZA ZAR. Saving replaces the built-in map (South Africa ZAR, United Kingdom GBP, United States USD, eurozone EUR). A blank map means every country uses the fallback. Countries that are not listed use the fallback currency.', 'reactwoo-geo-commerce' ) . '</p>';
-		echo '<textarea name="rwgcm_country_map_text" rows="12" cols="24" style="font-family: monospace;" class="large-text code">' . esc_textarea( $map_text ) . '</textarea>';
+		echo '<textarea name="rwgcm_country_map_text" rows="12" class="large-text code">' . esc_textarea( $map_text ) . '</textarea>';
 		echo '<p><label for="rwgcm_price_book_fallback_currency">' . esc_html__( 'Fallback currency', 'reactwoo-geo-commerce' ) . '</label><br/>';
-		echo '<input type="text" id="rwgcm_price_book_fallback_currency" name="rwgcm_price_book_fallback_currency" value="' . esc_attr( $fallback ) . '" maxlength="3" class="regular-text" style="width: 6em;" placeholder="' . esc_attr__( 'Store', 'reactwoo-geo-commerce' ) . '" /></p>';
+		echo '<input type="text" id="rwgcm_price_book_fallback_currency" name="rwgcm_price_book_fallback_currency" value="' . esc_attr( $fallback ) . '" maxlength="3" class="regular-text rwgcm-currency-code" placeholder="' . esc_attr__( 'Store', 'reactwoo-geo-commerce' ) . '" /></p>';
 		echo '<p class="description">' . esc_html__( 'Used when the country is known but not in the map. Leave blank to use the WooCommerce store currency. The code must be the store currency or one of the price-book currencies.', 'reactwoo-geo-commerce' ) . '</p>';
 		echo '<p class="description">' . esc_html( RWGCM_Price_Book_Currency::cache_compatibility_notes() ) . '</p>';
+		submit_button( __( 'Save price books', 'reactwoo-geo-commerce' ) );
+		echo '</form></div>';
+	}
 
-		echo '<h3>' . esc_html__( 'Payment gateways by country', 'reactwoo-geo-commerce' ) . '</h3>';
-		echo '<p class="description">' . esc_html__( 'Checked gateways are the only ones offered at checkout for that billing country. A country or group with nothing checked keeps every enabled gateway. Subscription renewals keep charging the gateway already on the subscription. Changing the payment method uses the subscription billing country.', 'reactwoo-geo-commerce' ) . '</p>';
+	/**
+	 * Payments by country and per-gateway currency list.
+	 *
+	 * @return void
+	 */
+	public static function render_payments_form() {
+		self::render_saved_notice();
+		echo '<div class="rwgc-card rwgcm-panel">';
+		echo '<form method="post" class="rwgcm-settings-form">';
+		wp_nonce_field( 'rwgcm_price_book_settings' );
+		echo '<input type="hidden" name="rwgcm_price_book_settings_save" value="1" />';
+		echo '<p>' . esc_html__( 'Checked gateways are the only ones offered at checkout for that billing country. A country or group with nothing checked keeps every enabled gateway. Subscription renewals keep charging the gateway already on the subscription. Changing the payment method uses the subscription billing country.', 'reactwoo-geo-commerce' ) . '</p>';
 		echo '<p class="description">' . esc_html__( 'A gateway that cannot charge the store currency needs its own currency list below. Checking it for a country does not change the currency it sees.', 'reactwoo-geo-commerce' ) . '</p>';
 		self::render_gateway_rules();
-
-		submit_button( __( 'Save price book settings', 'reactwoo-geo-commerce' ) );
+		submit_button( __( 'Save payment gateways', 'reactwoo-geo-commerce' ) );
 		echo '</form></div>';
+	}
+
+	/**
+	 * @return void
+	 */
+	private static function render_saved_notice() {
+		if ( isset( $_GET['rwgcm_price_book_saved'] ) && '1' === $_GET['rwgcm_price_book_saved'] ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			echo '<div class="notice notice-success"><p>' . esc_html__( 'Settings saved.', 'reactwoo-geo-commerce' ) . '</p></div>';
+		}
 	}
 
 	/**
