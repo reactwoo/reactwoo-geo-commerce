@@ -212,7 +212,7 @@ class RWGCM_Price_Book_Store_Api {
 		if ( function_exists( 'wc_get_logger' ) ) {
 			wc_get_logger()->error( 'Geo Commerce blocked an order: currency ' . $order->get_currency() . ' but a line or the shipping has no amount priced in it.', array( 'source' => 'rwgcm-price-book' ) );
 		}
-		throw new Exception( __( 'Prices in your cart changed currency. Please review your cart and try again.', '[REDACTED]-geo-commerce' ) );
+		throw new Exception( __( 'Prices in your cart changed currency. Please review your cart and try again.', 'reactwoo-geo-commerce' ) );
 	}
 
 	/**

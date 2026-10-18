@@ -73,7 +73,7 @@ class RWGCM_Gateway_Currency {
 	public static function no_methods_message( $currency ) {
 		return sprintf(
 			/* translators: %s: currency code, for example ZAR. */
-			__( 'No payment method can take payments in %s right now. Please contact us to complete your order.', '[REDACTED]-geo-commerce' ),
+			__( 'No payment method can take payments in %s right now. Please contact us to complete your order.', 'reactwoo-geo-commerce' ),
 			RWGCM_Price_Book::normalize_currency( $currency )
 		);
 	}

@@ -166,7 +166,7 @@ class RWGCM_Gateway_Availability {
 				continue;
 			}
 			$title   = $known && isset( $choices[ $id ]['title'] ) ? (string) $choices[ $id ]['title'] : $id;
-			$state   = $known ? __( 'disabled in WooCommerce', '[REDACTED]-geo-commerce' ) : __( 'not registered in WooCommerce', '[REDACTED]-geo-commerce' );
+			$state   = $known ? __( 'disabled in WooCommerce', 'reactwoo-geo-commerce' ) : __( 'not registered in WooCommerce', 'reactwoo-geo-commerce' );
 			$parts[] = sprintf( '%1$s (%2$s, %3$s) in %4$s', $title, $id, $state, implode( ', ', array_unique( $keys ) ) );
 		}
 		if ( empty( $parts ) ) {
@@ -174,7 +174,7 @@ class RWGCM_Gateway_Availability {
 		}
 		return sprintf(
 			/* translators: %s: list of gateways and the rules that use them. */
-			__( 'These rules name a gateway WooCommerce will not offer: %s. Checkout never shows a disabled gateway. A country rule whose gateways are all unavailable is ignored (every available gateway is offered, still limited by its currencies). Enable the gateway in WooCommerce, or change the rule.', '[REDACTED]-geo-commerce' ),
+			__( 'These rules name a gateway WooCommerce will not offer: %s. Checkout never shows a disabled gateway. A country rule whose gateways are all unavailable is ignored (every available gateway is offered, still limited by its currencies). Enable the gateway in WooCommerce, or change the rule.', 'reactwoo-geo-commerce' ),
 			implode( '; ', $parts )
 		);
 	}
