@@ -182,6 +182,9 @@ class RWGCM_Price_Book_Admin {
 			);
 			update_option( RWGCM_Gateway_Availability::OPTION_KEY, $merged, false );
 		}
+		if ( isset( $_POST['rwgcm_gateway_log_present'] ) ) {
+			RWGCM_Gateway_Log::save_setting( ! empty( $_POST['rwgcm_gateway_log_warnings'] ) );
+		}
 		if ( isset( $_POST['rwgcm_gateway_currencies_present'] ) ) {
 			$currency_raw = array();
 			if ( isset( $_POST['rwgcm_gateway_currencies'] ) && is_array( $_POST['rwgcm_gateway_currencies'] ) ) {
@@ -268,6 +271,8 @@ class RWGCM_Price_Book_Admin {
 			return;
 		}
 		echo '<input type="hidden" name="rwgcm_gateway_rules_present" value="1" />';
+		echo '<input type="hidden" name="rwgcm_gateway_log_present" value="1" />';
+		echo '<p class="rwgcm-gateway-log-setting"><label style="display:inline-flex;align-items:flex-start;gap:8px;max-width:100%;line-height:1.5;"><input type="checkbox" name="rwgcm_gateway_log_warnings" value="1" style="margin-top:3px;flex:none;"' . ( 'no' !== get_option( RWGCM_Gateway_Log::OPTION_ENABLED, 'yes' ) ? ' checked="checked"' : '' ) . ' /> <span>' . esc_html__( 'Log payment-rule fallbacks', 'reactwoo-geo-commerce' ) . ' <span class="description">' . esc_html__( '(WooCommerce → Status → Logs, source rwgcm-gateways; each distinct warning at most once a day)', 'reactwoo-geo-commerce' ) . '</span></span></label></p>';
 		foreach ( array_keys( $choices ) as $id ) {
 			echo '<input type="hidden" name="rwgcm_gateway_shown[]" value="' . esc_attr( $id ) . '" />';
 		}
@@ -295,6 +300,14 @@ class RWGCM_Price_Book_Admin {
 		$disabled_notice = RWGCM_Gateway_Availability::disabled_rule_warning( $rules, RWGCM_Gateway_Currency::stored_currencies(), $choices, RWGCM_Gateway_Availability::saved_enabled_flags( array_keys( $choices ) ) );
 		if ( '' !== $disabled_notice ) {
 			echo '<div class="notice notice-warning rwgcm-disabled-gateway-notice"><p>' . esc_html( $disabled_notice ) . '</p></div>';
+		}
+		$list_info = RWGCM_Gateway_Availability::disabled_list_info( $rules, RWGCM_Gateway_Currency::stored_currencies(), $choices, RWGCM_Gateway_Availability::saved_enabled_flags( array_keys( $choices ) ) );
+		if ( ! empty( $list_info ) ) {
+			echo '<div class="notice notice-info inline rwgcm-disabled-list-info">';
+			foreach ( $list_info as $line ) {
+				echo '<p>' . esc_html( $line ) . '</p>';
+			}
+			echo '</div>';
 		}
 
 		$names = array();
@@ -363,6 +376,7 @@ class RWGCM_Price_Book_Admin {
 		$saved = RWGCM_Gateway_Currency::stored_currencies();
 		$map   = RWGCM_Price_Book::country_currency_map();
 		$store = function_exists( 'get_woocommerce_currency' ) ? RWGCM_Price_Book::normalize_currency( get_woocommerce_currency() ) : '';
+		$saved_on = RWGCM_Gateway_Availability::saved_enabled_flags( array_keys( $choices ) );
 		echo '<h4>' . esc_html__( 'Gateway currencies', 'reactwoo-geo-commerce' ) . '</h4>';
 		echo '<p class="description">' . esc_html__( 'Optional. Leave a gateway blank and Geo Commerce will not change it. Enter the currencies that gateway can charge, separated by spaces. On that gateway’s own WooCommerce settings screen, if the store currency is not in the list, its currency check sees one of these currencies so the settings can load. Checkout only offers the gateway when the cart or order currency is in the list. Paystack (id paystack) accepts NGN, GHS, USD, KES, RWF, ZAR, XOF, and EGP. This does not change the store currency.', 'reactwoo-geo-commerce' ) . '</p>';
 		echo '<input type="hidden" name="rwgcm_gateway_currencies_present" value="1" />';
@@ -384,8 +398,16 @@ class RWGCM_Price_Book_Admin {
 				) . '</p>';
 			}
 			$saved_codes = isset( $saved[ $id ] ) && is_array( $saved[ $id ] ) ? $saved[ $id ] : array();
-			if ( ! $enabled && RWGCM_Gateway_Availability::explain_disabled_gateway( $id, $saved_codes ) ) {
-				echo '<p class="description">' . esc_html( RWGCM_Gateway_Availability::disabled_currency_hint( $title, $store, $saved_codes ) ) . '</p>';
+			if ( ! $enabled && RWGCM_Gateway_Availability::explain_disabled_gateway( $id, $saved_codes, ! empty( $saved_on[ $id ] ) ) ) {
+				echo '<p class="description rwgcm-currency-hint">' . esc_html( RWGCM_Gateway_Availability::disabled_currency_hint( $title, $store, $saved_codes ) ) . '</p>';
+			} elseif ( ! $enabled ) {
+				echo '<p class="description rwgcm-disabled-hint">' . esc_html(
+					sprintf(
+						/* translators: %s: gateway title. */
+						__( '%s is disabled in WooCommerce.', 'reactwoo-geo-commerce' ),
+						$title
+					)
+				) . '</p>';
 			}
 			echo '</td></tr>';
 		}

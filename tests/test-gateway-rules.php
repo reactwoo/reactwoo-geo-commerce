@@ -114,6 +114,32 @@ assert_true( 'admin warning skips enabled gateways', false === strpos( $w, 'Revo
 $w = RWGCM_Gateway_Availability::disabled_rule_warning( $rules, $lists, $choices, array( 'paystack' => true ) );
 assert_true( 'no warning for Paystack saved as enabled (only off for the GBP store currency)', false === strpos( $w, 'Paystack' ) );
 assert_true( 'no warning when every referenced gateway is enabled', '' === RWGCM_Gateway_Availability::disabled_rule_warning( array( 'countries' => array( 'GB' => array( 'revolut_cc' ) ) ), array(), $choices ) );
+// 0.4.8: currency-list-only references are not warnings.
+$choices2 = array(
+	'revolut_hosted_checkout' => array( 'title' => 'Revolut Hosted Checkout', 'enabled' => false ),
+	'paystack'                => array( 'title' => 'Paystack', 'enabled' => false ),
+	'cheque'                  => array( 'title' => 'Cheque', 'enabled' => false ),
+	'bacs'                    => array( 'title' => 'Bank', 'enabled' => true ),
+);
+$rules2 = array( 'countries' => array( 'ZA' => array( 'cheque' ) ), 'groups' => array() );
+$lists2 = array( 'revolut_hosted_checkout' => array( 'GBP', 'EUR' ), 'paystack' => array( 'ZAR' ), 'bacs' => array( 'GBP' ), 'gone' => array( 'USD' ), 'cheque' => array( 'ZAR' ) );
+$saved2 = array( 'revolut_hosted_checkout' => false, 'paystack' => true, 'cheque' => false, 'bacs' => true );
+$w2 = RWGCM_Gateway_Availability::disabled_rule_warning( $rules2, $lists2, $choices2, $saved2 );
+assert_true( 'warning still names a disabled gateway in a country rule', false !== strpos( $w2, 'Cheque (cheque, disabled in WooCommerce) in ZA, ZAR' ) );
+assert_true( 'warning omits a disabled gateway that is only in a currency list', false === strpos( $w2, 'Revolut' ) && false === strpos( $w2, 'gone' ) );
+assert_true( 'no warning at all when only currency lists reference disabled gateways', '' === RWGCM_Gateway_Availability::disabled_rule_warning( array(), $lists2, $choices2, $saved2 ) );
+$i2 = RWGCM_Gateway_Availability::disabled_list_info( $rules2, $lists2, $choices2, $saved2 );
+assert_true( 'soft info line for a disabled list-only gateway', in_array( 'Revolut Hosted Checkout is disabled in WooCommerce; its currency list has no effect.', $i2, true ) );
+assert_true( 'soft info line for an unregistered list-only gateway', in_array( 'gone is not registered in WooCommerce; its currency list has no effect.', $i2, true ) );
+assert_true( 'no info line for a rule gateway, an enabled one, or a saved-enabled one', 2 === count( $i2 ) );
+assert_true( 'no info lines with no lists', array() === RWGCM_Gateway_Availability::disabled_list_info( $rules2, array(), $choices2, $saved2 ) );
+assert_true( 'currency hint only for saved-enabled runtime-disabled', RWGCM_Gateway_Availability::explain_disabled_gateway( 'paystack', array( 'ZAR' ), true ) );
+assert_true( 'no currency hint for a plainly disabled gateway with a list', ! RWGCM_Gateway_Availability::explain_disabled_gateway( 'revolut_hosted_checkout', array( 'GBP', 'EUR' ), false ) );
+assert_true( 'no currency hint for plainly disabled Paystack', ! RWGCM_Gateway_Availability::explain_disabled_gateway( 'paystack', array(), false ) );
+$admin_src = file_get_contents( dirname( __DIR__ ) . '/includes/class-rwgcm-price-book-admin.php' );
+assert_true( 'admin passes the saved enabled flag to the hint', false !== strpos( $admin_src, 'explain_disabled_gateway( $id, $saved_codes, ! empty( $saved_on[ $id ] ) )' ) );
+assert_true( 'admin shows list info as notice-info, not a warning', false !== strpos( $admin_src, 'notice notice-info inline rwgcm-disabled-list-info' ) );
+assert_true( 'admin says disabled in WooCommerce for plainly disabled gateways', false !== strpos( $admin_src, "'%s is disabled in WooCommerce.'" ) );
 $GLOBALS['rw']['opts'] = array( 'woocommerce_paystack_settings' => array( 'enabled' => 'yes' ), 'woocommerce_bacs_settings' => array( 'enabled' => 'no' ) );
 $flags = RWGCM_Gateway_Availability::saved_enabled_flags( array( 'paystack', 'bacs', 'none' ) );
 assert_true( 'saved enabled flags read woocommerce_{id}_settings', true === $flags['paystack'] && false === $flags['bacs'] && false === $flags['none'] );

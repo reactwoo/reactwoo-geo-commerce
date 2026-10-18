@@ -90,6 +90,7 @@ class RWGCM_Plugin {
 		require_once RWGCM_PATH . 'includes/class-rwgcm-price-book-apply.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-price-book-order.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-price-book-store-api.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-gateway-log.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-gateway-availability.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-gateway-currency.php';
 		RWGCM_Price_Book::maybe_migrate_base_adjustments();
