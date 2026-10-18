@@ -60,7 +60,11 @@ class RWGCM_Shipping_Prices {
 			add_filter( 'woocommerce_shipping_' . $id . '_instance_option', array( __CLASS__, 'filter_instance_option' ), 20, 3 );
 		}
 		add_filter( 'woocommerce_package_rates', array( __CLASS__, 'filter_package_rates' ), 50, 2 );
-		add_action( 'woocommerce_after_calculate_totals', array( __CLASS__, 'maybe_notice_fallback' ), 99 );
+		// Persistent explanation (0.5.0): rendered from the current state on every
+		// classic cart / checkout render and checkout fragment refresh.
+		add_action( 'woocommerce_before_checkout_form', array( __CLASS__, 'render_checkout_notice' ), 11 );
+		add_filter( 'woocommerce_update_order_review_fragments', array( __CLASS__, 'filter_checkout_fragments' ) );
+		add_action( 'woocommerce_before_cart_totals', array( __CLASS__, 'render_cart_notice' ) );
 		add_action( 'update_option_' . self::OPTION_HIDE_UNPRICED, array( __CLASS__, 'flush_rate_cache' ) );
 		add_action( 'add_option_' . self::OPTION_HIDE_UNPRICED, array( __CLASS__, 'flush_rate_cache' ) );
 		if ( function_exists( 'did_action' ) && did_action( 'woocommerce_blocks_loaded' ) ) {
@@ -82,11 +86,6 @@ class RWGCM_Shipping_Prices {
 			WC_Cache_Helper::get_transient_version( 'shipping', true );
 		}
 	}
-
-	/**
-	 * Session key holding the last shipping fallback state ("ZAR|GB" or '').
-	 */
-	const SESSION_FALLBACK = 'rwgcm_shipping_fallback';
 
 	/**
 	 * Notice text for a cart kept in the store currency because shipping to
@@ -116,19 +115,6 @@ class RWGCM_Shipping_Prices {
 	}
 
 	/**
-	 * New state and whether to notify, from the previous and current state.
-	 * A notice is due only when the cart starts falling back (or falls back
-	 * for a different currency/country), not on every recalculation.
-	 *
-	 * @param string $previous Previous state.
-	 * @param string $current  Current state.
-	 * @return bool
-	 */
-	public static function should_notify( $previous, $current ) {
-		return '' !== $current && $current !== $previous;
-	}
-
-	/**
 	 * Current fallback state for the cart: "ZAR|GB" or ''.
 	 *
 	 * @return array{state: string, wanted: string, country: string}
@@ -151,35 +137,68 @@ class RWGCM_Shipping_Prices {
 	}
 
 	/**
-	 * After totals: add a one-off notice when an address change keeps the
-	 * cart in the store currency. Store API requests only record the state
-	 * (their responses carry extensions.rwgcm.shipping_currency_notice).
+	 * Notice text for the current cart, or '' when the cart is not held in
+	 * the store currency by the shipping fallback (including visitors whose
+	 * currency is the store currency anyway).
+	 *
+	 * @return string
+	 */
+	public static function current_notice() {
+		$now = self::current_fallback();
+		if ( '' === $now['state'] ) {
+			return '';
+		}
+		return self::fallback_notice( $now['wanted'], RWGCM_Price_Book_Currency::base_currency(), self::country_name( $now['country'] ) );
+	}
+
+	/**
+	 * One wrapper element, always present (empty when there is nothing to
+	 * say) so checkout fragment refreshes replace it in place: one notice,
+	 * no duplicates, gone when the cart is priced again.
+	 *
+	 * @param string $message Notice text or ''.
+	 * @param string $context checkout or cart.
+	 * @return string
+	 */
+	public static function notice_html( $message, $context = 'checkout' ) {
+		$class = 'rwgcm-shipping-currency-notice rwgcm-shipping-currency-notice--' . ( 'cart' === $context ? 'cart' : 'checkout' );
+		if ( '' === $message ) {
+			return '<div class="' . esc_attr( $class ) . '"></div>';
+		}
+		return '<div class="' . esc_attr( $class ) . '"><div class="woocommerce-info" role="status">' . esc_html( $message ) . '</div></div>';
+	}
+
+	/**
+	 * Classic checkout page load.
 	 *
 	 * @return void
 	 */
-	public static function maybe_notice_fallback() {
-		if ( ! function_exists( 'WC' ) || ! WC()->session ) {
-			return;
+	public static function render_checkout_notice() {
+		echo self::notice_html( self::current_notice(), 'checkout' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in notice_html().
+	}
+
+	/**
+	 * Classic checkout update_order_review: replace the wrapper in place.
+	 *
+	 * @param mixed $fragments Fragments.
+	 * @return mixed
+	 */
+	public static function filter_checkout_fragments( $fragments ) {
+		if ( ! is_array( $fragments ) ) {
+			return $fragments;
 		}
-		// Store API responses carry the reason in extensions.rwgcm instead; a
-		// session notice queued there would surface later on an unrelated page.
-		$rest = ( defined( 'REST_REQUEST' ) && REST_REQUEST ) || ( function_exists( 'wp_is_serving_rest_request' ) && wp_is_serving_rest_request() );
-		if ( $rest ) {
-			return;
-		}
-		$now      = self::current_fallback();
-		$previous = (string) WC()->session->get( self::SESSION_FALLBACK, '' );
-		if ( $previous === $now['state'] ) {
-			return;
-		}
-		WC()->session->set( self::SESSION_FALLBACK, $now['state'] );
-		if ( ! self::should_notify( $previous, $now['state'] ) || ! function_exists( 'wc_add_notice' ) ) {
-			return;
-		}
-		$message = self::fallback_notice( $now['wanted'], RWGCM_Price_Book_Currency::base_currency(), self::country_name( $now['country'] ) );
-		if ( ! function_exists( 'wc_has_notice' ) || ! wc_has_notice( $message, 'notice' ) ) {
-			wc_add_notice( $message, 'notice' );
-		}
+		$fragments['.rwgcm-shipping-currency-notice--checkout'] = self::notice_html( self::current_notice(), 'checkout' );
+		return $fragments;
+	}
+
+	/**
+	 * Classic cart page, inside .cart_totals so WooCommerce's cart refresh
+	 * (quantity change, shipping calculator) re-renders it.
+	 *
+	 * @return void
+	 */
+	public static function render_cart_notice() {
+		echo self::notice_html( self::current_notice(), 'cart' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in notice_html().
 	}
 
 	/**
