@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.4.5
+Stable tag: 0.4.6
 
 WooCommerce rules and personalization on ReactWoo Geo Core.
 
@@ -18,6 +18,10 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 2. Activate this plugin.
 
 == Changelog ==
+
+= 0.4.6 =
+* **Shipping:** Shipping rates are recalculated when the visitor's currency changes. WooCommerce could reuse rates cached in the other currency.
+* **Docs:** The `rwgcm_price_book_shipping_priced` filter warns that free-shipping minimum amounts are compared in the visitor's currency.
 
 = 0.4.5 =
 * **Shipping:** A cart that needs shipping stays in the store currency, because shipping rates are store-currency amounts. Use the `rwgcm_price_book_shipping_priced` filter if your rates are entered in another currency.

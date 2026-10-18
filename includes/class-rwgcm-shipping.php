@@ -17,6 +17,57 @@ class RWGCM_Shipping {
 	 */
 	public static function init() {
 		add_filter( 'woocommerce_package_rates', array( __CLASS__, 'filter_package_rates' ), 99, 2 );
+		add_filter( 'woocommerce_cart_shipping_packages', array( __CLASS__, 'filter_cart_shipping_packages' ), 99 );
+	}
+
+	/**
+	 * Package key that carries the Commerce currency into WooCommerce's rate cache.
+	 */
+	const PACKAGE_CURRENCY_KEY = 'rwgcm_currency';
+
+	/**
+	 * WooCommerce caches rates per package in the session
+	 * (WC_Shipping::calculate_shipping_for_package). Since WC 11.0 the cache
+	 * hash ignores subtotal and total, and it never included the currency,
+	 * so rates calculated in one currency could be reused after a switch.
+	 * Adding the active currency to each package changes the hash.
+	 *
+	 * @param mixed $packages Packages.
+	 * @return mixed
+	 */
+	public static function filter_cart_shipping_packages( $packages ) {
+		if ( ! is_array( $packages ) || ! class_exists( 'RWGCM_Price_Book_Currency', false ) || ! function_exists( 'get_woocommerce_currency' ) ) {
+			return $packages;
+		}
+		return self::add_currency_to_packages( $packages, get_woocommerce_currency(), RWGCM_Price_Book_Currency::base_currency() );
+	}
+
+	/**
+	 * Adds the active currency to every package, but only when it differs
+	 * from the store currency. Base-currency packages are left exactly as
+	 * WooCommerce built them, so their hash (and existing cached rates) is
+	 * the same as on a store without Commerce. A switch still changes the
+	 * hash in both directions (key present vs absent).
+	 *
+	 * @param array<mixed> $packages Packages.
+	 * @param string       $active   Active currency.
+	 * @param string       $base     Store currency.
+	 * @return array<mixed>
+	 */
+	public static function add_currency_to_packages( array $packages, $active, $base ) {
+		$active = RWGCM_Price_Book::normalize_currency( $active );
+		$base   = RWGCM_Price_Book::normalize_currency( $base );
+		foreach ( $packages as $i => $package ) {
+			if ( ! is_array( $package ) ) {
+				continue;
+			}
+			if ( '' === $active || $active === $base ) {
+				unset( $packages[ $i ][ self::PACKAGE_CURRENCY_KEY ] );
+				continue;
+			}
+			$packages[ $i ][ self::PACKAGE_CURRENCY_KEY ] = $active;
+		}
+		return $packages;
 	}
 
 	/**

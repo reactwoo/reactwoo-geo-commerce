@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-10-18
+
+### Fixed
+- **Shipping rate cache ignored the currency.** WooCommerce caches rates per package in the session (`WC_Shipping::calculate_shipping_for_package()`). Since WC 11.0 the cache hash ignores `subtotal` and `total`, and it never included the currency, so rates calculated in one currency could be reused after a switch (for example when `rwgcm_price_book_shipping_priced` is true and the visitor's currency changes). `woocommerce_cart_shipping_packages` now adds `rwgcm_currency` to each package when the active currency is not the store currency. Base-currency packages are unchanged, so normal stores keep their cache.
+
+### Changed
+- `rwgcm_price_book_shipping_priced` docblock: free shipping `min_amount` is one store-currency number, but WooCommerce compares it with the subtotal in the active currency. Per-currency minimums are planned for 0.5.0.
+
 ## [0.4.5] - 2026-10-17
 
 ### Fixed
