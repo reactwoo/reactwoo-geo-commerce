@@ -49,10 +49,134 @@ class RWGCM_Gateway_Availability {
 		$country = isset( $flags['billing_country'] ) ? (string) $flags['billing_country'] : '';
 		$rules   = self::stored_rules();
 		$allowed = self::resolve_allowed_ids( $country, $rules, self::matching_group_gateway_lists( $country, $rules ) );
-		if ( null === $allowed ) {
-			return $gateways;
+		$result  = self::apply_country_rule( $gateways, $allowed, self::currency_eligible( $gateways ) );
+		if ( $result['fallback'] && function_exists( 'wc_get_logger' ) ) {
+			wc_get_logger()->warning(
+				sprintf( 'Payments by country: the %s rule allows only %s, and none of those is available in WooCommerce (disabled or not available). Every available gateway is offered instead.', $country, implode( ', ', (array) $allowed ) ),
+				array( 'source' => 'rwgcm-gateways' )
+			);
 		}
-		return self::select_gateway_ids( $gateways, $allowed );
+		return $result['gateways'];
+	}
+
+	/**
+	 * Saved WooCommerce "enabled" settings, which can differ from the live
+	 * gateway property (Paystack forces false for an unsupported store currency).
+	 *
+	 * @param array<int, string> $ids Gateway ids.
+	 * @return array<string, bool>
+	 */
+	public static function saved_enabled_flags( array $ids ) {
+		$out = array();
+		foreach ( $ids as $id ) {
+			$id = (string) $id;
+			if ( '' === $id || ! function_exists( 'get_option' ) ) {
+				continue;
+			}
+			$settings   = get_option( 'woocommerce_' . $id . '_settings', array() );
+			$out[ $id ] = is_array( $settings ) && isset( $settings['enabled'] ) && 'yes' === $settings['enabled'];
+		}
+		return $out;
+	}
+
+	/**
+	 * Country rules only narrow the list WooCommerce already considers
+	 * available (woocommerce_available_payment_gateways: enabled and
+	 * is_available()). They never add a gateway. If a rule would remove
+	 * every available gateway (for example it names only a disabled
+	 * Paystack), the rule is unsatisfiable, so the available list is kept.
+	 * Currency lists (RWGCM_Gateway_Currency, priority 30) still apply
+	 * afterwards and are never relaxed, so a gateway is not offered for a
+	 * currency the owner did not allow.
+	 *
+	 * The decision uses the gateways that can also take the cart currency
+	 * ($eligible), so a rule naming only a ZAR/USD gateway does not empty a
+	 * GBP checkout either.
+	 *
+	 * @param array<string, mixed>      $gateways Available gateways.
+	 * @param array<int, string>|null   $allowed  Rule ids, or null for no rule.
+	 * @param array<string, mixed>|null $eligible Available gateways allowed for the cart currency (null: all).
+	 * @return array{gateways: array<string, mixed>, fallback: bool}
+	 */
+	public static function apply_country_rule( array $gateways, $allowed, $eligible = null ) {
+		if ( null === $allowed ) {
+			return array( 'gateways' => $gateways, 'fallback' => false );
+		}
+		$eligible = is_array( $eligible ) ? $eligible : $gateways;
+		$selected = self::select_gateway_ids( $gateways, (array) $allowed );
+		$usable   = array_intersect_key( $selected, $eligible );
+		if ( empty( $usable ) && ! empty( $eligible ) ) {
+			return array( 'gateways' => $eligible, 'fallback' => true );
+		}
+		if ( empty( $usable ) && empty( $selected ) && ! empty( $gateways ) ) {
+			return array( 'gateways' => $gateways, 'fallback' => true );
+		}
+		return array( 'gateways' => $selected, 'fallback' => false );
+	}
+
+	/**
+	 * Available gateways the currency lists allow for this request's currency.
+	 *
+	 * @param array<string, mixed> $gateways Available gateways.
+	 * @return array<string, mixed>|null Null when currency lists do not apply.
+	 */
+	private static function currency_eligible( array $gateways ) {
+		if ( ! class_exists( 'RWGCM_Gateway_Currency', false ) || ! function_exists( 'get_woocommerce_currency' ) ) {
+			return null;
+		}
+		return RWGCM_Gateway_Currency::select_for_currency( $gateways, get_woocommerce_currency(), RWGCM_Gateway_Currency::stored_currencies() );
+	}
+
+	/**
+	 * Admin warning: rules or currency lists that name a gateway WooCommerce
+	 * will not offer (disabled, or not registered).
+	 *
+	 * @param array<string, mixed>                                $rules   Stored country/group rules.
+	 * @param array<string, array<int, string>>                   $lists   Gateway currency lists.
+	 * @param array<string, array{title?: string, enabled?: bool}> $choices Gateway choices.
+	 * @param array<string, bool>                                 $saved   Gateway id => saved "enabled" setting
+	 *                                                                     (woocommerce_{id}_settings). Paystack sets
+	 *                                                                     its enabled property to false on screens in
+	 *                                                                     an unsupported store currency (GBP) even when
+	 *                                                                     saved as enabled; it then still appears at a
+	 *                                                                     ZAR checkout, so it is not warned about.
+	 * @return string Empty when nothing is wrong.
+	 */
+	public static function disabled_rule_warning( array $rules, array $lists, array $choices, array $saved = array() ) {
+		$where = array();
+		foreach ( array( 'countries', 'groups' ) as $bucket ) {
+			$entries = isset( $rules[ $bucket ] ) && is_array( $rules[ $bucket ] ) ? $rules[ $bucket ] : array();
+			foreach ( $entries as $key => $ids ) {
+				foreach ( self::normalize_ids( is_array( $ids ) ? $ids : array() ) as $id ) {
+					$where[ $id ][] = (string) $key;
+				}
+			}
+		}
+		foreach ( $lists as $id => $currencies ) {
+			$id = (string) $id;
+			if ( is_array( $currencies ) && ! empty( $currencies ) ) {
+				$where[ $id ][] = implode( '/', array_map( 'strval', $currencies ) );
+			}
+		}
+		$parts = array();
+		foreach ( $where as $id => $keys ) {
+			$known   = isset( $choices[ $id ] ) && is_array( $choices[ $id ] );
+			$enabled = $known && ! empty( $choices[ $id ]['enabled'] );
+			if ( $enabled || ( $known && ! empty( $saved[ $id ] ) ) ) {
+				continue;
+			}
+			$title   = $known && isset( $choices[ $id ]['title'] ) ? (string) $choices[ $id ]['title'] : $id;
+			$state   = $known ? __( 'disabled in WooCommerce', '[REDACTED]-geo-commerce' ) : __( 'not registered in WooCommerce', '[REDACTED]-geo-commerce' );
+			$parts[] = sprintf( '%1$s (%2$s, %3$s) in %4$s', $title, $id, $state, implode( ', ', array_unique( $keys ) ) );
+		}
+		if ( empty( $parts ) ) {
+			return '';
+		}
+		return sprintf(
+			/* translators: %s: list of gateways and the rules that use them. */
+			__( 'These rules name a gateway WooCommerce will not offer: %s. Checkout never shows a disabled gateway. A country rule whose gateways are all unavailable is ignored (every available gateway is offered, still limited by its currencies). Enable the gateway in WooCommerce, or change the rule.', '[REDACTED]-geo-commerce' ),
+			implode( '; ', $parts )
+		);
 	}
 
 	/**
@@ -574,7 +698,11 @@ class RWGCM_Gateway_Availability {
 			$country = RWGCM_Price_Book_Currency::entered_billing_country();
 		}
 		$store_api_cart = self::is_store_api_cart();
-		if ( '' === $country && $store_api_cart ) {
+		if ( '' === $country ) {
+			// Same source for classic and block checkout: the billing country
+			// WooCommerce shows (0.4.5 defaults it to the geo country). Before
+			// 0.4.7 only Store API cart routes used it, so the classic page
+			// (no country yet) showed every gateway while blocks were filtered.
 			$country = self::customer_billing_country();
 		}
 		return array(

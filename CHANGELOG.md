@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.7] - 2026-10-18
+
+### Fixed
+- **Country rules emptied checkout when their gateway was unavailable (live: ZA → Paystack only, Paystack disabled).** `RWGCM_Gateway_Availability::filter_gateways()` (`woocommerce_available_payment_gateways`, priority 20) intersected the rule with WooCommerce's available list. When the rule named only an unavailable gateway, nothing was left. Commerce never added a gateway: it only filters the list WooCommerce passes in, which already excludes disabled or `is_available() === false` gateways. Now `apply_country_rule()` treats a rule with no usable gateway as unsatisfiable. "Usable" means available **and** allowed for the cart currency by the currency lists. The available gateways allowed for that currency are offered instead, and a warning is logged to `rwgcm-gateways`. The currency lists (`RWGCM_Gateway_Currency`, priority 30) still apply and are never relaxed: a ZAR cart is not offered Revolut when Revolut is listed for GBP/EUR only.
+- **Nothing can take the currency.** The list stays empty (no gateway is offered for a currency the owner did not allow). Classic checkout replaces WooCommerce's "no available payment methods" text with "No payment method can take payments in ZAR right now…" (`woocommerce_no_available_payment_methods_message`), and the event is logged.
+- **Block checkout vs classic (GBP cart, ZA address: no methods in blocks, Revolut in classic).** The rule country fell back to `WC()->customer->get_billing_country()` only on Store API cart routes. So the classic page (no billing typed yet) skipped the rules, while blocks applied the ZA rule and emptied the list. Both now use the chosen billing country, then the customer billing country WooCommerce shows. Combined with the unsatisfiable-rule fallback, both offer Revolut for that cart.
+
+### Added
+- **Payments by country warning** when a country/group rule or a currency list names a gateway that is disabled or not registered in WooCommerce (`disabled_rule_warning()`). A gateway saved as enabled but switched off only because of the store currency (Paystack in a GBP store) is not flagged, because it can still appear at a ZAR checkout (`saved_enabled_flags()`).
+- `tests/test-gateway-rules.php` (22 tests).
+
 ## [0.4.6] - 2026-10-18
 
 ### Fixed

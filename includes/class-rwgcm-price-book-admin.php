@@ -292,6 +292,10 @@ class RWGCM_Price_Book_Admin {
 		if ( '' !== $notice ) {
 			echo '<div class="notice notice-warning"><p>' . esc_html( $notice ) . '</p></div>';
 		}
+		$disabled_notice = RWGCM_Gateway_Availability::disabled_rule_warning( $rules, RWGCM_Gateway_Currency::stored_currencies(), $choices, RWGCM_Gateway_Availability::saved_enabled_flags( array_keys( $choices ) ) );
+		if ( '' !== $disabled_notice ) {
+			echo '<div class="notice notice-warning rwgcm-disabled-gateway-notice"><p>' . esc_html( $disabled_notice ) . '</p></div>';
+		}
 
 		$names = array();
 		foreach ( $choices as $id => $choice ) {
