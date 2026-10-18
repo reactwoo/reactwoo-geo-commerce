@@ -21,7 +21,13 @@ $rwgcm_use_platform_shell = class_exists( 'RWGCM_Admin', false ) && RWGCM_Admin:
 	<?php endif; ?>
 	<?php
 	if ( class_exists( 'RWGCM_Price_Book_Admin', false ) ) {
-		RWGCM_Price_Book_Admin::render_price_books_form();
+		$rwgcm_tab = isset( $_GET['tab'] ) && 'shipping' === sanitize_key( wp_unslash( $_GET['tab'] ) ) ? 'shipping' : 'settings'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		RWGCM_Price_Book_Admin::render_tabs( $rwgcm_tab );
+		if ( 'shipping' === $rwgcm_tab ) {
+			RWGCM_Price_Book_Admin::render_shipping_overview();
+		} else {
+			RWGCM_Price_Book_Admin::render_price_books_form();
+		}
 	}
 	?>
 </div>
