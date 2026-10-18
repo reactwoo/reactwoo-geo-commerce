@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - "Log payment-rule fallbacks" checkbox on Payments by country (default on) and the `rwgcm_log_gateway_warnings` filter (default `true`).
 
 ### Fixed
+- Payments by country no longer warns about a disabled gateway that appears only in a currency list; it shows a soft info line ("… is disabled in WooCommerce; its currency list has no effect"). Country/group rule warnings are unchanged.
+- The store-currency explanation is only shown for gateways whose saved `enabled` is `yes` but which are disabled at runtime; plainly disabled gateways say "disabled in WooCommerce".
 - Text domain on four strings added in 0.4.5 and 0.4.7.
 
 ## [0.4.7] - 2026-10-18

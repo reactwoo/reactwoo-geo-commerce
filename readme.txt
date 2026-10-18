@@ -22,6 +22,7 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 = 0.4.8 =
 * **Payments by country:** The rwgcm-gateways log records each distinct fallback warning at most once a day (and once per request) instead of on every gateway check.
 * **Admin:** New "Log payment-rule fallbacks" checkbox on Payments by country (on by default), and a `rwgcm_log_gateway_warnings` filter, to turn these warnings off.
+* **Admin:** A disabled gateway that only has a currency list (no country or group rule) gets a soft info line instead of the warning. The "disabled because the store currency is …" hint is only shown for gateways saved as enabled that switch themselves off at runtime (such as Paystack in a GBP store). Other disabled gateways say "disabled in WooCommerce".
 * **i18n:** Fixed the text domain on four strings added in 0.4.5 and 0.4.7.
 
 = 0.4.7 =

@@ -155,9 +155,11 @@ class RWGCM_Gateway_Availability {
 				}
 			}
 		}
+		// Currency lists only add context to a gateway a rule already names.
+		// A disabled gateway that only has a currency list is harmless (see disabled_list_info()).
 		foreach ( $lists as $id => $currencies ) {
 			$id = (string) $id;
-			if ( is_array( $currencies ) && ! empty( $currencies ) ) {
+			if ( isset( $where[ $id ] ) && is_array( $currencies ) && ! empty( $currencies ) ) {
 				$where[ $id ][] = implode( '/', array_map( 'strval', $currencies ) );
 			}
 		}
@@ -180,6 +182,50 @@ class RWGCM_Gateway_Availability {
 			__( 'These rules name a gateway WooCommerce will not offer: %s. Checkout never shows a disabled gateway. A country rule whose gateways are all unavailable is ignored (every available gateway is offered, still limited by its currencies). Enable the gateway in WooCommerce, or change the rule.', 'reactwoo-geo-commerce' ),
 			implode( '; ', $parts )
 		);
+	}
+
+	/**
+	 * Soft notes for gateways that are disabled (or not registered) in WooCommerce
+	 * and appear only in a currency list, not in any country or group rule.
+	 * Such a list has no effect, so this is information, not a warning.
+	 * Gateways saved as enabled (woocommerce_{id}_settings) are skipped: they can
+	 * still appear at checkout in another currency.
+	 *
+	 * @param array<string, mixed>                                $rules   Stored country/group rules.
+	 * @param array<string, array<int, string>>                   $lists   Gateway currency lists.
+	 * @param array<string, array{title?: string, enabled?: bool}> $choices Gateway choices.
+	 * @param array<string, bool>                                 $saved   Gateway id => saved "enabled" setting.
+	 * @return array<int, string> One line per gateway.
+	 */
+	public static function disabled_list_info( array $rules, array $lists, array $choices, array $saved = array() ) {
+		$in_rules = array();
+		foreach ( array( 'countries', 'groups' ) as $bucket ) {
+			$entries = isset( $rules[ $bucket ] ) && is_array( $rules[ $bucket ] ) ? $rules[ $bucket ] : array();
+			foreach ( $entries as $ids ) {
+				foreach ( self::normalize_ids( is_array( $ids ) ? $ids : array() ) as $id ) {
+					$in_rules[ $id ] = true;
+				}
+			}
+		}
+		$lines = array();
+		foreach ( $lists as $id => $currencies ) {
+			$id = (string) $id;
+			if ( '' === $id || isset( $in_rules[ $id ] ) || ! is_array( $currencies ) || empty( $currencies ) ) {
+				continue;
+			}
+			$known   = isset( $choices[ $id ] ) && is_array( $choices[ $id ] );
+			$enabled = $known && ! empty( $choices[ $id ]['enabled'] );
+			if ( $enabled || ( $known && ! empty( $saved[ $id ] ) ) ) {
+				continue;
+			}
+			$title   = $known && isset( $choices[ $id ]['title'] ) ? (string) $choices[ $id ]['title'] : $id;
+			$lines[] = $known
+				/* translators: %s: gateway title. */
+				? sprintf( __( '%s is disabled in WooCommerce; its currency list has no effect.', 'reactwoo-geo-commerce' ), $title )
+				/* translators: %s: gateway id. */
+				: sprintf( __( '%s is not registered in WooCommerce; its currency list has no effect.', 'reactwoo-geo-commerce' ), $title );
+		}
+		return $lines;
 	}
 
 	/**
@@ -560,10 +606,16 @@ class RWGCM_Gateway_Availability {
 	 * Paystack and its extra instances disable themselves when the store currency is unsupported.
 	 *
 	 * @param string             $gateway_id Gateway id.
-	 * @param array<int, string> $currencies Saved currency list.
+	 * @param array<int, string> $currencies    Saved currency list.
+	 * @param bool|null          $saved_enabled Saved woocommerce_{id}_settings enabled === 'yes'; null when unknown.
 	 * @return bool
 	 */
-	public static function explain_disabled_gateway( $gateway_id, array $currencies ) {
+	public static function explain_disabled_gateway( $gateway_id, array $currencies, $saved_enabled = null ) {
+		// Only a gateway saved as enabled but switched off at runtime (Paystack in a
+		// GBP store) is off because of the store currency. A plainly disabled one is not.
+		if ( false === $saved_enabled ) {
+			return false;
+		}
 		$id = strtolower( (string) $gateway_id );
 		if ( 'paystack' === $id || 0 === strpos( $id, 'paystack-' ) ) {
 			return true;
