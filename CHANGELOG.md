@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Payments by country no longer warns about a disabled gateway that appears only in a currency list; it shows a soft info line ("… is disabled in WooCommerce; its currency list has no effect"). Country/group rule warnings are unchanged.
 - The store-currency explanation is only shown for gateways whose saved `enabled` is `yes` but which are disabled at runtime; plainly disabled gateways say "disabled in WooCommerce".
+- No more "get_cart was called incorrectly … before the wp_loaded action" notices: the cart item count merged into Geo Core visitor data is only read after `wp_loaded` (Geo Core resolves the visitor earlier, during `init`).
 - Text domain on four strings added in 0.4.5 and 0.4.7.
 
 ## [0.4.7] - 2026-10-18
