@@ -155,6 +155,10 @@ class RWGCM_Price_Book_Admin {
 			update_option( RWGCM_Price_Book::OPTION_FALLBACK_CURRENCY, $fallback, false );
 		}
 
+		if ( isset( $_POST['rwgcm_shipping_settings_present'] ) ) {
+			update_option( RWGCM_Shipping_Prices::OPTION_HIDE_UNPRICED, ! empty( $_POST['rwgcm_shipping_hide_unpriced'] ) ? 'yes' : 'no', false );
+		}
+
 		if ( isset( $_POST['rwgcm_gateway_rules_present'] ) ) {
 			$gateway_raw = array(
 				'countries' => array(),
@@ -227,8 +231,104 @@ class RWGCM_Price_Book_Admin {
 		echo '<input type="text" id="rwgcm_price_book_fallback_currency" name="rwgcm_price_book_fallback_currency" value="' . esc_attr( $fallback ) . '" maxlength="3" class="regular-text rwgcm-currency-code" placeholder="' . esc_attr__( 'Store', 'reactwoo-geo-commerce' ) . '" /></p>';
 		echo '<p class="description">' . esc_html__( 'Used when the country is known but not in the map. Leave blank to use the WooCommerce store currency. The code must be the store currency or one of the price-book currencies.', 'reactwoo-geo-commerce' ) . '</p>';
 		echo '<p class="description">' . esc_html( RWGCM_Price_Book_Currency::cache_compatibility_notes() ) . '</p>';
+
+		echo '<h2>' . esc_html__( 'Shipping', 'reactwoo-geo-commerce' ) . '</h2>';
+		echo '<input type="hidden" name="rwgcm_shipping_settings_present" value="1" />';
+		echo '<p><label style="display:inline-flex;align-items:flex-start;gap:8px;max-width:100%;line-height:1.5;"><input type="checkbox" name="rwgcm_shipping_hide_unpriced" value="1" style="margin-top:3px;flex:none;"' . checked( RWGCM_Shipping_Prices::hide_unpriced(), true, false ) . ' /> <span>' . esc_html__( 'Hide shipping methods not priced in the visitor’s currency', 'reactwoo-geo-commerce' ) . '</span></label></p>';
+		echo '<p class="description">' . esc_html__( 'Off (default): a cart stays in the store currency when any method in its shipping zone has no amount in the visitor currency. On: the cart uses the visitor currency when at least one method is priced, and the unpriced methods are hidden. Per-currency amounts are entered on each shipping method (WooCommerce → Settings → Shipping). See the Shipping tab.', 'reactwoo-geo-commerce' ) . '</p>';
 		submit_button( __( 'Save price books', 'reactwoo-geo-commerce' ) );
 		echo '</form></div>';
+	}
+
+	/**
+	 * Tabs on the Price books screen.
+	 *
+	 * @param string $current settings or shipping.
+	 * @return void
+	 */
+	public static function render_tabs( $current ) {
+		$base = function_exists( 'admin_url' ) ? admin_url( 'admin.php?page=rwgcm-price-books' ) : 'admin.php?page=rwgcm-price-books';
+		$tabs = array(
+			'settings' => array( __( 'Settings', 'reactwoo-geo-commerce' ), $base ),
+			'shipping' => array( __( 'Shipping', 'reactwoo-geo-commerce' ), $base . '&tab=shipping' ),
+		);
+		echo '<nav class="nav-tab-wrapper rwgcm-price-book-tabs" style="margin-bottom:12px;">';
+		foreach ( $tabs as $key => $tab ) {
+			echo '<a href="' . esc_url( $tab[1] ) . '" class="nav-tab' . ( $key === $current ? ' nav-tab-active' : '' ) . '"' . ( $key === $current ? ' aria-current="page"' : '' ) . '>' . esc_html( $tab[0] ) . '</a>';
+		}
+		echo '</nav>';
+	}
+
+	/**
+	 * Read-only Shipping tab: zones × methods × currencies with reasons.
+	 *
+	 * @return void
+	 */
+	public static function render_shipping_overview() {
+		$base       = RWGCM_Price_Book_Currency::base_currency();
+		$currencies = RWGCM_Shipping_Prices::extra_currencies();
+		$hide       = RWGCM_Shipping_Prices::hide_unpriced();
+		$zones      = RWGCM_Shipping_Prices::overview( RWGCM_Shipping_Prices::all_zones(), $currencies, $base, $hide );
+		echo '<div class="rwgc-card rwgcm-panel rwgcm-shipping-overview">';
+		echo '<h2>' . esc_html__( 'Shipping prices by currency', 'reactwoo-geo-commerce' ) . '</h2>';
+		echo '<p class="description">' . esc_html(
+			sprintf(
+				/* translators: %s: store currency. */
+				__( 'Read only. A shipped cart uses the visitor currency only when its shipping zone is priced in it; otherwise it stays in %s. Amounts are entered on each method under WooCommerce → Settings → Shipping (flat rate cost, free shipping minimum, local pickup cost). Other and carrier methods are store currency only.', 'reactwoo-geo-commerce' ),
+				$base
+			)
+		) . '</p>';
+		if ( empty( $currencies ) ) {
+			echo '<p>' . esc_html__( 'No price-book currency other than the store currency is configured.', 'reactwoo-geo-commerce' ) . '</p></div>';
+			return;
+		}
+		echo '<p class="description">' . esc_html( $hide ? __( 'Hiding unpriced methods is on: a zone counts as priced when at least one enabled method is priced; the others are hidden in that currency.', 'reactwoo-geo-commerce' ) : __( 'Hiding unpriced methods is off: every enabled method in a zone must be priced.', 'reactwoo-geo-commerce' ) ) . '</p>';
+		echo '<ul class="rwgcm-shipping-summary">';
+		foreach ( $zones as $zone ) {
+			$parts = array();
+			foreach ( $zone['verdicts'] as $cur => $ok ) {
+				if ( null === $ok ) {
+					/* translators: %s: currency. */
+					$parts[] = sprintf( __( '%s: no enabled methods', 'reactwoo-geo-commerce' ), $cur );
+				} else {
+					$parts[] = $ok
+						/* translators: 1: currency. */
+						? sprintf( __( '%1$s carts use %1$s', 'reactwoo-geo-commerce' ), $cur )
+						/* translators: 1: currency, 2: store currency. */
+						: sprintf( __( '%1$s carts stay in %2$s', 'reactwoo-geo-commerce' ), $cur, $base );
+				}
+			}
+			echo '<li><strong>' . esc_html( $zone['name'] ) . '</strong>: ' . esc_html( implode( '; ', $parts ) ) . '</li>';
+		}
+		echo '</ul>';
+		echo '<div class="rwgcm-gateway-matrix rwgcm-shipping-matrix" style="overflow-x: auto;">';
+		echo '<table class="widefat striped"><thead><tr><th>' . esc_html__( 'Zone / method', 'reactwoo-geo-commerce' ) . '</th>';
+		foreach ( $currencies as $cur ) {
+			echo '<th>' . esc_html( $cur ) . '</th>';
+		}
+		echo '</tr></thead><tbody>';
+		foreach ( $zones as $zone ) {
+			$url = function_exists( 'admin_url' ) ? admin_url( 'admin.php?page=wc-settings&tab=shipping&zone_id=' . (int) $zone['id'] ) : '';
+			echo '<tr class="rwgcm-shipping-zone"><th scope="row"><a href="' . esc_url( $url ) . '">' . esc_html( $zone['name'] ) . '</a></th>';
+			foreach ( $currencies as $cur ) {
+				$ok = $zone['verdicts'][ $cur ];
+				echo '<td><strong>' . esc_html( null === $ok ? '—' : ( $ok ? '✓ ' . $cur : '✗ ' . $base ) ) . '</strong></td>';
+			}
+			echo '</tr>';
+			if ( empty( $zone['rows'] ) ) {
+				echo '<tr><td>' . esc_html__( '(no methods)', 'reactwoo-geo-commerce' ) . '</td>' . str_repeat( '<td></td>', count( $currencies ) ) . '</tr>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			}
+			foreach ( $zone['rows'] as $row ) {
+				$label = $row['title'] . ( $row['enabled'] ? '' : ' (' . __( 'disabled', 'reactwoo-geo-commerce' ) . ')' );
+				echo '<tr class="rwgcm-shipping-method"><td style="padding-left:24px;">' . esc_html( $label ) . ' <code>' . esc_html( $row['id'] ) . '</code></td>';
+				foreach ( $currencies as $cur ) {
+					$cell = $row['cells'][ $cur ];
+					echo '<td>' . esc_html( ( $cell['priced'] ? '✓ ' : '— ' ) . $cell['label'] ) . '</td>';
+				}
+				echo '</tr>';
+			}
+		}
+		echo '</tbody></table></div></div>';
 	}
 
 	/**

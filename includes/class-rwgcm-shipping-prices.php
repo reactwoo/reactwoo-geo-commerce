@@ -1,0 +1,815 @@
+<?php
+/**
+ * Per-currency shipping amounts for WooCommerce flat rate, free shipping and
+ * legacy local pickup (0.5.0, option A of the per-currency shipping scope).
+ *
+ * @package ReactWoo_Geo_Commerce
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+/**
+ * Extra instance fields ("Cost (ZAR)", "Minimum order amount (ZAR)"), the
+ * read-time swap that lets WooCommerce's own cost formula and shipping tax run
+ * unchanged, the computed "shipping priced" decision, rate tagging and the
+ * optional hiding of unpriced rates.
+ */
+class RWGCM_Shipping_Prices {
+
+	/**
+	 * Hide rates that are not priced in the visitor currency (yes/no, default no).
+	 */
+	const OPTION_HIDE_UNPRICED = 'rwgcm_shipping_hide_unpriced';
+
+	/**
+	 * Rate and order shipping-line meta: the currency the amount was entered in.
+	 */
+	const META_PRICED = 'rwgcm_priced_currency';
+
+	/**
+	 * Rate meta set when the site's rwgcm_price_book_shipping_priced filter declared the rate priced.
+	 */
+	const META_SOURCE = 'rwgcm_priced_source';
+
+	/**
+	 * Supported method id => WooCommerce setting swapped per currency.
+	 *
+	 * @var array<string, string>
+	 */
+	private static $swap = array(
+		'flat_rate'     => 'cost',
+		'free_shipping' => 'min_amount',
+		'local_pickup'  => 'cost',
+	);
+
+	/**
+	 * Memo for computed decisions within a request.
+	 *
+	 * @var array<string, array<string, mixed>>
+	 */
+	private static $memo = array();
+
+	/**
+	 * @return void
+	 */
+	public static function init() {
+		foreach ( array_keys( self::$swap ) as $id ) {
+			add_filter( 'woocommerce_shipping_instance_form_fields_' . $id, array( __CLASS__, 'filter_form_fields_' . $id ) );
+			add_filter( 'woocommerce_shipping_' . $id . '_instance_option', array( __CLASS__, 'filter_instance_option' ), 20, 3 );
+		}
+		add_filter( 'woocommerce_package_rates', array( __CLASS__, 'filter_package_rates' ), 50, 2 );
+		// Persistent explanation (0.5.0): rendered from the current state on every
+		// classic cart / checkout render and checkout fragment refresh.
+		add_action( 'woocommerce_before_checkout_form', array( __CLASS__, 'render_checkout_notice' ), 11 );
+		add_filter( 'woocommerce_update_order_review_fragments', array( __CLASS__, 'filter_checkout_fragments' ) );
+		add_action( 'woocommerce_before_cart_totals', array( __CLASS__, 'render_cart_notice' ) );
+		add_action( 'update_option_' . self::OPTION_HIDE_UNPRICED, array( __CLASS__, 'flush_rate_cache' ) );
+		add_action( 'add_option_' . self::OPTION_HIDE_UNPRICED, array( __CLASS__, 'flush_rate_cache' ) );
+		if ( function_exists( 'did_action' ) && did_action( 'woocommerce_blocks_loaded' ) ) {
+			self::register_store_api_data();
+		} else {
+			add_action( 'woocommerce_blocks_loaded', array( __CLASS__, 'register_store_api_data' ) );
+		}
+	}
+
+	/**
+	 * WooCommerce caches calculated rates in the session, keyed by a package
+	 * hash that includes the "shipping" transient version. Hiding changes
+	 * which rates exist, so bump that version when the setting changes.
+	 *
+	 * @return void
+	 */
+	public static function flush_rate_cache() {
+		if ( class_exists( 'WC_Cache_Helper' ) ) {
+			WC_Cache_Helper::get_transient_version( 'shipping', true );
+		}
+	}
+
+	/**
+	 * Notice text for a cart kept in the store currency because shipping to
+	 * the address is not priced in the visitor currency.
+	 *
+	 * @param string $wanted  Visitor currency.
+	 * @param string $base    Store currency.
+	 * @param string $country Shipping country name or code.
+	 * @return string
+	 */
+	public static function fallback_notice( $wanted, $base, $country ) {
+		if ( '' === $country ) {
+			return sprintf(
+				/* translators: 1: store currency, 2: visitor currency. */
+				__( 'Prices are shown in %1$s because shipping to this address isn’t priced in %2$s.', 'reactwoo-geo-commerce' ),
+				$base,
+				$wanted
+			);
+		}
+		return sprintf(
+			/* translators: 1: store currency, 2: shipping country, 3: visitor currency. */
+			__( 'Prices are shown in %1$s because shipping to %2$s isn’t priced in %3$s.', 'reactwoo-geo-commerce' ),
+			$base,
+			$country,
+			$wanted
+		);
+	}
+
+	/**
+	 * Current fallback state for the cart: "ZAR|GB" or ''.
+	 *
+	 * @return array{state: string, wanted: string, country: string}
+	 */
+	private static function current_fallback() {
+		$out = array( 'state' => '', 'wanted' => '', 'country' => '' );
+		if ( ! function_exists( 'get_woocommerce_currency' ) || RWGCM_Price_Book_Currency::forces_store_currency() ) {
+			return $out;
+		}
+		get_woocommerce_currency();
+		$wanted = RWGCM_Price_Book_Currency::shipping_fallback_currency();
+		if ( '' === $wanted ) {
+			return $out;
+		}
+		$country = '';
+		if ( function_exists( 'WC' ) && WC()->customer && method_exists( WC()->customer, 'get_shipping_country' ) ) {
+			$country = (string) WC()->customer->get_shipping_country();
+		}
+		return array( 'state' => $wanted . '|' . $country, 'wanted' => $wanted, 'country' => $country );
+	}
+
+	/**
+	 * Notice text for the current cart, or '' when the cart is not held in
+	 * the store currency by the shipping fallback (including visitors whose
+	 * currency is the store currency anyway).
+	 *
+	 * @return string
+	 */
+	public static function current_notice() {
+		$now = self::current_fallback();
+		if ( '' === $now['state'] ) {
+			return '';
+		}
+		return self::fallback_notice( $now['wanted'], RWGCM_Price_Book_Currency::base_currency(), self::country_name( $now['country'] ) );
+	}
+
+	/**
+	 * One wrapper element, always present (empty when there is nothing to
+	 * say) so checkout fragment refreshes replace it in place: one notice,
+	 * no duplicates, gone when the cart is priced again.
+	 *
+	 * @param string $message Notice text or ''.
+	 * @param string $context checkout or cart.
+	 * @return string
+	 */
+	public static function notice_html( $message, $context = 'checkout' ) {
+		$class = 'rwgcm-shipping-currency-notice rwgcm-shipping-currency-notice--' . ( 'cart' === $context ? 'cart' : 'checkout' );
+		if ( '' === $message ) {
+			return '<div class="' . esc_attr( $class ) . '"></div>';
+		}
+		return '<div class="' . esc_attr( $class ) . '"><div class="woocommerce-info" role="status">' . esc_html( $message ) . '</div></div>';
+	}
+
+	/**
+	 * Classic checkout page load.
+	 *
+	 * @return void
+	 */
+	public static function render_checkout_notice() {
+		echo self::notice_html( self::current_notice(), 'checkout' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in notice_html().
+	}
+
+	/**
+	 * Classic checkout update_order_review: replace the wrapper in place.
+	 *
+	 * @param mixed $fragments Fragments.
+	 * @return mixed
+	 */
+	public static function filter_checkout_fragments( $fragments ) {
+		if ( ! is_array( $fragments ) ) {
+			return $fragments;
+		}
+		$fragments['.rwgcm-shipping-currency-notice--checkout'] = self::notice_html( self::current_notice(), 'checkout' );
+		return $fragments;
+	}
+
+	/**
+	 * Classic cart page, inside .cart_totals so WooCommerce's cart refresh
+	 * (quantity change, shipping calculator) re-renders it.
+	 *
+	 * @return void
+	 */
+	public static function render_cart_notice() {
+		echo self::notice_html( self::current_notice(), 'cart' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in notice_html().
+	}
+
+	/**
+	 * @param string $code ISO2.
+	 * @return string
+	 */
+	private static function country_name( $code ) {
+		if ( '' !== $code && function_exists( 'WC' ) && WC()->countries ) {
+			$all = WC()->countries->get_countries();
+			if ( isset( $all[ $code ] ) ) {
+				return html_entity_decode( (string) $all[ $code ], ENT_QUOTES );
+			}
+		}
+		return $code;
+	}
+
+	/**
+	 * Store API: extensions.rwgcm on the cart, for block checkouts and themes.
+	 *
+	 * @return void
+	 */
+	public static function register_store_api_data() {
+		if ( ! function_exists( 'woocommerce_store_api_register_endpoint_data' ) || ! class_exists( '\\Automattic\\WooCommerce\\StoreApi\\Schemas\\V1\\CartSchema' ) ) {
+			return;
+		}
+		woocommerce_store_api_register_endpoint_data(
+			array(
+				'endpoint'        => \Automattic\WooCommerce\StoreApi\Schemas\V1\CartSchema::IDENTIFIER,
+				'namespace'       => 'rwgcm',
+				'data_callback'   => array( __CLASS__, 'store_api_data' ),
+				'schema_callback' => array( __CLASS__, 'store_api_schema' ),
+				'schema_type'     => ARRAY_A,
+			)
+		);
+	}
+
+	/**
+	 * @return array<string, string>
+	 */
+	public static function store_api_data() {
+		$now = self::current_fallback();
+		return array(
+			'shipping_fallback_currency' => $now['wanted'],
+			'shipping_currency_notice'   => '' === $now['state'] ? '' : self::fallback_notice( $now['wanted'], RWGCM_Price_Book_Currency::base_currency(), self::country_name( $now['country'] ) ),
+		);
+	}
+
+	/**
+	 * @return array<string, mixed>
+	 */
+	public static function store_api_schema() {
+		return array(
+			'shipping_fallback_currency' => array(
+				'description' => 'Visitor currency the cart would use if shipping to the address were priced in it.',
+				'type'        => 'string',
+				'readonly'    => true,
+			),
+			'shipping_currency_notice'   => array(
+				'description' => 'Why the cart is shown in the store currency.',
+				'type'        => 'string',
+				'readonly'    => true,
+			),
+		);
+	}
+
+	/**
+	 * Setting key that holds the amount for a currency.
+	 *
+	 * @param string $method_id Method id.
+	 * @param string $currency  Currency code.
+	 * @return string Empty for an unsupported method.
+	 */
+	public static function field_key( $method_id, $currency ) {
+		if ( ! isset( self::$swap[ $method_id ] ) ) {
+			return '';
+		}
+		return 'rwgcm_' . self::$swap[ $method_id ] . '_' . RWGCM_Price_Book::normalize_currency( $currency );
+	}
+
+	/**
+	 * Price-book currencies other than the store currency.
+	 *
+	 * @param string|null $base Store currency (tests).
+	 * @return array<int, string>
+	 */
+	public static function extra_currencies( $base = null ) {
+		$base = RWGCM_Price_Book::normalize_currency( null === $base ? RWGCM_Price_Book_Currency::base_currency() : $base );
+		$out  = array();
+		foreach ( RWGCM_Price_Book::currencies() as $code ) {
+			if ( $code !== $base ) {
+				$out[] = $code;
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * @param array<string, mixed> $fields Fields.
+	 * @return array<string, mixed>
+	 */
+	public static function filter_form_fields_flat_rate( $fields ) {
+		return self::add_fields( 'flat_rate', $fields, self::extra_currencies() );
+	}
+
+	/**
+	 * @param array<string, mixed> $fields Fields.
+	 * @return array<string, mixed>
+	 */
+	public static function filter_form_fields_free_shipping( $fields ) {
+		return self::add_fields( 'free_shipping', $fields, self::extra_currencies() );
+	}
+
+	/**
+	 * @param array<string, mixed> $fields Fields.
+	 * @return array<string, mixed>
+	 */
+	public static function filter_form_fields_local_pickup( $fields ) {
+		return self::add_fields( 'local_pickup', $fields, self::extra_currencies() );
+	}
+
+	/**
+	 * Adds a heading and one input per currency. The inputs reuse the
+	 * sanitize callback of WooCommerce's own field, so a cost formula is
+	 * validated exactly like the store-currency one.
+	 *
+	 * @param string               $method_id  Method id.
+	 * @param mixed                $fields     Fields.
+	 * @param array<int, string>   $currencies Extra currencies.
+	 * @return mixed
+	 */
+	public static function add_fields( $method_id, $fields, array $currencies ) {
+		if ( ! is_array( $fields ) || empty( $currencies ) || ! isset( self::$swap[ $method_id ] ) ) {
+			return $fields;
+		}
+		$setting = self::$swap[ $method_id ];
+		$native  = isset( $fields[ $setting ] ) && is_array( $fields[ $setting ] ) ? $fields[ $setting ] : array();
+		$fields['rwgcm_currency_prices'] = array(
+			'title'       => __( 'Prices in other currencies (Geo Commerce)', 'reactwoo-geo-commerce' ),
+			'type'        => 'title',
+			'default'     => '',
+			'description' => 'min_amount' === $setting
+				? __( 'Used instead of the minimum above when the cart is in that currency. Leave blank: this free shipping is not priced in that currency, so carts shipped to this zone stay in the store currency.', 'reactwoo-geo-commerce' )
+				: __( 'Used instead of the cost above when the cart is in that currency. Same format as the cost above. Leave blank: not offered in that currency, so carts shipped to this zone stay in the store currency.', 'reactwoo-geo-commerce' ),
+		);
+		foreach ( $currencies as $code ) {
+			$key = self::field_key( $method_id, $code );
+			if ( '' === $key ) {
+				continue;
+			}
+			$field = array(
+				'title'       => 'min_amount' === $setting
+					/* translators: %s: currency code. */
+					? sprintf( __( 'Minimum order amount (%s)', 'reactwoo-geo-commerce' ), $code )
+					/* translators: %s: currency code. */
+					: sprintf( __( 'Cost (%s)', 'reactwoo-geo-commerce' ), $code ),
+				'type'        => 'text',
+				'class'       => 'wc-shipping-modal-price rwgcm-currency-price',
+				'placeholder' => sprintf(
+					/* translators: %s: currency code. */
+					__( 'Leave blank: not offered in %s', 'reactwoo-geo-commerce' ),
+					$code
+				),
+				'default'     => '',
+				'desc_tip'    => true,
+				'description' => '',
+			);
+			if ( isset( $native['sanitize_callback'] ) ) {
+				$field['sanitize_callback'] = $native['sanitize_callback'];
+			}
+			$fields[ $key ] = $field;
+		}
+		return $fields;
+	}
+
+	/**
+	 * Read-time swap. WooCommerce reads cost / min_amount through
+	 * get_instance_option() in init(), calculate_shipping() and is_available(),
+	 * so returning the per-currency value here keeps its formula, class logic
+	 * and shipping tax unchanged. Admin screens, REST exports, cron and CLI
+	 * force the store currency and never see a swapped value.
+	 *
+	 * @param mixed  $value  Stored value.
+	 * @param string $key    Setting key.
+	 * @param mixed  $method WC_Shipping_Method.
+	 * @return mixed
+	 */
+	public static function filter_instance_option( $value, $key, $method ) {
+		if ( ! is_object( $method ) || ! isset( $method->id ) || ! isset( self::$swap[ $method->id ] ) || self::$swap[ $method->id ] !== $key ) {
+			return $value;
+		}
+		if ( RWGCM_Price_Book_Currency::forces_store_currency() || ! function_exists( 'get_woocommerce_currency' ) ) {
+			return $value;
+		}
+		$settings = isset( $method->instance_settings ) && is_array( $method->instance_settings ) ? $method->instance_settings : array();
+		return self::swapped_value( $method->id, $settings, $value, get_woocommerce_currency(), RWGCM_Price_Book_Currency::base_currency() );
+	}
+
+	/**
+	 * @param string               $method_id Method id.
+	 * @param array<string, mixed> $settings  Instance settings.
+	 * @param mixed                $value     Store-currency value.
+	 * @param string               $active    Active currency.
+	 * @param string               $base      Store currency.
+	 * @return mixed
+	 */
+	public static function swapped_value( $method_id, array $settings, $value, $active, $base ) {
+		$active = RWGCM_Price_Book::normalize_currency( $active );
+		if ( '' === $active || $active === RWGCM_Price_Book::normalize_currency( $base ) ) {
+			return $value;
+		}
+		$key = self::field_key( $method_id, $active );
+		if ( '' !== $key && isset( $settings[ $key ] ) && '' !== trim( (string) $settings[ $key ] ) ) {
+			return trim( (string) $settings[ $key ] );
+		}
+		return $value;
+	}
+
+	/**
+	 * Whether a method instance is priced in a currency, from its settings.
+	 *
+	 * @param string               $method_id Method id.
+	 * @param array<string, mixed> $settings  Raw instance settings (woocommerce_{id}_{n}_settings).
+	 * @param string               $currency  Currency.
+	 * @param string               $base      Store currency.
+	 * @return array{priced: bool, reason: string, amount: string}
+	 */
+	public static function method_status( $method_id, array $settings, $currency, $base ) {
+		$currency = RWGCM_Price_Book::normalize_currency( $currency );
+		if ( '' === $currency || $currency === RWGCM_Price_Book::normalize_currency( $base ) ) {
+			return array( 'priced' => true, 'reason' => 'base', 'amount' => '' );
+		}
+		if ( ! isset( self::$swap[ $method_id ] ) ) {
+			return array( 'priced' => false, 'reason' => 'unsupported', 'amount' => '' );
+		}
+		$key      = self::field_key( $method_id, $currency );
+		$override = isset( $settings[ $key ] ) ? trim( (string) $settings[ $key ] ) : '';
+		$native   = isset( $settings[ self::$swap[ $method_id ] ] ) ? trim( (string) $settings[ self::$swap[ $method_id ] ] ) : '';
+
+		if ( 'free_shipping' === $method_id ) {
+			$requires = isset( $settings['requires'] ) ? (string) $settings['requires'] : '';
+			if ( ! in_array( $requires, array( 'min_amount', 'either', 'both' ), true ) ) {
+				return array( 'priced' => true, 'reason' => 'coupon' === $requires ? 'coupon_only' : 'no_minimum', 'amount' => '' );
+			}
+			if ( '' !== $override ) {
+				return array( 'priced' => true, 'reason' => 'override', 'amount' => $override );
+			}
+			if ( self::is_zero( $native ) ) {
+				return array( 'priced' => true, 'reason' => 'zero', 'amount' => '' );
+			}
+			return array( 'priced' => false, 'reason' => 'missing', 'amount' => '' );
+		}
+
+		if ( 'flat_rate' === $method_id && self::has_class_costs( $settings ) ) {
+			return array( 'priced' => false, 'reason' => 'class_costs', 'amount' => '' );
+		}
+		if ( '' !== $override ) {
+			return array( 'priced' => true, 'reason' => 'override', 'amount' => $override );
+		}
+		if ( self::is_zero( $native ) ) {
+			return array( 'priced' => true, 'reason' => 'zero', 'amount' => '' );
+		}
+		return array( 'priced' => false, 'reason' => 'missing', 'amount' => '' );
+	}
+
+	/**
+	 * Blank or 0 amounts are the same in every currency.
+	 *
+	 * @param string $value Value.
+	 * @return bool
+	 */
+	private static function is_zero( $value ) {
+		$value = trim( (string) $value );
+		return '' === $value || ( is_numeric( $value ) && 0.0 === (float) $value );
+	}
+
+	/**
+	 * Flat-rate shipping-class costs have no per-currency field in 0.5.0.
+	 *
+	 * @param array<string, mixed> $settings Settings.
+	 * @return bool
+	 */
+	public static function has_class_costs( array $settings ) {
+		foreach ( $settings as $key => $value ) {
+			$key = (string) $key;
+			if ( ( 0 === strpos( $key, 'class_cost_' ) || 'no_class_cost' === $key ) && '' !== trim( (string) $value ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Decision for a set of zones: each zone is a list of enabled methods
+	 * array{id, instance_id, settings}. Default: every method in every zone
+	 * must be priced. With hiding on: each zone needs at least one priced method.
+	 * A zone with no enabled methods charges nothing, so it does not block.
+	 *
+	 * @param array<int, array<int, array<string, mixed>>> $zones    Methods per package zone.
+	 * @param string                                       $currency Currency.
+	 * @param string                                       $base     Store currency.
+	 * @param bool                                         $hide     Hide unpriced methods.
+	 * @return bool
+	 */
+	public static function zones_priced( array $zones, $currency, $base, $hide ) {
+		foreach ( $zones as $methods ) {
+			$priced = 0;
+			$total  = 0;
+			foreach ( (array) $methods as $m ) {
+				if ( ! is_array( $m ) || empty( $m['id'] ) ) {
+					continue;
+				}
+				++$total;
+				$status = self::method_status( (string) $m['id'], isset( $m['settings'] ) && is_array( $m['settings'] ) ? $m['settings'] : array(), $currency, $base );
+				if ( $status['priced'] ) {
+					++$priced;
+				}
+			}
+			if ( 0 === $total ) {
+				continue;
+			}
+			if ( $hide ? 0 === $priced : $priced < $total ) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * @return bool
+	 */
+	public static function hide_unpriced() {
+		$on = function_exists( 'get_option' ) && 'yes' === get_option( self::OPTION_HIDE_UNPRICED, 'no' );
+		return (bool) ( function_exists( 'apply_filters' ) ? apply_filters( 'rwgcm_shipping_hide_unpriced', $on ) : $on );
+	}
+
+	/**
+	 * Computed default of rwgcm_price_book_shipping_priced for real packages.
+	 *
+	 * @param string       $currency Currency.
+	 * @param array<mixed> $packages WooCommerce cart shipping packages.
+	 * @return bool
+	 */
+	public static function computed_priced( $currency, array $packages ) {
+		$base = RWGCM_Price_Book_Currency::base_currency();
+		$cur  = RWGCM_Price_Book::normalize_currency( $currency );
+		if ( '' === $cur || $cur === $base ) {
+			return true;
+		}
+		if ( ! class_exists( 'WC_Shipping_Zones' ) ) {
+			return false;
+		}
+		$zones = array();
+		foreach ( $packages as $package ) {
+			if ( is_array( $package ) ) {
+				$zones[] = self::package_methods( $package );
+			}
+		}
+		if ( empty( $zones ) ) {
+			return false;
+		}
+		return self::zones_priced( $zones, $cur, $base, self::hide_unpriced() );
+	}
+
+	/**
+	 * Enabled methods of the zone matching a package, with raw settings.
+	 *
+	 * @param array<string, mixed> $package Package.
+	 * @return array<int, array<string, mixed>>
+	 */
+	public static function package_methods( array $package ) {
+		if ( ! class_exists( 'WC_Shipping_Zones' ) ) {
+			return array();
+		}
+		$dest = isset( $package['destination'] ) && is_array( $package['destination'] ) ? $package['destination'] : array();
+		$memo = 'zone:' . md5( (string) wp_json_encode( array( $dest['country'] ?? '', $dest['state'] ?? '', $dest['postcode'] ?? '' ) ) );
+		if ( isset( self::$memo[ $memo ] ) ) {
+			return self::$memo[ $memo ];
+		}
+		$zone = WC_Shipping_Zones::get_zone_matching_package( $package );
+		$out  = self::zone_methods( $zone );
+		self::$memo[ $memo ] = $out;
+		return $out;
+	}
+
+	/**
+	 * @param mixed $zone WC_Shipping_Zone.
+	 * @param bool  $enabled_only Only enabled methods.
+	 * @return array<int, array<string, mixed>>
+	 */
+	public static function zone_methods( $zone, $enabled_only = true ) {
+		$out = array();
+		if ( ! is_object( $zone ) || ! method_exists( $zone, 'get_shipping_methods' ) ) {
+			return $out;
+		}
+		foreach ( $zone->get_shipping_methods( $enabled_only ) as $method ) {
+			if ( ! is_object( $method ) || empty( $method->id ) ) {
+				continue;
+			}
+			$instance = isset( $method->instance_id ) ? (int) $method->instance_id : 0;
+			$raw      = $instance ? get_option( 'woocommerce_' . $method->id . '_' . $instance . '_settings', array() ) : array();
+			$out[]    = array(
+				'id'          => (string) $method->id,
+				'instance_id' => $instance,
+				'title'       => method_exists( $method, 'get_method_title' ) ? (string) ( isset( $raw['title'] ) && '' !== $raw['title'] ? $raw['title'] : $method->get_method_title() ) : (string) $method->id,
+				'enabled'     => isset( $method->enabled ) && 'yes' === $method->enabled,
+				'settings'    => is_array( $raw ) ? $raw : array(),
+			);
+		}
+		return $out;
+	}
+
+	/**
+	 * Tags each rate with the currency its amount is in, and hides unpriced
+	 * rates when that setting is on (never all of them).
+	 *
+	 * @param mixed $rates   Rates.
+	 * @param mixed $package Package.
+	 * @return mixed
+	 */
+	public static function filter_package_rates( $rates, $package ) {
+		if ( ! is_array( $rates ) || empty( $rates ) || ! function_exists( 'get_woocommerce_currency' ) ) {
+			return $rates;
+		}
+		$active = RWGCM_Price_Book::normalize_currency( get_woocommerce_currency() );
+		$base   = RWGCM_Price_Book_Currency::base_currency();
+		$forced = false;
+		if ( $active !== $base && is_array( $package ) ) {
+			$computed = self::computed_priced( $active, array( $package ) );
+			$forced   = ! $computed && RWGCM_Price_Book_Currency::shipping_priced( $active, array( $package ) );
+		}
+		$settings = array();
+		$priced   = array();
+		foreach ( $rates as $rate_id => $rate ) {
+			if ( ! is_object( $rate ) || ! method_exists( $rate, 'get_method_id' ) ) {
+				continue;
+			}
+			$mid  = (string) $rate->get_method_id();
+			$inst = method_exists( $rate, 'get_instance_id' ) ? (int) $rate->get_instance_id() : 0;
+			if ( ! isset( $settings[ $mid . ':' . $inst ] ) ) {
+				$raw                            = $inst ? get_option( 'woocommerce_' . $mid . '_' . $inst . '_settings', array() ) : array();
+				$settings[ $mid . ':' . $inst ] = is_array( $raw ) ? $raw : array();
+			}
+			$status = self::method_status( $mid, $settings[ $mid . ':' . $inst ], $active, $base );
+			$cur    = self::rate_currency( $status['priced'], $forced, $active, $base );
+			if ( method_exists( $rate, 'add_meta_data' ) ) {
+				$rate->add_meta_data( self::META_PRICED, $cur );
+				if ( $forced && ! $status['priced'] ) {
+					$rate->add_meta_data( self::META_SOURCE, 'filter' );
+				}
+			}
+			$priced[ $rate_id ] = $cur === $active;
+		}
+		if ( $active !== $base && self::hide_unpriced() && in_array( true, $priced, true ) ) {
+			foreach ( $priced as $rate_id => $ok ) {
+				if ( ! $ok ) {
+					unset( $rates[ $rate_id ] );
+				}
+			}
+		}
+		return $rates;
+	}
+
+	/**
+	 * @param bool   $priced Method priced in the active currency.
+	 * @param bool   $forced Site filter declared shipping priced.
+	 * @param string $active Active currency.
+	 * @param string $base   Store currency.
+	 * @return string
+	 */
+	public static function rate_currency( $priced, $forced, $active, $base ) {
+		return ( $priced || $forced ) ? $active : $base;
+	}
+
+	/**
+	 * Order guard: in a non-store currency every shipping line must carry
+	 * the order currency as its "priced in" meta, so a store-currency-only rate
+	 * is never charged as another currency. Store-currency orders pass.
+	 *
+	 * @param array<int, array{total: float, meta: string}> $lines    Shipping lines.
+	 * @param string                                        $currency Order currency.
+	 * @param string                                        $base     Store currency.
+	 * @return bool
+	 */
+	public static function shipping_lines_ok( array $lines, $currency, $base ) {
+		$currency = RWGCM_Price_Book::normalize_currency( $currency );
+		if ( '' === $currency || $currency === RWGCM_Price_Book::normalize_currency( $base ) ) {
+			return true;
+		}
+		foreach ( $lines as $line ) {
+			$meta = isset( $line['meta'] ) ? RWGCM_Price_Book::normalize_currency( $line['meta'] ) : '';
+			if ( $meta !== $currency ) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Short reason for a method status, for the Shipping overview.
+	 *
+	 * @param array{priced: bool, reason: string, amount: string} $status Status.
+	 * @param string                                              $currency Currency.
+	 * @param string                                              $method_id Method id.
+	 * @return string
+	 */
+	public static function reason_label( array $status, $currency, $method_id = '' ) {
+		switch ( $status['reason'] ) {
+			case 'override':
+				return 'free_shipping' === $method_id
+					/* translators: 1: currency, 2: amount. */
+					? sprintf( __( 'minimum %1$s %2$s', 'reactwoo-geo-commerce' ), $currency, $status['amount'] )
+					: $currency . ' ' . $status['amount'];
+			case 'zero':
+				return __( 'free (no amount needed)', 'reactwoo-geo-commerce' );
+			case 'coupon_only':
+				return __( 'coupon only (no amount needed)', 'reactwoo-geo-commerce' );
+			case 'no_minimum':
+				return __( 'no minimum (no amount needed)', 'reactwoo-geo-commerce' );
+			case 'class_costs':
+				return __( 'has shipping-class costs (store currency only in 0.5.0)', 'reactwoo-geo-commerce' );
+			case 'unsupported':
+				return __( 'other or carrier method (store currency only)', 'reactwoo-geo-commerce' );
+			case 'missing':
+				/* translators: %s: currency code. */
+				return sprintf( __( 'no %s amount', 'reactwoo-geo-commerce' ), $currency );
+		}
+		return '';
+	}
+
+	/**
+	 * Read-only overview data: one row per zone method, one verdict per zone
+	 * and currency.
+	 *
+	 * @param array<int, array{id: int, name: string, methods: array<int, array<string, mixed>>}> $zones Zones (all methods, enabled flag included).
+	 * @param array<int, string>                                                                    $currencies Extra currencies.
+	 * @param string                                                                                $base Store currency.
+	 * @param bool                                                                                  $hide Hide unpriced methods.
+	 * @return array<int, array<string, mixed>>
+	 */
+	public static function overview( array $zones, array $currencies, $base, $hide ) {
+		$out = array();
+		foreach ( $zones as $zone ) {
+			$enabled = array();
+			$rows    = array();
+			foreach ( (array) $zone['methods'] as $m ) {
+				$cells = array();
+				foreach ( $currencies as $cur ) {
+					$st           = self::method_status( (string) $m['id'], (array) $m['settings'], $cur, $base );
+					$cells[ $cur ] = array(
+						'priced' => $st['priced'],
+						'label'  => self::reason_label( $st, $cur, (string) $m['id'] ),
+					);
+				}
+				$rows[] = array(
+					'title'       => (string) ( $m['title'] ?? $m['id'] ),
+					'id'          => (string) $m['id'],
+					'instance_id' => (int) ( $m['instance_id'] ?? 0 ),
+					'enabled'     => ! empty( $m['enabled'] ),
+					'cells'       => $cells,
+				);
+				if ( ! empty( $m['enabled'] ) ) {
+					$enabled[] = $m;
+				}
+			}
+			$verdicts = array();
+			foreach ( $currencies as $cur ) {
+				$verdicts[ $cur ] = empty( $enabled ) ? null : self::zones_priced( array( $enabled ), $cur, $base, $hide );
+			}
+			$out[] = array(
+				'id'       => (int) $zone['id'],
+				'name'     => (string) $zone['name'],
+				'rows'     => $rows,
+				'verdicts' => $verdicts,
+			);
+		}
+		return $out;
+	}
+
+	/**
+	 * Every zone including "Locations not covered by your other zones".
+	 *
+	 * @return array<int, array{id: int, name: string, methods: array<int, array<string, mixed>>}>
+	 */
+	public static function all_zones() {
+		$out = array();
+		if ( ! class_exists( 'WC_Shipping_Zones' ) ) {
+			return $out;
+		}
+		foreach ( WC_Shipping_Zones::get_zones( 'admin' ) as $data ) {
+			$zone  = WC_Shipping_Zones::get_zone( (int) $data['zone_id'] );
+			$out[] = array(
+				'id'      => (int) $data['zone_id'],
+				'name'    => (string) $data['zone_name'],
+				'methods' => self::zone_methods( $zone, false ),
+			);
+		}
+		$rest  = WC_Shipping_Zones::get_zone( 0 );
+		$out[] = array(
+			'id'      => 0,
+			'name'    => $rest && method_exists( $rest, 'get_zone_name' ) ? (string) $rest->get_zone_name() : __( 'Locations not covered by your other zones', 'reactwoo-geo-commerce' ),
+			'methods' => self::zone_methods( $rest, false ),
+		);
+		return $out;
+	}
+
+	/**
+	 * Tests: forget memoized zones.
+	 *
+	 * @return void
+	 */
+	public static function reset_memo() {
+		self::$memo = array();
+	}
+}

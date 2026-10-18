@@ -72,7 +72,7 @@ assert_true( 'filter passes non-array input through', 'x' === RWGCM_Shipping::fi
 $src = file_get_contents( dirname( __DIR__ ) . '/includes/class-rwgcm-shipping.php' );
 assert_true( 'hooked on woocommerce_cart_shipping_packages', false !== strpos( $src, "'woocommerce_cart_shipping_packages'" ) );
 $cur = file_get_contents( dirname( __DIR__ ) . '/includes/class-rwgcm-price-book-currency.php' );
-assert_true( 'shipping_priced docblock warns about free shipping min_amount', false !== strpos( $cur, 'min_amount' ) && false !== strpos( $cur, '0.5.0' ) );
+assert_true( 'shipping_priced default is computed from zones since 0.5.0', false !== strpos( $cur, 'RWGCM_Shipping_Prices::computed_priced( $currency, $packages )' ) && false !== strpos( $cur, 'Since 0.5.0' ) );
 
 echo "\n{$passed} passed, {$failed} failed\n";
 exit( $failed > 0 ? 1 : 0 );

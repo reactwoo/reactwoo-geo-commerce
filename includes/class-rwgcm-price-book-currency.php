@@ -66,6 +66,14 @@ class RWGCM_Price_Book_Currency {
 	private static $store_currency_writes = 0;
 
 	/**
+	 * Currency the cart would be in if shipping were priced in it ('' when
+	 * shipping did not decide the last resolution).
+	 *
+	 * @var string
+	 */
+	private static $shipping_fallback = '';
+
+	/**
 	 * @return void
 	 */
 	public static function init() {
@@ -499,6 +507,7 @@ class RWGCM_Price_Book_Currency {
 		if ( ! self::cart_is_ready() ) {
 			return $preferred;
 		}
+		self::$shipping_fallback = '';
 		$supports = self::cart_line_support( $preferred );
 		return RWGCM_Price_Book::currency_for_lines( $preferred, $base, $supports );
 	}
@@ -797,7 +806,10 @@ class RWGCM_Price_Book_Currency {
 			$supports[] = RWGCM_Price_Book::has_price( $book, $currency );
 		}
 		if ( ! empty( $supports ) ) {
-			$supports[] = RWGCM_Price_Book::shipping_supports_currency( $currency, self::base_currency(), self::cart_needs_shipping(), self::shipping_priced( $currency ) );
+			$shipping   = RWGCM_Price_Book::shipping_supports_currency( $currency, self::base_currency(), self::cart_needs_shipping(), self::shipping_priced( $currency ) );
+			$items_ok   = ! in_array( false, $supports, true );
+			$supports[] = $shipping;
+			self::$shipping_fallback = ( $items_ok && ! $shipping ) ? RWGCM_Price_Book::normalize_currency( $currency ) : '';
 		}
 		return $supports;
 	}
@@ -818,32 +830,81 @@ class RWGCM_Price_Book_Currency {
 	}
 
 	/**
-	 * Whether shipping rates are priced in a currency. Off by default:
-	 * WooCommerce shipping rates are entered in the store currency.
+	 * Currency that every cart line is priced in but shipping to the current
+	 * address is not, from the last resolution ('' when shipping did not
+	 * decide it). Used for the "prices shown in GBP" notice.
 	 *
-	 * @param string $currency Currency.
+	 * @return string
+	 */
+	public static function shipping_fallback_currency() {
+		return self::$shipping_fallback;
+	}
+
+	/**
+	 * Whether shipping is priced in a currency. The default is computed from
+	 * the zone configuration of the cart's shipping packages
+	 * (RWGCM_Shipping_Prices::computed_priced): every enabled method in each
+	 * matched zone has an amount for the currency (flat rate cost, free
+	 * shipping minimum, legacy local pickup cost), or needs none (coupon-only
+	 * free shipping, a zero cost). Partially priced zones keep the store
+	 * currency unless "hide unpriced methods" is on.
+	 *
+	 * @param string            $currency Currency.
+	 * @param array<mixed>|null $packages Packages, or null for the cart's.
 	 * @return bool
 	 */
-	public static function shipping_priced( $currency ) {
+	public static function shipping_priced( $currency, $packages = null ) {
 		if ( ! function_exists( 'apply_filters' ) ) {
 			return false;
 		}
+		if ( null === $packages ) {
+			$packages = self::cart_shipping_packages();
+		}
+		$packages = is_array( $packages ) ? $packages : array();
+		$computed = class_exists( 'RWGCM_Shipping_Prices', false ) && ! empty( $packages ) && RWGCM_Shipping_Prices::computed_priced( $currency, $packages );
 		/**
-		 * Return true when every shipping rate this site offers is entered
-		 * in $currency (for example a zone used only by that currency).
+		 * Whether shipping for these packages is priced in $currency.
 		 *
-		 * Warning (until 0.5.0 adds per-currency minimums): WooCommerce's
-		 * Free shipping "Minimum order amount" (min_amount) is a single
-		 * number entered in the store currency, but WooCommerce compares it
-		 * with the cart subtotal in the active currency
-		 * (WC_Shipping_Free_Shipping::is_available). With this filter on,
-		 * a R499 cart passes a "10" (meant as GBP 10) minimum. Do not return
-		 * true for a currency while a zone offers free shipping with a
-		 * minimum amount, unless that minimum was entered in that currency.
+		 * Since 0.5.0 the default is computed from the shipping zones (see
+		 * RWGCM_Shipping_Prices). Returning true declares that the rates for
+		 * these packages are amounts in $currency (the 0.4.5 contract); such
+		 * rates are tagged rwgcm_priced_source=filter on the order.
 		 *
-		 * @param bool   $priced   Default false.
-		 * @param string $currency Currency code.
+		 * @param bool         $priced   Computed default.
+		 * @param string       $currency Currency code.
+		 * @param array<mixed> $packages Shipping packages.
 		 */
-		return (bool) apply_filters( 'rwgcm_price_book_shipping_priced', false, $currency );
+		return (bool) apply_filters( 'rwgcm_price_book_shipping_priced', $computed, $currency, $packages );
+	}
+
+	/**
+	 * Destination-only package for the zone lookup. WC_Cart::get_shipping_packages()
+	 * is not used here: currency is resolved while WooCommerce is still
+	 * calculating line totals (it would read line_total before it exists), and
+	 * only the destination decides the zone. Rates themselves are still tagged
+	 * per real package in RWGCM_Shipping_Prices::filter_package_rates().
+	 *
+	 * @return array<mixed>
+	 */
+	private static function cart_shipping_packages() {
+		if ( ! self::cart_is_ready() || ! WC()->customer || ! method_exists( WC()->customer, 'get_shipping_country' ) ) {
+			return array();
+		}
+		$c = WC()->customer;
+		return array(
+			array(
+				'contents'      => array(),
+				'contents_cost' => 0,
+				'destination'   => array(
+					'country'   => (string) $c->get_shipping_country(),
+					'state'     => (string) $c->get_shipping_state(),
+					'postcode'  => (string) $c->get_shipping_postcode(),
+					'city'      => (string) $c->get_shipping_city(),
+					'address'   => (string) $c->get_shipping_address(),
+					'address_1' => (string) $c->get_shipping_address(),
+					'address_2' => (string) $c->get_shipping_address_2(),
+				),
+			),
+		);
 	}
 }

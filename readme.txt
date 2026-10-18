@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.4.8
+Stable tag: 0.5.0
 
 WooCommerce rules and personalization on ReactWoo Geo Core.
 
@@ -18,6 +18,15 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 2. Activate this plugin.
 
 == Changelog ==
+
+= 0.5.0 =
+* **Shipping in the visitor's currency:** Flat rate, Free shipping and (legacy) Local pickup methods get "Cost (ZAR)" / "Minimum order amount (ZAR)" fields for each price-book currency, under "Prices in other currencies (Geo Commerce)" in the method settings. WooCommerce's own cost formula ([qty], [cost], [fee]) and shipping tax run on the amount for the cart's currency. Admin screens and exports keep showing the store-currency values.
+* **Which carts switch:** A shipped cart uses the visitor's currency when every enabled method in its shipping zone has an amount in that currency (coupon-only free shipping and zero costs need none). Otherwise it stays in the store currency, as before. Flat rates with shipping-class costs, carrier and other methods stay store-currency only in this release. The `rwgcm_price_book_shipping_priced` filter now defaults to this computed answer and receives the packages as a third argument.
+* **Optional:** "Hide shipping methods not priced in the visitor's currency" (Price books) uses the visitor's currency when at least one method is priced and hides the others.
+* **Checkout guard:** Each order shipping line records the currency its amount was entered in (`rwgcm_priced_currency`); an order whose shipping was not priced in the order currency is refused.
+* **Address changes:** When the shipping address is in a zone not priced in the visitor's currency, the cart uses the store currency and the classic cart and checkout show "Prices are shown in GBP because shipping to … isn't priced in ZAR." for as long as that is the case. The Store API cart carries the same text in `extensions.rwgcm.shipping_currency_notice`.
+* **Admin:** New read-only Shipping tab on Price books: zones × methods × currencies, with the reason a zone stays in the store currency.
+* **Upgrade note:** Free shipping "Minimum order amount" is now compared with a per-currency minimum. If your site returned true from `rwgcm_price_book_shipping_priced`, its rates are still treated as priced (tagged `rwgcm_priced_source=filter`); enter per-currency amounts to drop the filter.
 
 = 0.4.8 =
 * **Payments by country:** The rwgcm-gateways log records each distinct fallback warning at most once a day (and once per request) instead of on every gateway check.

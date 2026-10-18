@@ -203,10 +203,18 @@ class RWGCM_Price_Book_Store_Api {
 			$variation = method_exists( $item, 'get_variation_id' ) ? (int) $item->get_variation_id() : 0;
 			$ids[]     = $variation > 0 ? $variation : (int) $item->get_product_id();
 		}
-		$base     = RWGCM_Price_Book_Currency::base_currency();
-		$shipping = method_exists( $order, 'get_shipping_total' ) && (float) $order->get_shipping_total() > 0;
+		$base  = RWGCM_Price_Book_Currency::base_currency();
+		$lines = array();
+		foreach ( $order->get_items( 'shipping' ) as $line ) {
+			if ( is_object( $line ) && method_exists( $line, 'get_meta' ) ) {
+				$lines[] = array(
+					'total' => method_exists( $line, 'get_total' ) ? (float) $line->get_total() : 0.0,
+					'meta'  => (string) $line->get_meta( RWGCM_Shipping_Prices::META_PRICED ),
+				);
+			}
+		}
 		if ( self::lines_priced_in( $ids, $order->get_currency(), $base, array( __CLASS__, 'line_priced_in' ) )
-			&& RWGCM_Price_Book::shipping_supports_currency( $order->get_currency(), $base, $shipping, RWGCM_Price_Book_Currency::shipping_priced( $order->get_currency() ) ) ) {
+			&& RWGCM_Shipping_Prices::shipping_lines_ok( $lines, $order->get_currency(), $base ) ) {
 			return;
 		}
 		if ( function_exists( 'wc_get_logger' ) ) {

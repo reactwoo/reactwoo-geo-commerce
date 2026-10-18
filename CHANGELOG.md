@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-18
+
+### Added
+- **Per-currency shipping amounts** (option A of `qa/2026-10-18-per-currency-shipping-scope.md`). `RWGCM_Shipping_Prices` adds `rwgcm_cost_{CUR}` (flat_rate, legacy local_pickup) and `rwgcm_min_amount_{CUR}` (free_shipping) instance fields for every price-book currency except the store currency, via `woocommerce_shipping_instance_form_fields_{id}`. They save and delete with the method and reuse WooCommerce's own `sanitize_callback`, so a formula is validated like the store-currency cost.
+- **Read-time swap** on `woocommerce_shipping_{id}_instance_option`: on the storefront and Store API, when the cart currency is not the store currency and an amount exists, `cost` / `min_amount` read as that amount. WooCommerce's formula, free-shipping check and shipping tax run unchanged. wp-admin, non-Store REST (exports), cron and CLI force the store currency and never see swapped values.
+- **Computed "shipping priced"**: `rwgcm_price_book_shipping_priced` defaults to a decision from the zone configuration (every enabled method in each matched zone priced; coupon-only / no-minimum free shipping and zero costs count as priced; flat rates with class costs and other or carrier methods do not). The filter gets `$packages` as a third argument and can still force the answer.
+- **Optional setting** `rwgcm_shipping_hide_unpriced` (Price books → "Hide shipping methods not priced in the visitor's currency", default off; filter `rwgcm_shipping_hide_unpriced`): a zone counts as priced when at least one method is priced, and unpriced rates are hidden in that currency (never all of them). Changing it flushes WooCommerce's rate cache.
+- **Rate and order line meta** `rwgcm_priced_currency` (and `rwgcm_priced_source=filter` when the site filter declared an otherwise unpriced rate). WooCommerce copies rate meta to the order shipping line for classic and block checkout; it also appears in Store API `shipping_rates[].meta_data`.
+- **Shipping-currency notice**: while a cart is held in the store currency because shipping to its address is not priced in the visitor's currency, the classic cart and checkout show "Prices are shown in GBP because shipping to … isn't priced in ZAR." It is rendered from the current state on every page load and checkout refresh (`update_order_review` fragment `.rwgcm-shipping-currency-notice--checkout`; on the cart inside the totals), so it shows on first load, never duplicates, and disappears when the cart is priced again. Visitors whose currency is the store currency never see it. Store API carts expose `extensions.rwgcm.shipping_fallback_currency` and `shipping_currency_notice`.
+- **Price books → Shipping tab** (read-only): zones × methods × currencies, with amounts, reasons and a per-zone verdict; uses the Payments matrix layout (sticky first column, horizontal scroll).
+
+### Changed
+- **Checkout guard**: a non-store-currency order passes only when every shipping line is tagged with the order currency, instead of the site-wide `shipping_priced()` yes/no.
+- The currency resolver looks up the zone from the customer's shipping destination instead of `WC_Cart::get_shipping_packages()`, which read `line_total` before WooCommerce had calculated it.
+
+### Not in this release (see the scope doc)
+- Per-currency flat-rate shipping-class costs, block-checkout "Local pickup" (pickup_location) costs, exchange-rate conversion and carrier conversion, coupon minimum amounts per currency.
+
 ## [0.4.8] - 2026-10-18
 
 ### Changed
