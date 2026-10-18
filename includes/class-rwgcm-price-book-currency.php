@@ -832,6 +832,15 @@ class RWGCM_Price_Book_Currency {
 		 * Return true when every shipping rate this site offers is entered
 		 * in $currency (for example a zone used only by that currency).
 		 *
+		 * Warning (until 0.5.0 adds per-currency minimums): WooCommerce's
+		 * Free shipping "Minimum order amount" (min_amount) is a single
+		 * number entered in the store currency, but WooCommerce compares it
+		 * with the cart subtotal in the active currency
+		 * (WC_Shipping_Free_Shipping::is_available). With this filter on,
+		 * a R499 cart passes a "10" (meant as GBP 10) minimum. Do not return
+		 * true for a currency while a zone offers free shipping with a
+		 * minimum amount, unless that minimum was entered in that currency.
+		 *
 		 * @param bool   $priced   Default false.
 		 * @param string $currency Currency code.
 		 */

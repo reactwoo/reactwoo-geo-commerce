@@ -340,10 +340,10 @@ assert_true(
 $plugin = file_get_contents( dirname( __DIR__ ) . '/reactwoo-geo-commerce.php' );
 $readme = file_get_contents( dirname( __DIR__ ) . '/readme.txt' );
 assert_true(
-	'the plugin version is 0.4.5',
-	is_string( $plugin ) && false !== strpos( $plugin, 'Version: 0.4.5' ) && false !== strpos( $plugin, "define( 'RWGCM_VERSION', '0.4.5' )" )
+	'the plugin version is 0.4.7',
+	is_string( $plugin ) && false !== strpos( $plugin, 'Version: 0.4.7' ) && false !== strpos( $plugin, "define( 'RWGCM_VERSION', '0.4.7' )" )
 );
-assert_true( 'the readme stable tag is 0.4.5', is_string( $readme ) && false !== strpos( $readme, 'Stable tag: 0.4.5' ) );
+assert_true( 'the readme stable tag is 0.4.7', is_string( $readme ) && false !== strpos( $readme, 'Stable tag: 0.4.7' ) );
 
 echo "\n{$passed} passed, {$failed} failed\n";
 exit( $failed > 0 ? 1 : 0 );

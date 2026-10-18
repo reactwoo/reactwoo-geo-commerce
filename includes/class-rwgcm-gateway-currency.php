@@ -42,6 +42,40 @@ class RWGCM_Gateway_Currency {
 		add_filter( 'woocommerce_currency', array( __CLASS__, 'filter_currency' ), 30 );
 		add_filter( 'woocommerce_available_payment_gateways', array( __CLASS__, 'filter_gateways' ), 30 );
 		add_filter( self::PAYSTACK_CURRENCIES_FILTER, array( __CLASS__, 'filter_paystack_supported_currencies' ) );
+		add_filter( 'woocommerce_no_available_payment_methods_message', array( __CLASS__, 'filter_no_methods_message' ), 20 );
+	}
+
+	/**
+	 * Gateways removed by currency lists on this request.
+	 *
+	 * @var array<int, string>
+	 */
+	private static $removed_for_currency = array();
+
+	/**
+	 * Classic checkout: say why nothing is offered when the currency lists
+	 * removed every available gateway.
+	 *
+	 * @param mixed $message WooCommerce message.
+	 * @return mixed
+	 */
+	public static function filter_no_methods_message( $message ) {
+		if ( empty( self::$removed_for_currency ) || ! function_exists( 'get_woocommerce_currency' ) ) {
+			return $message;
+		}
+		return self::no_methods_message( get_woocommerce_currency() );
+	}
+
+	/**
+	 * @param string $currency Currency.
+	 * @return string
+	 */
+	public static function no_methods_message( $currency ) {
+		return sprintf(
+			/* translators: %s: currency code, for example ZAR. */
+			__( 'No payment method can take payments in %s right now. Please contact us to complete your order.', '[REDACTED]-geo-commerce' ),
+			RWGCM_Price_Book::normalize_currency( $currency )
+		);
 	}
 
 	/**
@@ -71,7 +105,12 @@ class RWGCM_Gateway_Currency {
 		if ( '' === $currency ) {
 			return $gateways;
 		}
-		return self::select_for_currency( $gateways, $currency, self::stored_currencies() );
+		$out = self::select_for_currency( $gateways, $currency, self::stored_currencies() );
+		self::$removed_for_currency = empty( $out ) ? array_map( 'strval', array_keys( $gateways ) ) : array();
+		if ( empty( $out ) && ! empty( $gateways ) && function_exists( 'wc_get_logger' ) ) {
+			wc_get_logger()->warning( 'Payments by country: no available gateway is allowed for ' . $currency . ' (removed: ' . implode( ', ', array_keys( $gateways ) ) . ').', array( 'source' => 'rwgcm-gateways' ) );
+		}
+		return $out;
 	}
 
 	/**
