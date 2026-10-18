@@ -53,11 +53,12 @@ class RW_Response { public $d; public function __construct( $d ) { $this->d = $d
 class RW_Request { public $r; public function __construct( $r ) { $this->r = $r; } public function get_route() { return $this->r; } } // phpcs:ignore
 /** Order stand-ins. */
 class RW_Item { public $p; public function __construct( $p ) { $this->p = $p; } public function get_product_id() { return $this->p; } public function get_variation_id() { return 0; } public function get_meta( $k ) { unset( $k ); return ''; } } // phpcs:ignore
-class RW_Order { public $c; public $i; public function __construct( $c, $ids ) { $this->c = $c; $this->i = array_map( function ( $p ) { return new RW_Item( $p ); }, $ids ); } public function get_currency() { return $this->c; } public function get_items( $t ) { unset( $t ); return $this->i; } } // phpcs:ignore
+class RW_Order { public $c; public $i; public function __construct( $c, $ids ) { $this->c = $c; $this->i = array_map( function ( $p ) { return new RW_Item( $p ); }, $ids ); } public function get_currency() { return $this->c; } public function get_items( $t ) { return 'shipping' === $t ? array() : $this->i; } } // phpcs:ignore
 
 require_once dirname( __DIR__ ) . '/includes/class-rwgcm-price-book.php';
 require_once dirname( __DIR__ ) . '/includes/class-rwgcm-price-book-currency.php';
 require_once dirname( __DIR__ ) . '/includes/class-rwgcm-price-book-apply.php';
+require_once dirname( __DIR__ ) . '/includes/class-rwgcm-shipping-prices.php';
 require_once dirname( __DIR__ ) . '/includes/class-rwgcm-price-book-store-api.php';
 
 $passed = 0;

@@ -58,6 +58,7 @@ function WC() { // phpcs:ignore
 
 require_once dirname( __DIR__ ) . '/includes/class-rwgcm-price-book.php';
 require_once dirname( __DIR__ ) . '/includes/class-rwgcm-price-book-currency.php';
+require_once dirname( __DIR__ ) . '/includes/class-rwgcm-shipping-prices.php';
 require_once dirname( __DIR__ ) . '/includes/class-rwgcm-price-book-store-api.php';
 
 $passed = 0;
@@ -159,7 +160,8 @@ rw_cart( array() ); $GLOBALS['rw']['ship'] = true;
 assert_true( 'empty cart still shows the geo currency (catalog)', 'ZAR' === rw_currency() );
 
 /** Order stand-in with shipping. */
-class RW_ShipOrder { public $c; public $s; public function __construct( $c, $s ) { $this->c = $c; $this->s = $s; } public function get_currency() { return $this->c; } public function get_shipping_total() { return $this->s; } public function get_items( $t ) { unset( $t ); return array( new class() { public function get_product_id() { return 3655; } public function get_variation_id() { return 0; } public function get_meta( $k ) { unset( $k ); return ''; } } ); } } // phpcs:ignore
+class RW_ShipLine { public $t; public $m; public function __construct( $t, $m ) { $this->t = $t; $this->m = $m; } public function get_total() { return $this->t; } public function get_meta( $k ) { return 'rwgcm_priced_currency' === $k ? $this->m : ''; } } // phpcs:ignore
+class RW_ShipOrder { public $c; public $s; public $m; public function __construct( $c, $s, $m = '' ) { $this->c = $c; $this->s = $s; $this->m = $m; } public function get_currency() { return $this->c; } public function get_shipping_total() { return $this->s; } public function get_items( $t ) { if ( 'shipping' === $t ) { return (float) $this->s > 0 || '' !== $this->m ? array( new RW_ShipLine( (float) $this->s, $this->m ) ) : array(); } return array( new class() { public function get_product_id() { return 3655; } public function get_variation_id() { return 0; } public function get_meta( $k ) { unset( $k ); return ''; } } ); } } // phpcs:ignore
 $threw = false;
 try { RWGCM_Price_Book_Store_Api::guard_order_currency( new RW_ShipOrder( 'ZAR', '73.23' ) ); } catch ( Exception $e ) { $threw = true; } // phpcs:ignore
 assert_true( 'guard: ZAR order with store-currency shipping is refused', $threw );
@@ -169,6 +171,15 @@ assert_true( 'guard: ZAR order without shipping passes', ! $threw );
 $threw = false;
 try { RWGCM_Price_Book_Store_Api::guard_order_currency( new RW_ShipOrder( 'GBP', '19.90' ) ); } catch ( Exception $e ) { $threw = true; } // phpcs:ignore
 assert_true( 'guard: GBP order with shipping passes', ! $threw );
+$threw = false;
+try { RWGCM_Price_Book_Store_Api::guard_order_currency( new RW_ShipOrder( 'ZAR', '150', 'ZAR' ) ); } catch ( Exception $e ) { $threw = true; } // phpcs:ignore
+assert_true( 'guard 0.5.0: ZAR order whose shipping line is priced in ZAR passes', ! $threw );
+$threw = false;
+try { RWGCM_Price_Book_Store_Api::guard_order_currency( new RW_ShipOrder( 'ZAR', '10', 'GBP' ) ); } catch ( Exception $e ) { $threw = true; } // phpcs:ignore
+assert_true( 'guard 0.5.0: ZAR order with a GBP-priced shipping line is refused', $threw );
+$threw = false;
+try { RWGCM_Price_Book_Store_Api::guard_order_currency( new RW_ShipOrder( 'ZAR', '0', 'GBP' ) ); } catch ( Exception $e ) { $threw = true; } // phpcs:ignore
+assert_true( 'guard 0.5.0: a free line priced in GBP (unpriced free-shipping minimum) is refused too', $threw );
 
 echo "\n{$passed} passed, {$failed} failed\n";
 exit( $failed > 0 ? 1 : 0 );
