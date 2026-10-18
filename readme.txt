@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.4.7
+Stable tag: 0.4.8
 
 WooCommerce rules and personalization on ReactWoo Geo Core.
 
@@ -18,6 +18,11 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 2. Activate this plugin.
 
 == Changelog ==
+
+= 0.4.8 =
+* **Payments by country:** The rwgcm-gateways log records each distinct fallback warning at most once a day (and once per request) instead of on every gateway check.
+* **Admin:** New "Log payment-rule fallbacks" checkbox on Payments by country (on by default), and a `rwgcm_log_gateway_warnings` filter, to turn these warnings off.
+* **i18n:** Fixed the text domain on four strings added in 0.4.5 and 0.4.7.
 
 = 0.4.7 =
 * **Payments by country:** Rules only narrow the gateways WooCommerce already offers. A country rule whose gateways are all disabled or unavailable no longer empties checkout: the available gateways allowed for the cart currency are offered instead. Currency lists are never relaxed. If no gateway can take the currency, classic checkout says so.

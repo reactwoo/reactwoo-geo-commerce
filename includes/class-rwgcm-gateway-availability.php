@@ -50,10 +50,13 @@ class RWGCM_Gateway_Availability {
 		$rules   = self::stored_rules();
 		$allowed = self::resolve_allowed_ids( $country, $rules, self::matching_group_gateway_lists( $country, $rules ) );
 		$result  = self::apply_country_rule( $gateways, $allowed, self::currency_eligible( $gateways ) );
-		if ( $result['fallback'] && function_exists( 'wc_get_logger' ) ) {
-			wc_get_logger()->warning(
-				sprintf( 'Payments by country: the %s rule allows only %s, and none of those is available in WooCommerce (disabled or not available). Every available gateway is offered instead.', $country, implode( ', ', (array) $allowed ) ),
-				array( 'source' => 'rwgcm-gateways' )
+		if ( $result['fallback'] && class_exists( 'RWGCM_Gateway_Log', false ) ) {
+			RWGCM_Gateway_Log::warn(
+				'fallback',
+				$country,
+				function_exists( 'get_woocommerce_currency' ) ? (string) get_woocommerce_currency() : '',
+				array_merge( array_map( static function ( $id ) { return 'rule:' . $id; }, (array) $allowed ), array_map( static function ( $id ) { return 'offered:' . $id; }, array_keys( $result['gateways'] ) ) ),
+				sprintf( 'Payments by country: the %s rule allows only %s, and none of those is available in WooCommerce (disabled or not available). Every available gateway is offered instead.', $country, implode( ', ', (array) $allowed ) )
 			);
 		}
 		return $result['gateways'];

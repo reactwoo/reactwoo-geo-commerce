@@ -107,8 +107,14 @@ class RWGCM_Gateway_Currency {
 		}
 		$out = self::select_for_currency( $gateways, $currency, self::stored_currencies() );
 		self::$removed_for_currency = empty( $out ) ? array_map( 'strval', array_keys( $gateways ) ) : array();
-		if ( empty( $out ) && ! empty( $gateways ) && function_exists( 'wc_get_logger' ) ) {
-			wc_get_logger()->warning( 'Payments by country: no available gateway is allowed for ' . $currency . ' (removed: ' . implode( ', ', array_keys( $gateways ) ) . ').', array( 'source' => 'rwgcm-gateways' ) );
+		if ( empty( $out ) && ! empty( $gateways ) && class_exists( 'RWGCM_Gateway_Log', false ) ) {
+			RWGCM_Gateway_Log::warn(
+				'no_gateway_for_currency',
+				'',
+				$currency,
+				array_map( 'strval', array_keys( $gateways ) ),
+				'Payments by country: no available gateway is allowed for ' . $currency . ' (removed: ' . implode( ', ', array_keys( $gateways ) ) . ').'
+			);
 		}
 		return $out;
 	}

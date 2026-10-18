@@ -182,6 +182,9 @@ class RWGCM_Price_Book_Admin {
 			);
 			update_option( RWGCM_Gateway_Availability::OPTION_KEY, $merged, false );
 		}
+		if ( isset( $_POST['rwgcm_gateway_log_present'] ) ) {
+			RWGCM_Gateway_Log::save_setting( ! empty( $_POST['rwgcm_gateway_log_warnings'] ) );
+		}
 		if ( isset( $_POST['rwgcm_gateway_currencies_present'] ) ) {
 			$currency_raw = array();
 			if ( isset( $_POST['rwgcm_gateway_currencies'] ) && is_array( $_POST['rwgcm_gateway_currencies'] ) ) {
@@ -268,6 +271,8 @@ class RWGCM_Price_Book_Admin {
 			return;
 		}
 		echo '<input type="hidden" name="rwgcm_gateway_rules_present" value="1" />';
+		echo '<input type="hidden" name="rwgcm_gateway_log_present" value="1" />';
+		echo '<p class="rwgcm-gateway-log-setting"><label style="display:inline-flex;align-items:flex-start;gap:8px;max-width:100%;line-height:1.5;"><input type="checkbox" name="rwgcm_gateway_log_warnings" value="1" style="margin-top:3px;flex:none;"' . ( 'no' !== get_option( RWGCM_Gateway_Log::OPTION_ENABLED, 'yes' ) ? ' checked="checked"' : '' ) . ' /> <span>' . esc_html__( 'Log payment-rule fallbacks', 'reactwoo-geo-commerce' ) . ' <span class="description">' . esc_html__( '(WooCommerce → Status → Logs, source rwgcm-gateways; each distinct warning at most once a day)', 'reactwoo-geo-commerce' ) . '</span></span></label></p>';
 		foreach ( array_keys( $choices ) as $id ) {
 			echo '<input type="hidden" name="rwgcm_gateway_shown[]" value="' . esc_attr( $id ) . '" />';
 		}

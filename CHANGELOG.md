@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.8] - 2026-10-18
+
+### Changed
+- Payment-rule warnings in the `rwgcm-gateways` log are de-duplicated: each distinct warning (type, country, currency, gateway set) is logged at most once per 24 hours and once per request.
+
+### Added
+- "Log payment-rule fallbacks" checkbox on Payments by country (default on) and the `rwgcm_log_gateway_warnings` filter (default `true`).
+
+### Fixed
+- Text domain on four strings added in 0.4.5 and 0.4.7.
+
 ## [0.4.7] - 2026-10-18
 
 ### Fixed
