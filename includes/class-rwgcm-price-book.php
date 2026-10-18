@@ -220,6 +220,48 @@ class RWGCM_Price_Book {
 	}
 
 	/**
+	 * Default checkout country for a customer who has not chosen one: the
+	 * geo country when the store sells there, otherwise WooCommerce's own
+	 * default.
+	 *
+	 * @param string            $geo_country Geo Core visitor ISO2.
+	 * @param array<int|string> $allowed     Allowed ISO2 codes (list or code => name).
+	 * @param string            $wc_default  WooCommerce default.
+	 * @return string
+	 */
+	public static function default_checkout_country( $geo_country, array $allowed, $wc_default ) {
+		$geo = self::normalize_country( $geo_country );
+		if ( '' === $geo ) {
+			return (string) $wc_default;
+		}
+		$codes = array();
+		foreach ( $allowed as $key => $value ) {
+			$codes[] = self::normalize_country( is_string( $key ) ? $key : $value );
+		}
+		return in_array( $geo, $codes, true ) ? $geo : (string) $wc_default;
+	}
+
+	/**
+	 * Billing country the customer actually set: posted this request, then
+	 * remembered from a checkout or Store API update, then (cart and
+	 * checkout only) the saved account country. A pre-filled default is
+	 * never one of these, so it never overrides the geo currency.
+	 *
+	 * @param string $posted        Posted billing country.
+	 * @param string $remembered    Session-remembered billing country.
+	 * @param string $account       Saved account billing country (logged in).
+	 * @param bool   $checkout_flow Cart, checkout, or Store API cart/checkout.
+	 * @return string
+	 */
+	public static function chosen_billing_country( $posted, $remembered, $account, $checkout_flow ) {
+		$country = self::effective_billing_country( $posted, $remembered, $checkout_flow );
+		if ( '' !== $country ) {
+			return $country;
+		}
+		return $checkout_flow ? self::normalize_country( $account ) : '';
+	}
+
+	/**
 	 * @param mixed $code Raw code.
 	 * @return string Uppercase ISO 4217 or empty.
 	 */
@@ -351,6 +393,27 @@ class RWGCM_Price_Book {
 			}
 		}
 		return $preferred;
+	}
+
+	/**
+	 * Shipping rates are entered in the store currency (flat rate, Royal
+	 * Mail, and so on) and Commerce has no per-currency shipping prices. A
+	 * cart that needs shipping therefore cannot be charged in another
+	 * currency unless the site says its shipping is priced in it
+	 * (filter rwgcm_price_book_shipping_priced).
+	 *
+	 * @param string $currency        Preferred currency.
+	 * @param string $base            Store currency.
+	 * @param bool   $needs_shipping  Cart needs shipping.
+	 * @param bool   $shipping_priced Shipping is priced in $currency.
+	 * @return bool True when shipping supports $currency.
+	 */
+	public static function shipping_supports_currency( $currency, $base, $needs_shipping, $shipping_priced ) {
+		$currency = self::normalize_currency( $currency );
+		if ( '' === $currency || $currency === self::normalize_currency( $base ) ) {
+			return true;
+		}
+		return ! $needs_shipping || (bool) $shipping_priced;
 	}
 
 	/**
