@@ -85,6 +85,11 @@ class RWGCM_Price_Book_Currency {
 		add_action( 'woocommerce_checkout_update_customer', array( __CLASS__, 'remember_checkout_billing' ), 10, 2 );
 		add_action( 'woocommerce_store_api_checkout_update_customer_from_request', array( __CLASS__, 'remember_store_api_billing' ), 10, 2 );
 		add_action( 'woocommerce_store_api_cart_update_customer_from_request', array( __CLASS__, 'remember_store_api_billing' ), 10, 2 );
+		// The shipping calculator updates the customer, then the cart page renders.
+		// WooCommerce writes that session at shutdown, after the response is flushed,
+		// so a fragment request started from the response still sees the previous
+		// country. Persist it now, before any HTML is sent.
+		add_action( 'woocommerce_calculated_shipping', array( __CLASS__, 'persist_customer_session' ), 99 );
 		add_action( 'litespeed_init', array( __CLASS__, 'register_litespeed_vary' ), 20 );
 		add_action( 'wp', array( __CLASS__, 'mark_transactional_pages_uncached' ) );
 		add_action( 'woocommerce_before_product_object_save', array( __CLASS__, 'begin_store_currency_write' ), 0 );
@@ -679,6 +684,26 @@ class RWGCM_Price_Book_Currency {
 			return '';
 		}
 		return RWGCM_Price_Book::normalize_currency( $subscription->get_currency() );
+	}
+
+	/**
+	 * Write the customer session before the calculator response is flushed.
+	 *
+	 * get_refreshed_fragments then resolves currency from the same shipping
+	 * country the cart totals request just rendered, not from the geo default
+	 * still sitting in the previous session row.
+	 *
+	 * @return void
+	 */
+	public static function persist_customer_session() {
+		if ( ! function_exists( 'WC' ) ) {
+			return;
+		}
+		$wc = WC();
+		if ( ! $wc || ! $wc->session || ! method_exists( $wc->session, 'save_data' ) ) {
+			return;
+		}
+		$wc->session->save_data();
 	}
 
 	/**
