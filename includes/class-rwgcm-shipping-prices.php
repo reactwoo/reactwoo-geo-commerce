@@ -262,7 +262,87 @@ class RWGCM_Shipping_Prices {
 	}
 
 	/**
+	 * Selectors for a theme header amount that is not inside
+	 * div.widget_shopping_cart_content. WooCommerce only refreshes the widget.
+	 * A selector already present (the theme built it) is left alone.
+	 *
+	 * @return array<int, string>
+	 */
+	public static function header_cart_fragment_selectors() {
+		$defaults = array(
+			'a.cart-contents',
+			'.site-header-cart a.cart-contents',
+		);
+		$selectors = function_exists( 'apply_filters' ) ? apply_filters( 'rwgcm_header_cart_fragment_selectors', $defaults ) : $defaults;
+		if ( ! is_array( $selectors ) ) {
+			return $defaults;
+		}
+		$out = array();
+		foreach ( $selectors as $selector ) {
+			if ( is_string( $selector ) && '' !== $selector ) {
+				$out[] = $selector;
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * @param string $selector CSS selector.
+	 * @return string Last class token, or "amount".
+	 */
+	public static function fragment_class_from_selector( $selector ) {
+		if ( preg_match_all( '/\.([_a-zA-Z][_a-zA-Z0-9-]*)/', (string) $selector, $matches ) && ! empty( $matches[1] ) ) {
+			return (string) $matches[1][ count( $matches[1] ) - 1 ];
+		}
+		return 'amount';
+	}
+
+	/**
+	 * Header amount markup for one selector. $total and $count are passed in
+	 * so a theme fragment can be built without another cart read.
+	 *
+	 * @param string $selector CSS selector.
+	 * @param string $currency Active currency.
+	 * @param string $total    Formatted subtotal HTML.
+	 * @param string $count    Item count.
+	 * @return string
+	 */
+	public static function header_cart_fragment_html( $selector, $currency, $total, $count ) {
+		$currency = RWGCM_Price_Book::normalize_currency( (string) $currency );
+		$class    = self::fragment_class_from_selector( $selector );
+		$marker   = '<span class="rwgcm-mini-cart-currency" data-currency="' . esc_attr( $currency ) . '" hidden></span>';
+		if ( false !== strpos( (string) $selector, 'cart-contents' ) ) {
+			return '<a class="' . esc_attr( $class ) . '" href="#" data-rwgcm-currency="' . esc_attr( $currency ) . '"><span class="count">' . esc_html( (string) $count ) . '</span>' . (string) $total . $marker . '</a>';
+		}
+		return '<span class="' . esc_attr( $class ) . '" data-rwgcm-currency="' . esc_attr( $currency ) . '">' . (string) $total . $marker . '</span>';
+	}
+
+	/**
+	 * Add header fragments the theme did not already register.
+	 *
+	 * @param array<string, string> $fragments Fragments.
+	 * @param string                $currency  Active currency.
+	 * @param string                $total     Formatted subtotal HTML.
+	 * @param string                $count     Item count.
+	 * @return array<string, string>
+	 */
+	public static function append_header_cart_fragments( array $fragments, $currency, $total, $count ) {
+		foreach ( self::header_cart_fragment_selectors() as $selector ) {
+			if ( isset( $fragments[ $selector ] ) ) {
+				continue;
+			}
+			$fragments[ $selector ] = self::header_cart_fragment_html( $selector, $currency, $total, $count );
+		}
+		return $fragments;
+	}
+
+	/**
 	 * Stamp the active currency onto refreshed cart fragments.
+	 *
+	 * The currency is whatever get_woocommerce_currency() resolved for this
+	 * request. On get_refreshed_fragments that is the cart's shipping
+	 * destination (persisted in woocommerce_calculated_shipping), the same
+	 * input the cart totals request used.
 	 *
 	 * @param mixed $fragments Fragments.
 	 * @return mixed
@@ -283,51 +363,86 @@ class RWGCM_Shipping_Prices {
 				$fragments[ $key ] = $updated;
 			}
 		}
+		$total = '';
+		$count = '';
+		if ( function_exists( 'WC' ) && WC() && WC()->cart ) {
+			if ( method_exists( WC()->cart, 'get_cart_subtotal' ) ) {
+				$total = (string) WC()->cart->get_cart_subtotal();
+			}
+			if ( method_exists( WC()->cart, 'get_cart_contents_count' ) ) {
+				$count = (string) (int) WC()->cart->get_cart_contents_count();
+			}
+		}
+		if ( '' !== $total ) {
+			$fragments = self::append_header_cart_fragments( $fragments, $currency, $total, $count );
+		}
 		return $fragments;
 	}
 
 	/**
-	 * WooCommerce's fragment script has to be present so wc_fragment_refresh
-	 * has a listener. Printed later from the footer so a missing handle cannot
-	 * drop it.
+	 * Own footer script, dependent on jQuery. wc-cart-fragments is not
+	 * enqueued on the cart page, so triggering wc_fragment_refresh alone
+	 * never sends get_refreshed_fragments.
 	 *
 	 * @return void
 	 */
 	public static function enqueue_cart_fragment_refresh() {
-		if ( ! function_exists( 'is_cart' ) || ! is_cart() || ! function_exists( 'wp_enqueue_script' ) ) {
+		if ( ! function_exists( 'is_cart' ) || ! is_cart() ) {
 			return;
 		}
-		wp_enqueue_script( 'wc-cart-fragments' );
+		if ( ! function_exists( 'wp_register_script' ) || ! function_exists( 'wp_enqueue_script' ) || ! function_exists( 'wp_add_inline_script' ) ) {
+			return;
+		}
+		$ver = defined( 'RWGCM_VERSION' ) ? RWGCM_VERSION : '0.5.1';
+		wp_register_script( 'rwgcm-cart-fragments', false, array( 'jquery' ), $ver, true );
+		wp_enqueue_script( 'rwgcm-cart-fragments' );
+		wp_add_inline_script( 'rwgcm-cart-fragments', self::cart_fragment_refresh_script() );
 	}
 
 	/**
+	 * Fallback when the handle was not printed with the footer scripts.
+	 *
 	 * @return void
 	 */
 	public static function print_cart_fragment_refresh_script() {
 		if ( ! function_exists( 'is_cart' ) || ! is_cart() ) {
 			return;
 		}
+		if ( function_exists( 'wp_script_is' ) && wp_script_is( 'rwgcm-cart-fragments', 'done' ) ) {
+			return;
+		}
 		echo '<script>' . self::cart_fragment_refresh_script() . '</script>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- script is a static string with no user input.
 	}
 
 	/**
-	 * Debounced refresh for every cart-totals update and every shipping
-	 * calculator submit. A later event resets the timer, so this is not a
-	 * one-shot. When the currency in the new totals differs from the one we
-	 * stored, cached wc_fragments_* entries are dropped first.
+	 * Posts get_refreshed_fragments after each cart-totals refresh.
+	 *
+	 * Bound with jQuery on document.body, because WooCommerce triggers
+	 * updated_cart_totals, updated_shipping_method and updated_wc_div with
+	 * jQuery. The calculator submit does not send: that request has not
+	 * saved the shipping country yet. A fragment response must not arm the
+	 * debounce again (that cleared the timer before it fired). A switch
+	 * that arrives while a request is in flight queues one more send.
 	 *
 	 * @return string
 	 */
 	public static function cart_fragment_refresh_script() {
 		return <<<'JS'
 jQuery(function($){
-  var timer=null;
-  function schedule(){
+  var timer=null,inflight=null,again=false;
+  function arm(){
     if(timer){window.clearTimeout(timer);}
-    timer=window.setTimeout(refresh,50);
+    timer=window.setTimeout(send,80);
   }
-  function refresh(){
+  function endpoint(){
+    var params=window.wc_cart_fragments_params||window.wc_cart_params||{};
+    var url=params.wc_ajax_url?String(params.wc_ajax_url):(window.location.pathname+'?wc-ajax=%%endpoint%%');
+    return url.replace('%%endpoint%%','get_refreshed_fragments');
+  }
+  function send(){
     timer=null;
+    if(inflight){again=true;return;}
+    again=false;
     var el=document.querySelector('.cart_totals [data-rwgcm-currency]');
     var currency=el?(el.getAttribute('data-rwgcm-currency')||''):'';
     try{
@@ -342,14 +457,37 @@ jQuery(function($){
       }
       if(currency){sessionStorage.setItem('rwgcm_cart_currency',currency);}
     }catch(err){}
-    $(document.body).trigger('wc_fragment_refresh');
+    inflight=$.ajax({url:endpoint(),type:'POST',data:{time:new Date().getTime()}});
+    inflight.done(function(data){
+      if(!data||!data.fragments){return;}
+      $.each(data.fragments,function(sel,html){
+        var nodes=$(sel);
+        if(nodes.length){nodes.replaceWith(html);}
+      });
+      try{
+        var stored=window.wc_cart_fragments_params;
+        if(stored&&data.cart_hash){
+          sessionStorage.setItem(stored.fragment_name,JSON.stringify(data.fragments));
+          sessionStorage.setItem(stored.cart_hash_key,data.cart_hash);
+          localStorage.setItem(stored.cart_hash_key,data.cart_hash);
+        }
+      }catch(err2){}
+      $(document.body).trigger('wc_fragments_refreshed');
+    });
+    inflight.always(function(){
+      inflight=null;
+      if(again){arm();}
+    });
   }
-  $(document.body).on('updated_cart_totals updated_shipping_method updated_wc_div',schedule);
-  $(document.body).on('submit','form.woocommerce-shipping-calculator',schedule);
+  $(document.body).on('updated_cart_totals updated_shipping_method updated_wc_div',arm);
+  $(document.body).on('submit','form.woocommerce-shipping-calculator',function(){
+    // The calculator has not saved the shipping country yet.
+  });
   $(document).ajaxComplete(function(event,xhr,settings){
     var data=settings&&settings.data?String(settings.data):'';
     var url=settings&&settings.url?String(settings.url):'';
-    if(data.indexOf('calc_shipping')!==-1||url.indexOf('update_shipping_method')!==-1){schedule();}
+    if(url.indexOf('get_refreshed_fragments')!==-1){return;}
+    if(data.indexOf('calc_shipping')!==-1||url.indexOf('update_shipping_method')!==-1){arm();}
   });
 });
 JS;

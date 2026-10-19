@@ -30,6 +30,9 @@ function get_current_user_id() { return $GLOBALS['rw']['user']; } // phpcs:ignor
 function get_user_meta( $id, $k, $s = false ) { unset( $s ); return isset( $GLOBALS['rw']['meta'][ $id ][ $k ] ) ? $GLOBALS['rw']['meta'][ $id ][ $k ] : ''; } // phpcs:ignore
 function get_post_meta( $id, $k, $s = false ) { unset( $k, $s ); return isset( $GLOBALS['rw']['books'][ $id ] ) ? $GLOBALS['rw']['books'][ $id ] : ''; } // phpcs:ignore
 function get_option( $k, $d = false ) { // phpcs:ignore
+	if ( isset( $GLOBALS['rw']['opts'] ) && array_key_exists( $k, $GLOBALS['rw']['opts'] ) ) {
+		return $GLOBALS['rw']['opts'][ $k ];
+	}
 	$o = array(
 		'woocommerce_currency'               => 'GBP',
 		'rwgcm_price_book_country_map'       => array( 'ZA' => 'ZAR', 'GB' => 'GBP', 'DE' => 'EUR', 'US' => 'USD' ),
@@ -37,12 +40,21 @@ function get_option( $k, $d = false ) { // phpcs:ignore
 	);
 	return isset( $o[ $k ] ) ? $o[ $k ] : $d;
 }
+function wp_json_encode( $v ) { return json_encode( $v ); } // phpcs:ignore
 /** WC stand-ins. */
-class RW_Session { public function get( $k ) { return isset( $GLOBALS['rw']['session'][ $k ] ) ? $GLOBALS['rw']['session'][ $k ] : null; } public function set( $k, $v ) { $GLOBALS['rw']['session'][ $k ] = $v; } } // phpcs:ignore
+class RW_Session { public $saved = 0; public function get( $k ) { return isset( $GLOBALS['rw']['session'][ $k ] ) ? $GLOBALS['rw']['session'][ $k ] : null; } public function set( $k, $v ) { $GLOBALS['rw']['session'][ $k ] = $v; } public function save_data() { ++$this->saved; } } // phpcs:ignore
 class RW_Cart { public function get_cart() { return $GLOBALS['rw']['cart']; } public function needs_shipping() { return ! empty( $GLOBALS['rw']['ship'] ); } } // phpcs:ignore
 class RW_Countries { public function get_allowed_countries() { return $GLOBALS['rw']['allowed']; } public function get_shipping_countries() { return $GLOBALS['rw']['allowed']; } } // phpcs:ignore
 /** Guest customer pre-filled from the store base country, as WooCommerce does. */
-class RW_Customer { public function get_billing_country() { return 'GB'; } } // phpcs:ignore
+class RW_Customer { // phpcs:ignore
+	public function get_billing_country() { return 'GB'; }
+	public function get_shipping_country() { return isset( $GLOBALS['rw']['ship_country'] ) ? (string) $GLOBALS['rw']['ship_country'] : ''; }
+	public function get_shipping_state() { return ''; }
+	public function get_shipping_postcode() { return ''; }
+	public function get_shipping_city() { return ''; }
+	public function get_shipping_address() { return ''; }
+	public function get_shipping_address_2() { return ''; }
+}
 class RW_P { public $id; public function __construct( $id ) { $this->id = $id; } public function get_id() { return $this->id; } } // phpcs:ignore
 function WC() { // phpcs:ignore
 	static $wc = null;
@@ -180,6 +192,24 @@ assert_true( 'guard 0.5.0: ZAR order with a GBP-priced shipping line is refused'
 $threw = false;
 try { RWGCM_Price_Book_Store_Api::guard_order_currency( new RW_ShipOrder( 'ZAR', '0', 'GBP' ) ); } catch ( Exception $e ) { $threw = true; } // phpcs:ignore
 assert_true( 'guard 0.5.0: a free line priced in GBP (unpriced free-shipping minimum) is refused too', $threw );
+
+// 8. Fragment refresh uses the customer shipping country the calculator saved,
+// not the geo visitor country. ZA shipping is priced in ZAR; GB shipping is not.
+class RW_DestMethod { public $id; public $instance_id; public $enabled = 'yes'; public function __construct( $id, $i ) { $this->id = $id; $this->instance_id = $i; } public function get_method_title() { return $this->id; } } // phpcs:ignore
+class RW_DestZone { public $m; public function __construct( $m ) { $this->m = $m; } public function get_shipping_methods( $enabled_only = false ) { unset( $enabled_only ); return $this->m; } } // phpcs:ignore
+class WC_Shipping_Zones { public static function get_zone_matching_package( $p ) { $c = isset( $p['destination']['country'] ) ? $p['destination']['country'] : ''; if ( 'ZA' === $c ) { return new RW_DestZone( array( new RW_DestMethod( 'flat_rate', 1 ) ) ); } if ( 'GB' === $c ) { return new RW_DestZone( array( new RW_DestMethod( 'flat_rate', 9 ) ) ); } return new RW_DestZone( array( new RW_DestMethod( 'custom_carrier', 8 ) ) ); } } // phpcs:ignore
+rw_reset(); rw_books(); rw_cart( array( 3655 ) ); $GLOBALS['rw']['ship'] = true;
+$GLOBALS['rw']['opts']['woocommerce_flat_rate_1_settings'] = array( 'cost' => '40', 'rwgcm_cost_ZAR' => '800' );
+$GLOBALS['rw']['opts']['woocommerce_flat_rate_9_settings'] = array( 'cost' => '5' );
+$GLOBALS['rw']['ship_country'] = 'ZA';
+RWGCM_Shipping_Prices::reset_memo();
+assert_true( 'fragment currency: geo ZA and shipping ZA (priced) stays ZAR', 'ZAR' === rw_currency() );
+$GLOBALS['rw']['ship_country'] = 'GB';
+RWGCM_Shipping_Prices::reset_memo();
+assert_true( 'fragment currency: geo ZA and calculator shipping GB (not priced in ZAR) is GBP, same as cart totals', 'GBP' === rw_currency() );
+$before = WC()->session->saved;
+RWGCM_Price_Book_Currency::persist_customer_session();
+assert_true( 'calculator writes the customer session before the response is flushed', WC()->session->saved === $before + 1 );
 
 echo "\n{$passed} passed, {$failed} failed\n";
 exit( $failed > 0 ? 1 : 0 );
