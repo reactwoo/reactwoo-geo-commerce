@@ -21,7 +21,7 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 
 = 0.5.1 =
 * **Cart notice:** On the classic cart, "Prices are shown in GBP because shipping to … isn't priced in ZAR." is a row inside the cart totals. The shipping calculator replaces that totals block, so the notice stays there, shows once, and goes away when the cart is priced in the visitor currency again. Checkout is unchanged.
-* **Mini-cart:** The cart hash and refreshed fragments include the active currency, and the classic cart asks WooCommerce to reload header fragments after the shipping calculator updates, so the mini-cart does not keep the previous currency's amount.
+* **Mini-cart:** The cart hash and refreshed fragments include the active currency. Each shipping-calculator submit, and each cart totals refresh, schedules another header fragment reload (debounced, not once per page). A currency change also drops cached `wc_fragments_*` session data, so the mini-cart does not keep the previous amount.
 
 = 0.5.0 =
 * **Shipping in the visitor's currency:** Flat rate, Free shipping and (legacy) Local pickup methods get "Cost (ZAR)" / "Minimum order amount (ZAR)" fields for each price-book currency, under "Prices in other currencies (Geo Commerce)" in the method settings. WooCommerce's own cost formula ([qty], [cost], [fee]) and shipping tax run on the amount for the cart's currency. Admin screens and exports keep showing the store-currency values.

@@ -224,7 +224,17 @@ $frags = $S::filter_cart_fragments( $frags );
 assert_true( 'mini-cart fragment follows a currency switch', false !== strpos( $frags['div.widget_shopping_cart_content'], 'data-currency="ZAR"' ) && 1 === substr_count( $frags['div.widget_shopping_cart_content'], 'rwgcm-mini-cart-currency' ) );
 assert_true( 'cart fragments: non-array passes through', 'x' === $S::filter_cart_fragments( 'x' ) );
 $script = $S::cart_fragment_refresh_script();
-assert_true( 'cart page refreshes header fragments after the shipping calculator', false !== strpos( $script, "trigger('wc_fragment_refresh')" ) && false !== strpos( $script, 'updated_shipping_method' ) && false !== strpos( $script, 'updated_cart_totals' ) && false !== strpos( $script, 'updated_wc_div' ) );
+assert_true(
+	'cart refresh listens for every totals event and the calculator submit',
+	false !== strpos( $script, "trigger('wc_fragment_refresh')" )
+		&& false !== strpos( $script, 'updated_cart_totals' )
+		&& false !== strpos( $script, 'updated_shipping_method' )
+		&& false !== strpos( $script, 'updated_wc_div' )
+		&& false !== strpos( $script, 'form.woocommerce-shipping-calculator' )
+);
+assert_true( 'cart refresh is debounced, not a one-shot flag', false !== strpos( $script, 'clearTimeout' ) && false !== strpos( $script, 'setTimeout' ) && false === strpos( $script, 'var fired' ) && false === strpos( $script, 'var done' ) );
+assert_true( 'a currency change drops cached wc_fragments sessionStorage', false !== strpos( $script, "key.indexOf('wc_fragments')" ) && false !== strpos( $script, 'sessionStorage.removeItem' ) && false !== strpos( $script, 'data-rwgcm-currency' ) );
+assert_true( 'totals carry the active currency for the fragment script', false !== strpos( $S::cart_currency_marker_html( 'ZAR' ), 'data-rwgcm-currency="ZAR"' ) && false === strpos( $S::cart_currency_marker_html( 'GBP' ), 'woocommerce-info' ) );
 assert_true( 'notice copy', 'Prices are shown in GBP because shipping to United Kingdom isn’t priced in ZAR.' === $S::fallback_notice( 'ZAR', 'GBP', 'United Kingdom' ) );
 assert_true( 'notice copy without a country', false !== strpos( $S::fallback_notice( 'ZAR', 'GBP', '' ), 'this address' ) );
 
@@ -297,6 +307,7 @@ assert_true( 'no one-shot wc_add_notice / session state any more', false === str
 assert_true( 'checkout: rendered on page load and in update_order_review fragments', false !== strpos( $src, "'woocommerce_before_checkout_form', array( __CLASS__, 'render_checkout_notice' )" ) && false !== strpos( $src, "'woocommerce_update_order_review_fragments', array( __CLASS__, 'filter_checkout_fragments' )" ) );
 assert_true( 'cart: rendered inside the totals table, not as a WooCommerce notice', false !== strpos( $src, "'woocommerce_cart_totals_after_order_total', array( __CLASS__, 'render_cart_notice' )" ) && false === strpos( $src, 'woocommerce_before_cart_totals' ) );
 assert_true( 'mini-cart cache key includes the active currency', false !== strpos( $src, "'woocommerce_cart_hash', array( __CLASS__, 'filter_cart_hash' )" ) && false !== strpos( $src, "'woocommerce_add_to_cart_fragments', array( __CLASS__, 'filter_cart_fragments' )" ) );
+assert_true( 'cart refresh script is printed in the footer on every cart view', false !== strpos( $src, "'wp_footer', array( __CLASS__, 'print_cart_fragment_refresh_script' )" ) );
 assert_true( 'Store API extension data unchanged', false !== strpos( $src, "'shipping_currency_notice'   => '' === \$now['state'] ? ''" ) );
 assert_true( 'plugin loads and inits RWGCM_Shipping_Prices', false !== strpos( $plug, 'class-rwgcm-shipping-prices.php' ) && false !== strpos( $plug, 'RWGCM_Shipping_Prices::init();' ) );
 assert_true( 'guard uses shipping line meta', false !== strpos( $guard, 'RWGCM_Shipping_Prices::shipping_lines_ok( $lines' ) && false === strpos( $guard, 'shipping_priced(' ) );

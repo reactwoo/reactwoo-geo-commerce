@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Classic cart shipping-currency notice.** The "Prices are shown in GBP because shipping to … isn't priced in ZAR." line is a row on `woocommerce_cart_totals_after_order_total`, inside the totals markup the shipping calculator replaces. It is not a WooCommerce notice, so cart.js no longer moves it to the top notice wrapper. It is rendered once while the cart is held in the store currency, and omitted when the cart is priced in the visitor currency again. Checkout still uses the `.rwgcm-shipping-currency-notice--checkout` fragment.
-- **Header mini-cart after a currency switch.** `woocommerce_cart_hash` includes the active currency, and refreshed cart fragments carry it, so a cached mini-cart from the previous currency is not reused. On the classic cart, a shipping-calculator update triggers `wc_fragment_refresh`.
+- **Header mini-cart after a currency switch.** `woocommerce_cart_hash` and `woocommerce_add_to_cart_fragments` include the active currency, so `wc-cart-fragments` cannot reuse a sessionStorage mini-cart from the previous currency. On the classic cart, `updated_cart_totals`, `updated_shipping_method`, `updated_wc_div`, and each shipping-calculator submit schedule a debounced `wc_fragment_refresh`. When the currency in the new totals differs, cached `wc_fragments_*` sessionStorage entries are removed first.
 
 ## [0.5.0] - 2026-10-18
 

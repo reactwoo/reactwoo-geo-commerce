@@ -68,9 +68,11 @@ class RWGCM_Shipping_Prices {
 		// Not a .woocommerce-info: that class is lifted into the top notice wrapper
 		// after update_cart / the shipping calculator.
 		add_action( 'woocommerce_cart_totals_after_order_total', array( __CLASS__, 'render_cart_notice' ) );
+		add_action( 'woocommerce_cart_totals_after_order_total', array( __CLASS__, 'render_cart_currency_marker' ), 11 );
 		add_filter( 'woocommerce_cart_hash', array( __CLASS__, 'filter_cart_hash' ) );
 		add_filter( 'woocommerce_add_to_cart_fragments', array( __CLASS__, 'filter_cart_fragments' ) );
-		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueue_cart_fragment_refresh' ) );
+		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueue_cart_fragment_refresh' ), 30 );
+		add_action( 'wp_footer', array( __CLASS__, 'print_cart_fragment_refresh_script' ), 20 );
 		add_action( 'update_option_' . self::OPTION_HIDE_UNPRICED, array( __CLASS__, 'flush_rate_cache' ) );
 		add_action( 'add_option_' . self::OPTION_HIDE_UNPRICED, array( __CLASS__, 'flush_rate_cache' ) );
 		if ( function_exists( 'did_action' ) && did_action( 'woocommerce_blocks_loaded' ) ) {
@@ -216,6 +218,25 @@ class RWGCM_Shipping_Prices {
 	}
 
 	/**
+	 * Always inside the replaced totals, including when the notice itself is omitted.
+	 *
+	 * @param string $currency Active currency.
+	 * @return string
+	 */
+	public static function cart_currency_marker_html( $currency ) {
+		$currency = RWGCM_Price_Book::normalize_currency( (string) $currency );
+		return '<tr class="rwgcm-cart-currency-row" hidden><td colspan="2"><span class="rwgcm-cart-currency" data-rwgcm-currency="' . esc_attr( $currency ) . '" hidden></span></td></tr>';
+	}
+
+	/**
+	 * @return void
+	 */
+	public static function render_cart_currency_marker() {
+		$currency = function_exists( 'get_woocommerce_currency' ) ? (string) get_woocommerce_currency() : '';
+		echo self::cart_currency_marker_html( $currency ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the helper.
+	}
+
+	/**
 	 * Cart-fragment session storage is keyed by this hash. Including the
 	 * active currency makes a currency switch (including a shipping-calculator
 	 * country change) miss the cached mini-cart.
@@ -266,25 +287,72 @@ class RWGCM_Shipping_Prices {
 	}
 
 	/**
-	 * After the classic cart replaces its totals, ask WooCommerce to reload
-	 * header fragments. The new cart hash then fetches a mini-cart in the
-	 * active currency.
+	 * WooCommerce's fragment script has to be present so wc_fragment_refresh
+	 * has a listener. Printed later from the footer so a missing handle cannot
+	 * drop it.
 	 *
 	 * @return void
 	 */
 	public static function enqueue_cart_fragment_refresh() {
-		if ( ! function_exists( 'is_cart' ) || ! is_cart() || ! function_exists( 'wp_enqueue_script' ) || ! function_exists( 'wp_add_inline_script' ) ) {
+		if ( ! function_exists( 'is_cart' ) || ! is_cart() || ! function_exists( 'wp_enqueue_script' ) ) {
 			return;
 		}
 		wp_enqueue_script( 'wc-cart-fragments' );
-		wp_add_inline_script( 'wc-cart-fragments', self::cart_fragment_refresh_script() );
 	}
 
 	/**
+	 * @return void
+	 */
+	public static function print_cart_fragment_refresh_script() {
+		if ( ! function_exists( 'is_cart' ) || ! is_cart() ) {
+			return;
+		}
+		echo '<script>' . self::cart_fragment_refresh_script() . '</script>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- script is a static string with no user input.
+	}
+
+	/**
+	 * Debounced refresh for every cart-totals update and every shipping
+	 * calculator submit. A later event resets the timer, so this is not a
+	 * one-shot. When the currency in the new totals differs from the one we
+	 * stored, cached wc_fragments_* entries are dropped first.
+	 *
 	 * @return string
 	 */
 	public static function cart_fragment_refresh_script() {
-		return '(function($){if(!$){return;}function refresh(){$(document.body).trigger(\'wc_fragment_refresh\');}$(document.body).on(\'updated_wc_div updated_cart_totals updated_shipping_method\',refresh);})(window.jQuery);';
+		return <<<'JS'
+jQuery(function($){
+  var timer=null;
+  function schedule(){
+    if(timer){window.clearTimeout(timer);}
+    timer=window.setTimeout(refresh,50);
+  }
+  function refresh(){
+    timer=null;
+    var el=document.querySelector('.cart_totals [data-rwgcm-currency]');
+    var currency=el?(el.getAttribute('data-rwgcm-currency')||''):'';
+    try{
+      var previous=sessionStorage.getItem('rwgcm_cart_currency')||'';
+      if(currency&&previous&&currency!==previous){
+        var drop=[];
+        for(var i=0;i<sessionStorage.length;i++){
+          var key=sessionStorage.key(i);
+          if(key&&key.indexOf('wc_fragments')===0){drop.push(key);}
+        }
+        for(var j=0;j<drop.length;j++){sessionStorage.removeItem(drop[j]);}
+      }
+      if(currency){sessionStorage.setItem('rwgcm_cart_currency',currency);}
+    }catch(err){}
+    $(document.body).trigger('wc_fragment_refresh');
+  }
+  $(document.body).on('updated_cart_totals updated_shipping_method updated_wc_div',schedule);
+  $(document.body).on('submit','form.woocommerce-shipping-calculator',schedule);
+  $(document).ajaxComplete(function(event,xhr,settings){
+    var data=settings&&settings.data?String(settings.data):'';
+    var url=settings&&settings.url?String(settings.url):'';
+    if(data.indexOf('calc_shipping')!==-1||url.indexOf('update_shipping_method')!==-1){schedule();}
+  });
+});
+JS;
 	}
 
 	/**

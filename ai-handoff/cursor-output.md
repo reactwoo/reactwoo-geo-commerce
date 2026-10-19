@@ -30,7 +30,7 @@ php -l includes/class-rwgcm-shipping-prices.php
 php tests/*.php
 ```
 
-475 passed, 0 failed.
+479 passed, 0 failed. The mini-cart refresh is debounced on every totals event and calculator submit, and a currency change drops cached wc_fragments sessionStorage.
 
 ## Remaining errors
 
