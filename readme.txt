@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.5.0
+Stable tag: 0.5.1
 
 WooCommerce rules and personalization on ReactWoo Geo Core.
 
@@ -18,6 +18,10 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 2. Activate this plugin.
 
 == Changelog ==
+
+= 0.5.1 =
+* **Cart notice:** On the classic cart, "Prices are shown in GBP because shipping to … isn't priced in ZAR." is a row inside the cart totals. The shipping calculator replaces that totals block, so the notice stays there, shows once, and goes away when the cart is priced in the visitor currency again. Checkout is unchanged.
+* **Mini-cart:** The cart hash and refreshed fragments include the active currency, and the classic cart asks WooCommerce to reload header fragments after the shipping calculator updates, so the mini-cart does not keep the previous currency's amount.
 
 = 0.5.0 =
 * **Shipping in the visitor's currency:** Flat rate, Free shipping and (legacy) Local pickup methods get "Cost (ZAR)" / "Minimum order amount (ZAR)" fields for each price-book currency, under "Prices in other currencies (Geo Commerce)" in the method settings. WooCommerce's own cost formula ([qty], [cost], [fee]) and shipping tax run on the amount for the cart's currency. Admin screens and exports keep showing the store-currency values.

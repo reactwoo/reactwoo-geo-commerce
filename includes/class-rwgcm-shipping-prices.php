@@ -64,7 +64,13 @@ class RWGCM_Shipping_Prices {
 		// classic cart / checkout render and checkout fragment refresh.
 		add_action( 'woocommerce_before_checkout_form', array( __CLASS__, 'render_checkout_notice' ), 11 );
 		add_filter( 'woocommerce_update_order_review_fragments', array( __CLASS__, 'filter_checkout_fragments' ) );
-		add_action( 'woocommerce_before_cart_totals', array( __CLASS__, 'render_cart_notice' ) );
+		// Inside the cart totals table, which cart.js replaces as a whole.
+		// Not a .woocommerce-info: that class is lifted into the top notice wrapper
+		// after update_cart / the shipping calculator.
+		add_action( 'woocommerce_cart_totals_after_order_total', array( __CLASS__, 'render_cart_notice' ) );
+		add_filter( 'woocommerce_cart_hash', array( __CLASS__, 'filter_cart_hash' ) );
+		add_filter( 'woocommerce_add_to_cart_fragments', array( __CLASS__, 'filter_cart_fragments' ) );
+		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueue_cart_fragment_refresh' ) );
 		add_action( 'update_option_' . self::OPTION_HIDE_UNPRICED, array( __CLASS__, 'flush_rate_cache' ) );
 		add_action( 'add_option_' . self::OPTION_HIDE_UNPRICED, array( __CLASS__, 'flush_rate_cache' ) );
 		if ( function_exists( 'did_action' ) && did_action( 'woocommerce_blocks_loaded' ) ) {
@@ -152,16 +158,24 @@ class RWGCM_Shipping_Prices {
 	}
 
 	/**
-	 * One wrapper element, always present (empty when there is nothing to
-	 * say) so checkout fragment refreshes replace it in place: one notice,
-	 * no duplicates, gone when the cart is priced again.
+	 * Checkout: one wrapper, always present (empty when there is nothing to
+	 * say) so update_order_review replaces it in place.
+	 * Cart: a single row inside the totals table, omitted when there is
+	 * nothing to say. It is not a WooCommerce notice, so cart.js does not
+	 * move it to the top notice wrapper when it replaces the totals.
 	 *
 	 * @param string $message Notice text or ''.
 	 * @param string $context checkout or cart.
 	 * @return string
 	 */
 	public static function notice_html( $message, $context = 'checkout' ) {
-		$class = 'rwgcm-shipping-currency-notice rwgcm-shipping-currency-notice--' . ( 'cart' === $context ? 'cart' : 'checkout' );
+		if ( 'cart' === $context ) {
+			if ( '' === (string) $message ) {
+				return '';
+			}
+			return '<tr class="rwgcm-shipping-currency-notice rwgcm-shipping-currency-notice--cart"><td colspan="2" role="status">' . esc_html( $message ) . '</td></tr>';
+		}
+		$class = 'rwgcm-shipping-currency-notice rwgcm-shipping-currency-notice--checkout';
 		if ( '' === $message ) {
 			return '<div class="' . esc_attr( $class ) . '"></div>';
 		}
@@ -192,13 +206,85 @@ class RWGCM_Shipping_Prices {
 	}
 
 	/**
-	 * Classic cart page, inside .cart_totals so WooCommerce's cart refresh
-	 * (quantity change, shipping calculator) re-renders it.
+	 * Classic cart page, inside the cart totals table so the shipping
+	 * calculator's totals replacement includes it.
 	 *
 	 * @return void
 	 */
 	public static function render_cart_notice() {
 		echo self::notice_html( self::current_notice(), 'cart' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in notice_html().
+	}
+
+	/**
+	 * Cart-fragment session storage is keyed by this hash. Including the
+	 * active currency makes a currency switch (including a shipping-calculator
+	 * country change) miss the cached mini-cart.
+	 *
+	 * @param mixed $hash WooCommerce cart hash.
+	 * @return string
+	 */
+	public static function filter_cart_hash( $hash ) {
+		if ( ! function_exists( 'get_woocommerce_currency' ) ) {
+			return is_string( $hash ) ? $hash : '';
+		}
+		return self::hash_with_currency( $hash, get_woocommerce_currency() );
+	}
+
+	/**
+	 * @param mixed  $hash     WooCommerce cart hash.
+	 * @param string $currency Active currency.
+	 * @return string
+	 */
+	public static function hash_with_currency( $hash, $currency ) {
+		$hash = is_string( $hash ) ? $hash : '';
+		return $hash . '|rwgcm:' . RWGCM_Price_Book::normalize_currency( (string) $currency );
+	}
+
+	/**
+	 * Stamp the active currency onto refreshed cart fragments.
+	 *
+	 * @param mixed $fragments Fragments.
+	 * @return mixed
+	 */
+	public static function filter_cart_fragments( $fragments ) {
+		if ( ! is_array( $fragments ) ) {
+			return $fragments;
+		}
+		$currency = function_exists( 'get_woocommerce_currency' ) ? RWGCM_Price_Book::normalize_currency( (string) get_woocommerce_currency() ) : '';
+		$marker   = '<span class="rwgcm-mini-cart-currency" data-currency="' . esc_attr( $currency ) . '" hidden></span>';
+		$fragments['span.rwgcm-mini-cart-currency'] = $marker;
+		$key = 'div.widget_shopping_cart_content';
+		if ( isset( $fragments[ $key ] ) && is_string( $fragments[ $key ] ) ) {
+			$without = preg_replace( '/<span class="rwgcm-mini-cart-currency" data-currency="[^"]*" hidden><\/span>/', '', $fragments[ $key ] );
+			$html    = is_string( $without ) ? $without : $fragments[ $key ];
+			$updated = preg_replace( '/(<div\b[^>]*widget_shopping_cart_content[^>]*>)/', '$1' . $marker, $html, 1 );
+			if ( is_string( $updated ) ) {
+				$fragments[ $key ] = $updated;
+			}
+		}
+		return $fragments;
+	}
+
+	/**
+	 * After the classic cart replaces its totals, ask WooCommerce to reload
+	 * header fragments. The new cart hash then fetches a mini-cart in the
+	 * active currency.
+	 *
+	 * @return void
+	 */
+	public static function enqueue_cart_fragment_refresh() {
+		if ( ! function_exists( 'is_cart' ) || ! is_cart() || ! function_exists( 'wp_enqueue_script' ) || ! function_exists( 'wp_add_inline_script' ) ) {
+			return;
+		}
+		wp_enqueue_script( 'wc-cart-fragments' );
+		wp_add_inline_script( 'wc-cart-fragments', self::cart_fragment_refresh_script() );
+	}
+
+	/**
+	 * @return string
+	 */
+	public static function cart_fragment_refresh_script() {
+		return '(function($){if(!$){return;}function refresh(){$(document.body).trigger(\'wc_fragment_refresh\');}$(document.body).on(\'updated_wc_div updated_cart_totals updated_shipping_method\',refresh);})(window.jQuery);';
 	}
 
 	/**

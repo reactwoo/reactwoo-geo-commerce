@@ -183,6 +183,17 @@ assert_true( 'fallback: stays on every render (persistent)', $S::current_notice(
 $h = $S::notice_html( $S::current_notice(), 'checkout' );
 assert_true( 'fallback: one woocommerce-info inside one wrapper', 1 === substr_count( $h, 'woocommerce-info' ) && 1 === substr_count( $h, 'rwgcm-shipping-currency-notice--checkout' ) );
 assert_true( 'cart wrapper class', false !== strpos( $S::notice_html( 'x', 'cart' ), 'rwgcm-shipping-currency-notice--cart' ) );
+$cart_row = $S::notice_html( $S::current_notice(), 'cart' );
+assert_true(
+	'cart notice is one totals row and not a WooCommerce notice',
+	1 === substr_count( $cart_row, 'rwgcm-shipping-currency-notice--cart' )
+		&& 0 === strpos( $cart_row, '<tr ' )
+		&& false === strpos( $cart_row, 'woocommerce-info' )
+		&& false === strpos( $cart_row, 'woocommerce-message' )
+		&& false === strpos( $cart_row, 'woocommerce-error' )
+		&& false !== strpos( $cart_row, 'Prices are shown in GBP' )
+);
+assert_true( 'cart notice markup is absent when there is nothing to say', '' === $S::notice_html( '', 'cart' ) );
 assert_true( 'notice text is escaped', false === strpos( $S::notice_html( '<b>x</b>' ), '<b>' ) );
 $fr = $S::filter_checkout_fragments( array( '.woocommerce-checkout-review-order-table' => 'T' ) );
 assert_true( 'fragments: wrapper replaced in place by its own selector', isset( $fr['.rwgcm-shipping-currency-notice--checkout'] ) && false !== strpos( $fr['.rwgcm-shipping-currency-notice--checkout'], 'Prices are shown' ) && 'T' === $fr['.woocommerce-checkout-review-order-table'] );
@@ -195,6 +206,25 @@ $rp->setValue( null, 'ZAR' );
 assert_true( 'admin context: no notice', '' === $S::current_notice() );
 $GLOBALS['rw_admin'] = false;
 $rp->setValue( null, '' );
+assert_true( 'cart notice disappears when the cart is priced in the visitor currency', '' === $S::notice_html( $S::current_notice(), 'cart' ) );
+$GLOBALS['rw_currency'] = 'ZAR';
+$hz = $S::filter_cart_hash( 'abc' );
+$GLOBALS['rw_currency'] = 'GBP';
+$hg = $S::filter_cart_hash( 'abc' );
+assert_true( 'cart hash keeps the WooCommerce hash and adds the active currency', 0 === strpos( $hz, 'abc|rwgcm:ZAR' ) && 'abc|rwgcm:GBP' === $hg && $hz !== $hg );
+$frags = $S::filter_cart_fragments( array( 'div.widget_shopping_cart_content' => '<div class="widget_shopping_cart_content">x</div>' ) );
+assert_true(
+	'mini-cart fragment records the active currency',
+	isset( $frags['span.rwgcm-mini-cart-currency'] )
+		&& false !== strpos( $frags['span.rwgcm-mini-cart-currency'], 'data-currency="GBP"' )
+		&& false !== strpos( $frags['div.widget_shopping_cart_content'], 'data-currency="GBP"' )
+);
+$GLOBALS['rw_currency'] = 'ZAR';
+$frags = $S::filter_cart_fragments( $frags );
+assert_true( 'mini-cart fragment follows a currency switch', false !== strpos( $frags['div.widget_shopping_cart_content'], 'data-currency="ZAR"' ) && 1 === substr_count( $frags['div.widget_shopping_cart_content'], 'rwgcm-mini-cart-currency' ) );
+assert_true( 'cart fragments: non-array passes through', 'x' === $S::filter_cart_fragments( 'x' ) );
+$script = $S::cart_fragment_refresh_script();
+assert_true( 'cart page refreshes header fragments after the shipping calculator', false !== strpos( $script, "trigger('wc_fragment_refresh')" ) && false !== strpos( $script, 'updated_shipping_method' ) && false !== strpos( $script, 'updated_cart_totals' ) && false !== strpos( $script, 'updated_wc_div' ) );
 assert_true( 'notice copy', 'Prices are shown in GBP because shipping to United Kingdom isn’t priced in ZAR.' === $S::fallback_notice( 'ZAR', 'GBP', 'United Kingdom' ) );
 assert_true( 'notice copy without a country', false !== strpos( $S::fallback_notice( 'ZAR', 'GBP', '' ), 'this address' ) );
 
@@ -265,7 +295,8 @@ assert_true( 'hide setting change flushes the rate cache', false !== strpos( $sr
 assert_true( 'Store API extension data registered', false !== strpos( $src, "'namespace'       => 'rwgcm'" ) );
 assert_true( 'no one-shot wc_add_notice / session state any more', false === strpos( $src, 'wc_add_notice' ) && false === strpos( $src, 'SESSION_FALLBACK' ) );
 assert_true( 'checkout: rendered on page load and in update_order_review fragments', false !== strpos( $src, "'woocommerce_before_checkout_form', array( __CLASS__, 'render_checkout_notice' )" ) && false !== strpos( $src, "'woocommerce_update_order_review_fragments', array( __CLASS__, 'filter_checkout_fragments' )" ) );
-assert_true( 'cart: rendered inside cart totals (refreshed by cart updates)', false !== strpos( $src, "'woocommerce_before_cart_totals', array( __CLASS__, 'render_cart_notice' )" ) );
+assert_true( 'cart: rendered inside the totals table, not as a WooCommerce notice', false !== strpos( $src, "'woocommerce_cart_totals_after_order_total', array( __CLASS__, 'render_cart_notice' )" ) && false === strpos( $src, 'woocommerce_before_cart_totals' ) );
+assert_true( 'mini-cart cache key includes the active currency', false !== strpos( $src, "'woocommerce_cart_hash', array( __CLASS__, 'filter_cart_hash' )" ) && false !== strpos( $src, "'woocommerce_add_to_cart_fragments', array( __CLASS__, 'filter_cart_fragments' )" ) );
 assert_true( 'Store API extension data unchanged', false !== strpos( $src, "'shipping_currency_notice'   => '' === \$now['state'] ? ''" ) );
 assert_true( 'plugin loads and inits RWGCM_Shipping_Prices', false !== strpos( $plug, 'class-rwgcm-shipping-prices.php' ) && false !== strpos( $plug, 'RWGCM_Shipping_Prices::init();' ) );
 assert_true( 'guard uses shipping line meta', false !== strpos( $guard, 'RWGCM_Shipping_Prices::shipping_lines_ok( $lines' ) && false === strpos( $guard, 'shipping_priced(' ) );

@@ -6,38 +6,31 @@ needs-review
 
 ## Summary
 
-Payments by country in 0.4.4 re-reads `woocommerce_payment_gateways` when the admin screen renders, lists any gateway WooCommerce’s registry missed, and warns that checkout cannot offer that gateway until WooCommerce registers it. A summary names every gateway, and the country column stays visible while the table scrolls. Checkout still uses WooCommerce’s own list. Not merged and not tagged.
+0.5.1 puts the classic-cart shipping-currency notice inside the cart totals table, as our own row, so the shipping calculator replaces it with the totals and cart.js does not move it to the top notice wrapper. Checkout still uses the checkout fragment. The cart hash and refreshed fragments include the active currency, and the classic cart triggers a header fragment refresh after the calculator updates. Draft PR only. Not merged and not tagged.
 
 ## Files changed
 
 | File | Reason |
 |------|--------|
-| includes/class-rwgcm-gateway-availability.php | Admin-only fallback instances, recorded fallback ids, checkout warning text |
-| includes/class-rwgcm-price-book-admin.php | Gateway summary, matrix wrapper, warning notice |
-| admin/css/rwgcm-admin.css | Sticky country column |
-| tests/test-gateway-fallback.php | Filter-only gateway is listed, and the warning names it |
-| reactwoo-geo-commerce.php, readme.txt, CHANGELOG.md | Version 0.4.4 |
+| includes/class-rwgcm-shipping-prices.php | Cart totals row, cart hash, fragments, fragment-refresh script |
+| tests/test-shipping-prices.php | Cart notice, hash, and fragment coverage |
+| tests/test-gateway-fallback.php | Version assertion is 0.5.1 |
+| reactwoo-geo-commerce.php, readme.txt, CHANGELOG.md | Version 0.5.1 |
 
 ## What was not changed
 
-- Checkout `filter_gateways()` still only sees the gateways WooCommerce passes in
-- Store currency is not forced, and the matrix is not transposed
-- No diagnostic for `wc_payment_gateways_initialized` before `plugins_loaded`
+- Checkout notice markup and `woocommerce_update_order_review_fragments`
+- Store API `shipping_currency_notice`
 - No merge and no tag
 
 ## Commands run
 
 ```bash
-php -l includes/class-rwgcm-gateway-availability.php
-php -l includes/class-rwgcm-price-book-admin.php
-php tests/test-gateway-fallback.php
-php tests/test-admin-nav.php
-php tests/test-gateway-currency.php
-php tests/test-price-book.php
-php tests/test-rules-unified.php
+php -l includes/class-rwgcm-shipping-prices.php
+php tests/*.php
 ```
 
-php -l: no syntax errors. Tests: gateway fallback 17, admin nav 19, gateway currency 36, price book 96, rules 8. No phpcs config in the repo.
+475 passed, 0 failed.
 
 ## Remaining errors
 
