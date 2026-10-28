@@ -419,6 +419,16 @@ class RWGCM_Admin {
 				'after'
 			);
 		}
+
+		if ( false !== strpos( $hook, 'rwgcm-price-books' ) && defined( 'RWGCM_URL' ) ) {
+			wp_enqueue_script(
+				'rwgcm-shipping-currency',
+				RWGCM_URL . 'admin/js/rwgcm-shipping-currency.js',
+				array(),
+				RWGCM_VERSION,
+				true
+			);
+		}
 	}
 
 	/**
@@ -679,8 +689,13 @@ class RWGCM_Admin {
 	 * @return string
 	 */
 	public static function settings_redirect_url( $return_to ) {
-		$slug = 'payments' === $return_to ? 'rwgcm-payments' : 'rwgcm-price-books';
-		$path = 'admin.php?page=' . $slug;
+		if ( 'payments' === $return_to ) {
+			$path = 'admin.php?page=rwgcm-payments';
+		} elseif ( 'price-books-shipping' === $return_to ) {
+			$path = 'admin.php?page=rwgcm-price-books&tab=shipping';
+		} else {
+			$path = 'admin.php?page=rwgcm-price-books';
+		}
 		return function_exists( 'admin_url' ) ? admin_url( $path ) : $path;
 	}
 

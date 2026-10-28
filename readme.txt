@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.5.1
+Stable tag: 0.6.0
 
 WooCommerce rules and personalization on ReactWoo Geo Core.
 
@@ -18,6 +18,13 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 2. Activate this plugin.
 
 == Changelog ==
+
+= 0.6.0 =
+* **Shipping-class costs:** A flat rate with shipping-class costs can be priced in another currency when every class cost and the base cost that will be charged has an amount in that currency (Cost (ZAR), and one field per class). If any of those amounts is blank, the method stays in the store currency and none of the amounts are swapped.
+* **Block local pickup:** Price books → Shipping has one card per WooCommerce local pickup location. The store-currency cost is shown and is not saved. Amounts are stored in Geo Commerce (`rwgcm_pickup_location_costs`). A location id WooCommerce no longer uses is listed so it can be deleted, and it is not copied onto another location. Saving returns to the Shipping tab.
+* **When the cart switches:** A cart that needs shipping uses the visitor currency only when every applicable rate, including block local pickup, has an amount in that currency. Otherwise it stays in the store currency, as before. Free-shipping minimums are unchanged.
+* **Checkout blocks:** The Cart and Checkout blocks show the same "prices are shown in …" notice as classic checkout, and remove it when shipping is priced in the visitor currency.
+* **Admin:** Currency fields have a visible helper and a decimal keypad. On a narrow screen the Shipping tab shows one currency column at a time.
 
 = 0.5.1 =
 * **Cart notice:** On the classic cart, "Prices are shown in GBP because shipping to … isn't priced in ZAR." is a row inside the cart totals. The shipping calculator replaces that totals block, so the notice stays there, shows once, and goes away when the cart is priced in the visitor currency again. Checkout is unchanged.

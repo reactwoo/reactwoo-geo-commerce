@@ -1,0 +1,16 @@
+.rwgcm-shipping-currency-notice--block {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.rwgcm-shipping-currency-notice--cart td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 782px) {
+  .rwgcm-shipping-currency-notice--block.woocommerce-info {
+    margin-left: 0;
+    margin-right: 0;
+  }
+}

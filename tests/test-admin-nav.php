@@ -105,6 +105,8 @@ $payments_redirect = RWGCM_Admin::settings_redirect_url( 'payments' );
 $books_redirect    = RWGCM_Admin::settings_redirect_url( 'price-books' );
 assert_nav( 'saving Payments by country returns to rwgcm-payments', false !== strpos( $payments_redirect, 'page=rwgcm-payments' ) && false === strpos( $payments_redirect, 'rwgcm-price-books' ) );
 assert_nav( 'saving price books returns to rwgcm-price-books', false !== strpos( $books_redirect, 'page=rwgcm-price-books' ) );
+$shipping_redirect = RWGCM_Admin::settings_redirect_url( 'price-books-shipping' );
+assert_nav( 'saving local pickup costs returns to the Shipping tab and not a zone', false !== strpos( $shipping_redirect, 'page=rwgcm-price-books' ) && false !== strpos( $shipping_redirect, 'tab=shipping' ) && false === strpos( $shipping_redirect, 'zone_id' ) );
 $checkout_settings = RWGCM_Admin::filter_checkout_settings( array(), '' );
 $checkout_desc     = isset( $checkout_settings[0]['desc'] ) ? (string) $checkout_settings[0]['desc'] : '';
 assert_nav(

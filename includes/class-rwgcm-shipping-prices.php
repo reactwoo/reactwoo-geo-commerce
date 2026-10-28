@@ -1,7 +1,8 @@
 <?php
 /**
- * Per-currency shipping amounts for WooCommerce flat rate, free shipping and
- * legacy local pickup (0.5.0, option A of the per-currency shipping scope).
+ * Per-currency shipping amounts for WooCommerce flat rate (including
+ * shipping-class costs), free shipping, legacy local pickup, and
+ * block-checkout local pickup (phase 1 of the per-currency shipping scope).
  *
  * @package ReactWoo_Geo_Commerce
  */
@@ -22,6 +23,12 @@ class RWGCM_Shipping_Prices {
 	 * Hide rates that are not priced in the visitor currency (yes/no, default no).
 	 */
 	const OPTION_HIDE_UNPRICED = 'rwgcm_shipping_hide_unpriced';
+
+	/**
+	 * Manual block-checkout local pickup costs. Location id => currency => amount.
+	 * The WooCommerce location list is never written.
+	 */
+	const OPTION_PICKUP_COSTS = 'rwgcm_pickup_location_costs';
 
 	/**
 	 * Rate and order shipping-line meta: the currency the amount was entered in.
@@ -60,6 +67,13 @@ class RWGCM_Shipping_Prices {
 			add_filter( 'woocommerce_shipping_' . $id . '_instance_option', array( __CLASS__, 'filter_instance_option' ), 20, 3 );
 		}
 		add_filter( 'woocommerce_package_rates', array( __CLASS__, 'filter_package_rates' ), 50, 2 );
+		// Block local pickup reads one cost in add_rate(), before tax. Swap it there.
+		add_filter( 'woocommerce_shipping_method_add_rate_args', array( __CLASS__, 'filter_add_rate_args' ), 10, 2 );
+		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_method_modal_styles' ) );
+		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueue_storefront_notice_style' ) );
+		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueue_block_notice_script' ) );
+		add_action( 'update_option_' . self::OPTION_PICKUP_COSTS, array( __CLASS__, 'flush_rate_cache' ) );
+		add_action( 'add_option_' . self::OPTION_PICKUP_COSTS, array( __CLASS__, 'flush_rate_cache' ) );
 		// Persistent explanation (0.5.0): rendered from the current state on every
 		// classic cart / checkout render and checkout fragment refresh.
 		add_action( 'woocommerce_before_checkout_form', array( __CLASS__, 'render_checkout_notice' ), 11 );
@@ -77,8 +91,10 @@ class RWGCM_Shipping_Prices {
 		add_action( 'add_option_' . self::OPTION_HIDE_UNPRICED, array( __CLASS__, 'flush_rate_cache' ) );
 		if ( function_exists( 'did_action' ) && did_action( 'woocommerce_blocks_loaded' ) ) {
 			self::register_store_api_data();
+			self::register_checkout_block();
 		} else {
 			add_action( 'woocommerce_blocks_loaded', array( __CLASS__, 'register_store_api_data' ) );
+			add_action( 'woocommerce_blocks_loaded', array( __CLASS__, 'register_checkout_block' ) );
 		}
 	}
 
@@ -93,6 +109,114 @@ class RWGCM_Shipping_Prices {
 		if ( class_exists( 'WC_Cache_Helper' ) ) {
 			WC_Cache_Helper::get_transient_version( 'shipping', true );
 		}
+	}
+
+	/**
+	 * Full-width currency fields inside WooCommerce's shipping method modal.
+	 * The price-books stylesheet is not loaded on that screen.
+	 *
+	 * @param string $hook Admin hook suffix.
+	 * @return void
+	 */
+	public static function enqueue_method_modal_styles( $hook ) {
+		if ( 'woocommerce_page_wc-settings' !== $hook ) {
+			return;
+		}
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- screen detection only.
+		$tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : '';
+		if ( 'shipping' !== $tab ) {
+			return;
+		}
+		if ( ! defined( 'RWGCM_URL' ) || ! function_exists( 'wp_enqueue_style' ) ) {
+			return;
+		}
+		$ver = defined( 'RWGCM_VERSION' ) ? RWGCM_VERSION : '0.6.0';
+		wp_enqueue_style( 'rwgcm-shipping-modal', RWGCM_URL . 'admin/css/rwgcm-shipping-modal.css', array(), $ver );
+	}
+
+	/**
+	 * Cart and Checkout blocks: show extensions.rwgcm.shipping_currency_notice.
+	 * Skipped when the blocks integration already enqueued the same handle.
+	 *
+	 * @return void
+	 */
+	public static function enqueue_block_notice_script() {
+		if ( ! function_exists( 'has_block' ) ) {
+			return;
+		}
+		if ( ! has_block( 'woocommerce/checkout' ) && ! has_block( 'woocommerce/cart' ) ) {
+			return;
+		}
+		if ( ! defined( 'RWGCM_URL' ) || ! function_exists( 'wp_enqueue_script' ) ) {
+			return;
+		}
+		if ( function_exists( 'wp_script_is' ) && wp_script_is( 'rwgcm-shipping-currency-notice', 'enqueued' ) ) {
+			return;
+		}
+		$ver = defined( 'RWGCM_VERSION' ) ? RWGCM_VERSION : '0.6.0';
+		wp_enqueue_script(
+			'rwgcm-shipping-currency-notice',
+			RWGCM_URL . 'assets/js/shipping-currency-notice.js',
+			array( 'wp-plugins', 'wp-element', 'wp-data', 'wc-blocks-checkout' ),
+			$ver,
+			true
+		);
+		if ( function_exists( 'wp_enqueue_style' ) ) {
+			wp_enqueue_style( 'rwgcm-shipping-currency-notice', RWGCM_URL . 'assets/css/shipping-currency-notice.css', array(), $ver );
+		}
+	}
+
+	/**
+	 * Notice wrapping on classic cart and checkout, and on the blocks when the
+	 * integration script is not what enqueued it.
+	 *
+	 * @return void
+	 */
+	public static function enqueue_storefront_notice_style() {
+		$on_cart     = function_exists( 'is_cart' ) && is_cart();
+		$on_checkout = function_exists( 'is_checkout' ) && is_checkout();
+		if ( ! $on_cart && ! $on_checkout ) {
+			return;
+		}
+		if ( ! defined( 'RWGCM_URL' ) || ! function_exists( 'wp_enqueue_style' ) ) {
+			return;
+		}
+		$ver = defined( 'RWGCM_VERSION' ) ? RWGCM_VERSION : '0.6.0';
+		wp_enqueue_style( 'rwgcm-shipping-currency-notice', RWGCM_URL . 'assets/css/shipping-currency-notice.css', array(), $ver );
+	}
+
+	/**
+	 * Checkout and cart blocks read extensions.rwgcm.shipping_currency_notice.
+	 *
+	 * @return void
+	 */
+	public static function register_checkout_block() {
+		if ( ! interface_exists( '\Automattic\WooCommerce\Blocks\Integrations\IntegrationInterface' ) ) {
+			return;
+		}
+		if ( ! class_exists( 'RWGCM_Shipping_Block_Integration', false ) ) {
+			require_once __DIR__ . '/class-rwgcm-shipping-block.php';
+		}
+		if ( ! class_exists( 'RWGCM_Shipping_Block_Integration', false ) ) {
+			return;
+		}
+		$integration = new RWGCM_Shipping_Block_Integration();
+		$register    = static function ( $registry ) use ( $integration ) {
+			if ( is_object( $registry ) && method_exists( $registry, 'register' ) ) {
+				$registry->register( $integration );
+			}
+		};
+		if ( class_exists( '\Automattic\WooCommerce\Blocks\Package' ) && method_exists( '\Automattic\WooCommerce\Blocks\Package', 'container' ) ) {
+			try {
+				$registry = \Automattic\WooCommerce\Blocks\Package::container()->get( \Automattic\WooCommerce\Blocks\Integrations\IntegrationRegistry::class );
+				$register( $registry );
+				return;
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+				unset( $e );
+			}
+		}
+		add_action( 'woocommerce_blocks_checkout_block_registration', $register );
+		add_action( 'woocommerce_blocks_cart_block_registration', $register );
 	}
 
 	/**
@@ -393,7 +517,7 @@ class RWGCM_Shipping_Prices {
 		if ( ! function_exists( 'wp_register_script' ) || ! function_exists( 'wp_enqueue_script' ) || ! function_exists( 'wp_add_inline_script' ) ) {
 			return;
 		}
-		$ver = defined( 'RWGCM_VERSION' ) ? RWGCM_VERSION : '0.5.1';
+		$ver = defined( 'RWGCM_VERSION' ) ? RWGCM_VERSION : '0.6.0';
 		wp_register_script( 'rwgcm-cart-fragments', false, array( 'jquery' ), $ver, true );
 		wp_enqueue_script( 'rwgcm-cart-fragments' );
 		wp_add_inline_script( 'rwgcm-cart-fragments', self::cart_fragment_refresh_script() );
@@ -635,32 +759,108 @@ JS;
 				? __( 'Used instead of the minimum above when the cart is in that currency. Leave blank: this free shipping is not priced in that currency, so carts shipped to this zone stay in the store currency.', 'reactwoo-geo-commerce' )
 				: __( 'Used instead of the cost above when the cart is in that currency. Same format as the cost above. Leave blank: not offered in that currency, so carts shipped to this zone stay in the store currency.', 'reactwoo-geo-commerce' ),
 		);
+		$sanitize = isset( $native['sanitize_callback'] ) ? $native['sanitize_callback'] : null;
+		$helper   = 'min_amount' === $setting
+			? __( 'Leave blank and carts shipped to this zone stay in the store currency.', 'reactwoo-geo-commerce' )
+			: __( 'Leave blank and carts shipped to this zone stay in the store currency.', 'reactwoo-geo-commerce' );
 		foreach ( $currencies as $code ) {
 			$key = self::field_key( $method_id, $code );
 			if ( '' === $key ) {
 				continue;
 			}
-			$field = array(
-				'title'       => 'min_amount' === $setting
-					/* translators: %s: currency code. */
-					? sprintf( __( 'Minimum order amount (%s)', 'reactwoo-geo-commerce' ), $code )
-					/* translators: %s: currency code. */
-					: sprintf( __( 'Cost (%s)', 'reactwoo-geo-commerce' ), $code ),
-				'type'        => 'text',
-				'class'       => 'wc-shipping-modal-price rwgcm-currency-price',
-				'placeholder' => sprintf(
+			$title = 'min_amount' === $setting
+				/* translators: %s: currency code. */
+				? sprintf( __( 'Minimum order amount (%s)', 'reactwoo-geo-commerce' ), $code )
+				/* translators: %s: currency code. */
+				: sprintf( __( 'Cost (%s)', 'reactwoo-geo-commerce' ), $code );
+			$fields[ $key ] = self::currency_text_field(
+				$title,
+				sprintf(
 					/* translators: %s: currency code. */
 					__( 'Leave blank: not offered in %s', 'reactwoo-geo-commerce' ),
 					$code
 				),
-				'default'     => '',
-				'desc_tip'    => true,
-				'description' => '',
+				$helper,
+				$sanitize
 			);
-			if ( isset( $native['sanitize_callback'] ) ) {
-				$field['sanitize_callback'] = $native['sanitize_callback'];
+		}
+		if ( 'flat_rate' === $method_id ) {
+			$fields = self::add_class_cost_fields( $fields, $currencies );
+		}
+		return $fields;
+	}
+
+	/**
+	 * One stacked text input. The helper is under the field (not only a tooltip)
+	 * and the keypad is decimal on a phone.
+	 *
+	 * @param string      $title       Visible label.
+	 * @param string      $placeholder Placeholder.
+	 * @param string      $description Helper under the field.
+	 * @param mixed       $sanitize    WooCommerce sanitize callback or null.
+	 * @return array<string, mixed>
+	 */
+	public static function currency_text_field( $title, $placeholder, $description, $sanitize ) {
+		$field = array(
+			'title'             => $title,
+			'type'              => 'text',
+			'class'             => 'wc-shipping-modal-price rwgcm-currency-price',
+			'placeholder'       => $placeholder,
+			'default'           => '',
+			'desc_tip'          => false,
+			'description'       => $description,
+			'custom_attributes' => array(
+				'inputmode' => 'decimal',
+			),
+		);
+		if ( null !== $sanitize ) {
+			$field['sanitize_callback'] = $sanitize;
+		}
+		return $field;
+	}
+
+	/**
+	 * Per-currency shipping-class costs, stacked under the base currency costs.
+	 * Keys match the data model: rwgcm_class_cost_{id}_{CUR}, rwgcm_no_class_cost_{CUR}.
+	 *
+	 * @param array<string, mixed> $fields     Fields so far.
+	 * @param array<int, string>   $currencies Extra currencies.
+	 * @return array<string, mixed>
+	 */
+	public static function add_class_cost_fields( array $fields, array $currencies ) {
+		$native_keys = array();
+		foreach ( $fields as $key => $field ) {
+			$key = (string) $key;
+			if ( self::is_native_class_cost_key( $key ) ) {
+				$native_keys[ $key ] = is_array( $field ) ? $field : array();
 			}
-			$fields[ $key ] = $field;
+		}
+		foreach ( $native_keys as $native_key => $native_field ) {
+			$sanitize = isset( $native_field['sanitize_callback'] ) ? $native_field['sanitize_callback'] : null;
+			$base_title = isset( $native_field['title'] ) && '' !== (string) $native_field['title']
+				? (string) $native_field['title']
+				: ( 'no_class_cost' === $native_key ? __( 'No shipping class cost', 'reactwoo-geo-commerce' ) : $native_key );
+			foreach ( $currencies as $code ) {
+				$key = self::manual_component_key( $native_key, $code );
+				if ( '' === $key || isset( $fields[ $key ] ) ) {
+					continue;
+				}
+				$fields[ $key ] = self::currency_text_field(
+					sprintf(
+						/* translators: 1: shipping class cost label, 2: currency code. */
+						__( '%1$s (%2$s)', 'reactwoo-geo-commerce' ),
+						function_exists( 'wp_strip_all_tags' ) ? wp_strip_all_tags( $base_title ) : strip_tags( $base_title ),
+						$code
+					),
+					sprintf(
+						/* translators: %s: currency code. */
+						__( 'Leave blank: not offered in %s', 'reactwoo-geo-commerce' ),
+						$code
+					),
+					__( 'Leave this blank and the flat rate stays in the store currency, including its base cost.', 'reactwoo-geo-commerce' ),
+					$sanitize
+				);
+			}
 		}
 		return $fields;
 	}
@@ -678,14 +878,20 @@ JS;
 	 * @return mixed
 	 */
 	public static function filter_instance_option( $value, $key, $method ) {
-		if ( ! is_object( $method ) || ! isset( $method->id ) || ! isset( self::$swap[ $method->id ] ) || self::$swap[ $method->id ] !== $key ) {
+		if ( ! is_object( $method ) || ! isset( $method->id ) || ! isset( self::$swap[ $method->id ] ) ) {
+			return $value;
+		}
+		$key        = (string) $key;
+		$is_primary = self::$swap[ $method->id ] === $key;
+		$is_class   = 'flat_rate' === $method->id && self::is_native_class_cost_key( $key );
+		if ( ! $is_primary && ! $is_class ) {
 			return $value;
 		}
 		if ( RWGCM_Price_Book_Currency::forces_store_currency() || ! function_exists( 'get_woocommerce_currency' ) ) {
 			return $value;
 		}
 		$settings = isset( $method->instance_settings ) && is_array( $method->instance_settings ) ? $method->instance_settings : array();
-		return self::swapped_value( $method->id, $settings, $value, get_woocommerce_currency(), RWGCM_Price_Book_Currency::base_currency() );
+		return self::swapped_value( $method->id, $settings, $value, get_woocommerce_currency(), RWGCM_Price_Book_Currency::base_currency(), $key );
 	}
 
 	/**
@@ -694,18 +900,78 @@ JS;
 	 * @param mixed                $value     Store-currency value.
 	 * @param string               $active    Active currency.
 	 * @param string               $base      Store currency.
+	 * @param string               $key       Setting key being read. Empty means the method's primary cost or minimum.
 	 * @return mixed
 	 */
-	public static function swapped_value( $method_id, array $settings, $value, $active, $base ) {
+	public static function swapped_value( $method_id, array $settings, $value, $active, $base, $key = '' ) {
 		$active = RWGCM_Price_Book::normalize_currency( $active );
 		if ( '' === $active || $active === RWGCM_Price_Book::normalize_currency( $base ) ) {
 			return $value;
 		}
-		$key = self::field_key( $method_id, $active );
-		if ( '' !== $key && isset( $settings[ $key ] ) && '' !== trim( (string) $settings[ $key ] ) ) {
-			return trim( (string) $settings[ $key ] );
+		if ( '' === $key ) {
+			$key = isset( self::$swap[ $method_id ] ) ? self::$swap[ $method_id ] : '';
+		}
+		// A flat rate with a missing class amount stays entirely in the store currency.
+		if ( 'flat_rate' === $method_id ) {
+			$status = self::method_status( $method_id, $settings, $active, $base );
+			if ( empty( $status['priced'] ) ) {
+				return $value;
+			}
+		}
+		$manual_key = self::manual_component_key( $key, $active );
+		if ( '' === $manual_key ) {
+			$manual_key = self::field_key( $method_id, $active );
+		}
+		if ( '' !== $manual_key && isset( $settings[ $manual_key ] ) && '' !== trim( (string) $settings[ $manual_key ] ) ) {
+			return trim( (string) $settings[ $manual_key ] );
 		}
 		return $value;
+	}
+
+	/**
+	 * Setting key for a flat-rate component in one currency.
+	 *
+	 * @param string $native_key cost, class_cost_{id}, or no_class_cost.
+	 * @param string $currency   Currency code.
+	 * @return string
+	 */
+	public static function manual_component_key( $native_key, $currency ) {
+		$currency = RWGCM_Price_Book::normalize_currency( $currency );
+		if ( '' === $currency ) {
+			return '';
+		}
+		$native_key = (string) $native_key;
+		if ( 'cost' === $native_key ) {
+			return 'rwgcm_cost_' . $currency;
+		}
+		if ( 'min_amount' === $native_key ) {
+			return 'rwgcm_min_amount_' . $currency;
+		}
+		if ( 'no_class_cost' === $native_key ) {
+			return 'rwgcm_no_class_cost_' . $currency;
+		}
+		if ( 0 === strpos( $native_key, 'class_cost_' ) ) {
+			$id = substr( $native_key, strlen( 'class_cost_' ) );
+			if ( '' === $id || ! preg_match( '/^[A-Za-z0-9_-]+$/', $id ) ) {
+				return '';
+			}
+			return 'rwgcm_class_cost_' . $id . '_' . $currency;
+		}
+		return '';
+	}
+
+	/**
+	 * WooCommerce's own class-cost keys. Per-currency copies start with rwgcm_.
+	 *
+	 * @param string $key Setting key.
+	 * @return bool
+	 */
+	public static function is_native_class_cost_key( $key ) {
+		$key = (string) $key;
+		if ( 0 === strpos( $key, 'rwgcm_' ) ) {
+			return false;
+		}
+		return 0 === strpos( $key, 'class_cost_' ) || 'no_class_cost' === $key;
 	}
 
 	/**
@@ -721,6 +987,12 @@ JS;
 		$currency = RWGCM_Price_Book::normalize_currency( $currency );
 		if ( '' === $currency || $currency === RWGCM_Price_Book::normalize_currency( $base ) ) {
 			return array( 'priced' => true, 'reason' => 'base', 'amount' => '' );
+		}
+		if ( 'pickup_location' === $method_id ) {
+			return self::pickup_method_status( $settings, $currency );
+		}
+		if ( 'flat_rate' === $method_id ) {
+			return self::flat_rate_method_status( $settings, $currency );
 		}
 		if ( ! isset( self::$swap[ $method_id ] ) ) {
 			return array( 'priced' => false, 'reason' => 'unsupported', 'amount' => '' );
@@ -743,9 +1015,6 @@ JS;
 			return array( 'priced' => false, 'reason' => 'missing', 'amount' => '' );
 		}
 
-		if ( 'flat_rate' === $method_id && self::has_class_costs( $settings ) ) {
-			return array( 'priced' => false, 'reason' => 'class_costs', 'amount' => '' );
-		}
 		if ( '' !== $override ) {
 			return array( 'priced' => true, 'reason' => 'override', 'amount' => $override );
 		}
@@ -767,19 +1036,99 @@ JS;
 	}
 
 	/**
-	 * Flat-rate shipping-class costs have no per-currency field in 0.5.0.
+	 * True when a flat rate has a shipping-class cost that is not blank or zero.
+	 * Blank and numeric zero are the same in every currency and do not need a manual amount.
 	 *
 	 * @param array<string, mixed> $settings Settings.
 	 * @return bool
 	 */
 	public static function has_class_costs( array $settings ) {
-		foreach ( $settings as $key => $value ) {
-			$key = (string) $key;
-			if ( ( 0 === strpos( $key, 'class_cost_' ) || 'no_class_cost' === $key ) && '' !== trim( (string) $value ) ) {
+		foreach ( self::flat_rate_components( $settings ) as $component ) {
+			if ( 'cost' === $component['key'] ) {
+				continue;
+			}
+			if ( ! self::is_zero( $component['value'] ) ) {
 				return true;
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * Base cost plus each native class cost.
+	 *
+	 * @param array<string, mixed> $settings Settings.
+	 * @return array<int, array{key: string, value: string}>
+	 */
+	public static function flat_rate_components( array $settings ) {
+		$out = array(
+			array(
+				'key'   => 'cost',
+				'value' => isset( $settings['cost'] ) ? trim( (string) $settings['cost'] ) : '',
+			),
+		);
+		foreach ( $settings as $key => $value ) {
+			$key = (string) $key;
+			if ( self::is_native_class_cost_key( $key ) ) {
+				$out[] = array(
+					'key'   => $key,
+					'value' => trim( (string) $value ),
+				);
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * A flat rate is priced only when every non-zero component has a manual amount.
+	 * Otherwise nothing is swapped, so a ZAR base is never added to a GBP class cost.
+	 *
+	 * @param array<string, mixed> $settings Settings.
+	 * @param string               $currency Currency.
+	 * @return array{priced: bool, reason: string, amount: string}
+	 */
+	public static function flat_rate_method_status( array $settings, $currency ) {
+		$missing_class = false;
+		$missing_base  = false;
+		$base_manual   = '';
+		$class_manual  = array();
+		foreach ( self::flat_rate_components( $settings ) as $component ) {
+			if ( self::is_zero( $component['value'] ) ) {
+				continue;
+			}
+			$manual_key = self::manual_component_key( $component['key'], $currency );
+			$manual     = ( '' !== $manual_key && isset( $settings[ $manual_key ] ) ) ? trim( (string) $settings[ $manual_key ] ) : '';
+			if ( '' === $manual ) {
+				if ( 'cost' === $component['key'] ) {
+					$missing_base = true;
+				} else {
+					$missing_class = true;
+				}
+				continue;
+			}
+			if ( 'cost' === $component['key'] ) {
+				$base_manual = $manual;
+			} else {
+				$class_manual[] = $manual;
+			}
+		}
+		if ( $missing_class ) {
+			return array( 'priced' => false, 'reason' => 'class_costs', 'amount' => '' );
+		}
+		if ( $missing_base ) {
+			return array( 'priced' => false, 'reason' => 'missing', 'amount' => '' );
+		}
+		if ( '' === $base_manual && empty( $class_manual ) ) {
+			return array( 'priced' => true, 'reason' => 'zero', 'amount' => '' );
+		}
+		$parts = array();
+		if ( '' !== $base_manual ) {
+			$parts[] = $base_manual;
+		}
+		if ( ! empty( $class_manual ) ) {
+			$parts[] = 'class ' . implode( ', ', $class_manual );
+		}
+		return array( 'priced' => true, 'reason' => 'override', 'amount' => implode( ' + ', $parts ) );
 	}
 
 	/**
@@ -870,7 +1219,7 @@ JS;
 			return self::$memo[ $memo ];
 		}
 		$zone = WC_Shipping_Zones::get_zone_matching_package( $package );
-		$out  = self::zone_methods( $zone );
+		$out  = array_merge( self::zone_methods( $zone ), self::pickup_methods_for_currency_decision() );
 		self::$memo[ $memo ] = $out;
 		return $out;
 	}
@@ -929,11 +1278,16 @@ JS;
 			}
 			$mid  = (string) $rate->get_method_id();
 			$inst = method_exists( $rate, 'get_instance_id' ) ? (int) $rate->get_instance_id() : 0;
-			if ( ! isset( $settings[ $mid . ':' . $inst ] ) ) {
-				$raw                            = $inst ? get_option( 'woocommerce_' . $mid . '_' . $inst . '_settings', array() ) : array();
-				$settings[ $mid . ':' . $inst ] = is_array( $raw ) ? $raw : array();
+			if ( 'pickup_location' === $mid ) {
+				$status_settings = self::pickup_rate_settings( $rate );
+			} else {
+				if ( ! isset( $settings[ $mid . ':' . $inst ] ) ) {
+					$raw                            = $inst ? get_option( 'woocommerce_' . $mid . '_' . $inst . '_settings', array() ) : array();
+					$settings[ $mid . ':' . $inst ] = is_array( $raw ) ? $raw : array();
+				}
+				$status_settings = $settings[ $mid . ':' . $inst ];
 			}
-			$status = self::method_status( $mid, $settings[ $mid . ':' . $inst ], $active, $base );
+			$status = self::method_status( $mid, $status_settings, $active, $base );
 			$cur    = self::rate_currency( $status['priced'], $forced, $active, $base );
 			if ( method_exists( $rate, 'add_meta_data' ) ) {
 				$rate->add_meta_data( self::META_PRICED, $cur );
@@ -1010,9 +1364,10 @@ JS;
 			case 'no_minimum':
 				return __( 'no minimum (no amount needed)', 'reactwoo-geo-commerce' );
 			case 'class_costs':
-				return __( 'has shipping-class costs (store currency only in 0.5.0)', 'reactwoo-geo-commerce' );
+				/* translators: %s: currency code. */
+				return sprintf( __( 'class costs need a %s amount', 'reactwoo-geo-commerce' ), $currency );
 			case 'unsupported':
-				return __( 'other or carrier method (store currency only)', 'reactwoo-geo-commerce' );
+				return __( 'carrier, store currency only', 'reactwoo-geo-commerce' );
 			case 'missing':
 				/* translators: %s: currency code. */
 				return sprintf( __( 'no %s amount', 'reactwoo-geo-commerce' ), $currency );
@@ -1103,5 +1458,400 @@ JS;
 	 */
 	public static function reset_memo() {
 		self::$memo = array();
+	}
+
+	/**
+	 * Stored block-pickup amounts. Absence of a key means that location is not priced.
+	 *
+	 * @return array<string, array<string, string>>
+	 */
+	public static function pickup_costs() {
+		$stored = function_exists( 'get_option' ) ? get_option( self::OPTION_PICKUP_COSTS, array() ) : array();
+		return is_array( $stored ) ? $stored : array();
+	}
+
+	/**
+	 * @return array<int, array<string, mixed>>
+	 */
+	public static function stored_pickup_locations() {
+		if ( ! function_exists( 'get_option' ) ) {
+			return array();
+		}
+		$rows = get_option( 'pickup_location_pickup_locations', array() );
+		return is_array( $rows ) ? $rows : array();
+	}
+
+	/**
+	 * Shared GBP cost from WooCommerce's pickup method settings.
+	 *
+	 * @return string
+	 */
+	public static function pickup_shared_cost() {
+		if ( ! function_exists( 'get_option' ) ) {
+			return '';
+		}
+		$settings = get_option( 'woocommerce_pickup_location_settings', array() );
+		if ( ! is_array( $settings ) || ! isset( $settings['cost'] ) ) {
+			return '';
+		}
+		return trim( (string) $settings['cost'] );
+	}
+
+	/**
+	 * Block local pickup is offered only when WooCommerce has enabled the method.
+	 *
+	 * @return bool
+	 */
+	public static function pickup_method_enabled() {
+		if ( ! function_exists( 'get_option' ) ) {
+			return false;
+		}
+		$settings = get_option( 'woocommerce_pickup_location_settings', array() );
+		return is_array( $settings ) && isset( $settings['enabled'] ) && 'yes' === (string) $settings['enabled'];
+	}
+
+	/**
+	 * Opaque location id. WooCommerce's rate id uses the array index; a location
+	 * that already has an id keeps that string. This does not invent an id from
+	 * the name or address.
+	 *
+	 * @param array<string, mixed> $location Location row.
+	 * @param int|string           $index    Array index.
+	 * @return string
+	 */
+	public static function pickup_location_id( array $location, $index ) {
+		if ( isset( $location['id'] ) && is_scalar( $location['id'] ) ) {
+			$id = self::sanitize_location_id( $location['id'] );
+			if ( '' !== $id ) {
+				return $id;
+			}
+		}
+		return self::sanitize_location_id( (string) $index );
+	}
+
+	/**
+	 * @param mixed $id Raw id.
+	 * @return string
+	 */
+	public static function sanitize_location_id( $id ) {
+		$id = trim( (string) $id );
+		if ( '' === $id || strlen( $id ) > 100 ) {
+			return '';
+		}
+		if ( ! preg_match( '/^[A-Za-z0-9_.:-]+$/', $id ) ) {
+			return '';
+		}
+		return $id;
+	}
+
+	/**
+	 * @param array<string, mixed> $location Location.
+	 * @return bool
+	 */
+	public static function location_is_enabled( array $location ) {
+		if ( ! array_key_exists( 'enabled', $location ) ) {
+			return true;
+		}
+		$value = $location['enabled'];
+		if ( is_bool( $value ) ) {
+			return $value;
+		}
+		return ! in_array( strtolower( trim( (string) $value ) ), array( '', '0', 'no', 'false' ), true );
+	}
+
+	/**
+	 * GBP cost shown for a location. A cost on the location wins; otherwise the
+	 * method cost. Neither value is written by this plugin.
+	 *
+	 * @param array<string, mixed> $location Location.
+	 * @param string               $shared   Method cost.
+	 * @return string
+	 */
+	public static function location_gbp_cost( array $location, $shared ) {
+		if ( isset( $location['cost'] ) && '' !== trim( (string) $location['cost'] ) ) {
+			return trim( (string) $location['cost'] );
+		}
+		return trim( (string) $shared );
+	}
+
+	/**
+	 * Enabled pickup locations as methods for the currency decision.
+	 * A disabled method, or a method with no enabled locations, does not block.
+	 *
+	 * @return array<int, array<string, mixed>>
+	 */
+	public static function pickup_methods_for_currency_decision() {
+		if ( ! self::pickup_method_enabled() ) {
+			return array();
+		}
+		$shared = self::pickup_shared_cost();
+		$costs  = self::pickup_costs();
+		$out    = array();
+		foreach ( self::stored_pickup_locations() as $index => $location ) {
+			if ( ! is_array( $location ) || ! self::location_is_enabled( $location ) ) {
+				continue;
+			}
+			$id    = self::pickup_location_id( $location, $index );
+			$out[] = array(
+				'id'          => 'pickup_location',
+				'instance_id' => 0,
+				'title'       => isset( $location['name'] ) ? (string) $location['name'] : $id,
+				'enabled'     => true,
+				'settings'    => array(
+					'cost'          => self::location_gbp_cost( $location, $shared ),
+					'location_id'   => $id,
+					'pickup_costs'  => $costs,
+				),
+			);
+		}
+		return $out;
+	}
+
+	/**
+	 * @param array<string, mixed> $settings Settings including location_id and pickup_costs.
+	 * @param string               $currency Currency.
+	 * @return array{priced: bool, reason: string, amount: string}
+	 */
+	public static function pickup_method_status( array $settings, $currency ) {
+		$cost   = isset( $settings['cost'] ) ? trim( (string) $settings['cost'] ) : '';
+		$loc    = isset( $settings['location_id'] ) ? trim( (string) $settings['location_id'] ) : '';
+		$manual = '' !== $loc ? self::lookup_pickup_amount( $settings, $loc, $currency ) : '';
+		if ( '' !== $manual ) {
+			return array( 'priced' => true, 'reason' => 'override', 'amount' => $manual );
+		}
+		if ( self::is_zero( $cost ) ) {
+			return array( 'priced' => true, 'reason' => 'zero', 'amount' => '' );
+		}
+		return array( 'priced' => false, 'reason' => 'missing', 'amount' => '' );
+	}
+
+	/**
+	 * @param array<string, mixed> $settings    Settings.
+	 * @param string               $location_id Location id.
+	 * @param string               $currency    Currency.
+	 * @return string
+	 */
+	public static function lookup_pickup_amount( array $settings, $location_id, $currency ) {
+		$map = isset( $settings['pickup_costs'] ) && is_array( $settings['pickup_costs'] ) ? $settings['pickup_costs'] : self::pickup_costs();
+		$location_id = (string) $location_id;
+		$currency    = RWGCM_Price_Book::normalize_currency( $currency );
+		if ( '' === $location_id || '' === $currency || ! isset( $map[ $location_id ] ) || ! is_array( $map[ $location_id ] ) ) {
+			return '';
+		}
+		return isset( $map[ $location_id ][ $currency ] ) ? trim( (string) $map[ $location_id ][ $currency ] ) : '';
+	}
+
+	/**
+	 * Settings for one calculated pickup rate. The rate id is pickup_location:{index}.
+	 *
+	 * @param mixed $rate WC_Shipping_Rate.
+	 * @return array<string, mixed>
+	 */
+	public static function pickup_rate_settings( $rate ) {
+		$rate_id   = ( is_object( $rate ) && method_exists( $rate, 'get_id' ) ) ? (string) $rate->get_id() : '';
+		$index     = self::pickup_index_from_rate_id( $rate_id );
+		$locations = self::stored_pickup_locations();
+		$location  = ( null !== $index && isset( $locations[ $index ] ) && is_array( $locations[ $index ] ) ) ? $locations[ $index ] : array();
+		$id        = self::pickup_location_id( $location, null === $index ? '' : (string) $index );
+		return array(
+			'cost'         => self::location_gbp_cost( $location, self::pickup_shared_cost() ),
+			'location_id'  => $id,
+			'pickup_costs' => self::pickup_costs(),
+		);
+	}
+
+	/**
+	 * @param string $rate_id Rate id.
+	 * @return int|null
+	 */
+	public static function pickup_index_from_rate_id( $rate_id ) {
+		$rate_id = (string) $rate_id;
+		if ( 1 !== preg_match( '/^pickup_location:(\d+)$/', $rate_id, $m ) ) {
+			return null;
+		}
+		return (int) $m[1];
+	}
+
+	/**
+	 * Manual amount for a pickup rate, or null when the location has none.
+	 * Null leaves WooCommerce's GBP cost in place.
+	 *
+	 * @param string $rate_id  Rate id.
+	 * @param string $currency Active currency.
+	 * @return string|null
+	 */
+	public static function pickup_manual_amount_for_rate( $rate_id, $currency ) {
+		$index     = self::pickup_index_from_rate_id( $rate_id );
+		$locations = self::stored_pickup_locations();
+		$location  = ( null !== $index && isset( $locations[ $index ] ) && is_array( $locations[ $index ] ) ) ? $locations[ $index ] : array();
+		$id        = self::pickup_location_id( $location, null === $index ? '' : (string) $index );
+		$amount    = self::lookup_pickup_amount( array( 'pickup_costs' => self::pickup_costs() ), $id, $currency );
+		return '' === $amount ? null : $amount;
+	}
+
+	/**
+	 * Replace a block-pickup rate cost before WooCommerce calculates shipping tax.
+	 * Does not write the location list or the GBP cost.
+	 *
+	 * @param mixed $args   Rate args.
+	 * @param mixed $method Shipping method.
+	 * @return mixed
+	 */
+	public static function filter_add_rate_args( $args, $method ) {
+		if ( ! is_array( $args ) || ! is_object( $method ) || ! isset( $method->id ) || 'pickup_location' !== $method->id ) {
+			return $args;
+		}
+		if ( RWGCM_Price_Book_Currency::forces_store_currency() || ! function_exists( 'get_woocommerce_currency' ) ) {
+			return $args;
+		}
+		$active = RWGCM_Price_Book::normalize_currency( get_woocommerce_currency() );
+		$base   = RWGCM_Price_Book::normalize_currency( RWGCM_Price_Book_Currency::base_currency() );
+		if ( '' === $active || $active === $base ) {
+			return $args;
+		}
+		$amount = self::pickup_manual_amount_for_rate( isset( $args['id'] ) ? (string) $args['id'] : '', $active );
+		if ( null === $amount ) {
+			return $args;
+		}
+		$args['cost'] = $amount;
+		return $args;
+	}
+
+	/**
+	 * Numeric pickup amount. Blank stays blank. Anything else is rejected so a
+	 * formula cannot be stored as if it were a fixed cost.
+	 *
+	 * @param mixed $raw Posted value.
+	 * @return string
+	 */
+	public static function sanitize_pickup_amount( $raw ) {
+		$raw = trim( (string) $raw );
+		$raw = str_replace( ' ', '', $raw );
+		if ( '' === $raw ) {
+			return '';
+		}
+		if ( ! preg_match( '/^\d+([.,]\d+)?$/', $raw ) ) {
+			return '';
+		}
+		return str_replace( ',', '.', $raw );
+	}
+
+	/**
+	 * Merge posted pickup amounts into the side option.
+	 * Shown ids are replaced. Ids that were not on the form are kept.
+	 * Deleted ids are removed. GBP location rows are not part of this array.
+	 *
+	 * @param array<string, mixed> $stored     Current option.
+	 * @param array<string, mixed> $posted     id => currency => raw amount.
+	 * @param array<int, mixed>    $shown_ids  Location ids on the form.
+	 * @param array<int, mixed>    $delete_ids Orphan ids to remove.
+	 * @param array<int, string>   $currencies Extra currencies.
+	 * @return array<string, array<string, string>>
+	 */
+	public static function merge_pickup_costs( array $stored, array $posted, array $shown_ids, array $delete_ids, array $currencies ) {
+		$allowed = array();
+		foreach ( $currencies as $code ) {
+			$code = RWGCM_Price_Book::normalize_currency( $code );
+			if ( '' !== $code ) {
+				$allowed[ $code ] = true;
+			}
+		}
+		$out = array();
+		foreach ( $stored as $id => $row ) {
+			$id = self::sanitize_location_id( $id );
+			if ( '' === $id || ! is_array( $row ) ) {
+				continue;
+			}
+			$clean = array();
+			foreach ( $row as $code => $amount ) {
+				$code   = RWGCM_Price_Book::normalize_currency( $code );
+				$amount = self::sanitize_pickup_amount( $amount );
+				if ( '' !== $code && isset( $allowed[ $code ] ) && '' !== $amount ) {
+					$clean[ $code ] = $amount;
+				}
+			}
+			if ( ! empty( $clean ) ) {
+				$out[ $id ] = $clean;
+			}
+		}
+		$shown = array();
+		foreach ( $shown_ids as $id ) {
+			$id = self::sanitize_location_id( $id );
+			if ( '' !== $id ) {
+				$shown[ $id ] = true;
+			}
+		}
+		$delete = array();
+		foreach ( $delete_ids as $id ) {
+			$id = self::sanitize_location_id( $id );
+			if ( '' !== $id ) {
+				$delete[ $id ] = true;
+			}
+		}
+		foreach ( array_keys( $shown ) as $id ) {
+			if ( isset( $delete[ $id ] ) ) {
+				unset( $out[ $id ] );
+				continue;
+			}
+			$row    = array();
+			$posted_row = ( isset( $posted[ $id ] ) && is_array( $posted[ $id ] ) ) ? $posted[ $id ] : array();
+			foreach ( array_keys( $allowed ) as $code ) {
+				$amount = self::sanitize_pickup_amount( isset( $posted_row[ $code ] ) ? $posted_row[ $code ] : '' );
+				if ( '' !== $amount ) {
+					$row[ $code ] = $amount;
+				}
+			}
+			if ( empty( $row ) ) {
+				unset( $out[ $id ] );
+			} else {
+				$out[ $id ] = $row;
+			}
+		}
+		foreach ( array_keys( $delete ) as $id ) {
+			unset( $out[ $id ] );
+		}
+		return $out;
+	}
+
+	/**
+	 * Cards for the Shipping tab, plus stored ids that no longer match a location.
+	 *
+	 * @param array<int, mixed>    $locations   WooCommerce locations.
+	 * @param string               $shared_cost Method GBP cost.
+	 * @param array<string, mixed> $stored      Side option.
+	 * @return array{cards: array<int, array<string, mixed>>, orphans: array<int, array<string, mixed>>}
+	 */
+	public static function pickup_admin_model( array $locations, $shared_cost, array $stored ) {
+		$cards = array();
+		$ids   = array();
+		foreach ( $locations as $index => $location ) {
+			if ( ! is_array( $location ) ) {
+				continue;
+			}
+			$id         = self::pickup_location_id( $location, $index );
+			$ids[ $id ] = true;
+			$cards[]    = array(
+				'id'       => $id,
+				'name'     => isset( $location['name'] ) && '' !== (string) $location['name'] ? (string) $location['name'] : $id,
+				'enabled'  => self::location_is_enabled( $location ),
+				'gbp_cost' => self::location_gbp_cost( $location, $shared_cost ),
+				'amounts'  => ( isset( $stored[ $id ] ) && is_array( $stored[ $id ] ) ) ? $stored[ $id ] : array(),
+			);
+		}
+		$orphans = array();
+		foreach ( $stored as $id => $amounts ) {
+			$id = (string) $id;
+			if ( isset( $ids[ $id ] ) || ! is_array( $amounts ) ) {
+				continue;
+			}
+			$orphans[] = array(
+				'id'      => $id,
+				'amounts' => $amounts,
+			);
+		}
+		return array(
+			'cards'   => $cards,
+			'orphans' => $orphans,
+		);
 	}
 }

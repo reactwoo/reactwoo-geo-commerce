@@ -159,6 +159,20 @@ class RWGCM_Price_Book_Admin {
 			update_option( RWGCM_Shipping_Prices::OPTION_HIDE_UNPRICED, ! empty( $_POST['rwgcm_shipping_hide_unpriced'] ) ? 'yes' : 'no', false );
 		}
 
+		if ( isset( $_POST['rwgcm_pickup_costs_present'] ) ) {
+			$posted = isset( $_POST['rwgcm_pickup_cost'] ) && is_array( $_POST['rwgcm_pickup_cost'] ) ? wp_unslash( $_POST['rwgcm_pickup_cost'] ) : array(); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			$shown  = isset( $_POST['rwgcm_pickup_shown'] ) && is_array( $_POST['rwgcm_pickup_shown'] ) ? wp_unslash( $_POST['rwgcm_pickup_shown'] ) : array(); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			$delete = isset( $_POST['rwgcm_pickup_delete'] ) && is_array( $_POST['rwgcm_pickup_delete'] ) ? wp_unslash( $_POST['rwgcm_pickup_delete'] ) : array(); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			$merged = RWGCM_Shipping_Prices::merge_pickup_costs(
+				RWGCM_Shipping_Prices::pickup_costs(),
+				is_array( $posted ) ? $posted : array(),
+				is_array( $shown ) ? $shown : array(),
+				is_array( $delete ) ? $delete : array(),
+				RWGCM_Shipping_Prices::extra_currencies()
+			);
+			update_option( RWGCM_Shipping_Prices::OPTION_PICKUP_COSTS, $merged, false );
+		}
+
 		if ( isset( $_POST['rwgcm_gateway_rules_present'] ) ) {
 			$gateway_raw = array(
 				'countries' => array(),
@@ -274,7 +288,7 @@ class RWGCM_Price_Book_Admin {
 		echo '<p class="description">' . esc_html(
 			sprintf(
 				/* translators: %s: store currency. */
-				__( 'Read only. A shipped cart uses the visitor currency only when its shipping zone is priced in it; otherwise it stays in %s. Amounts are entered on each method under WooCommerce → Settings → Shipping (flat rate cost, free shipping minimum, local pickup cost). Other and carrier methods are store currency only.', 'reactwoo-geo-commerce' ),
+				__( 'A shipped cart uses the visitor currency only when every applicable rate has an amount in it; otherwise it stays in %s. Flat rate costs, shipping-class costs, free-shipping minimums, and legacy local pickup are entered on each method under WooCommerce → Settings → Shipping. Block local pickup amounts are entered on this screen and do not change the WooCommerce location list. Carrier methods stay in the store currency.', 'reactwoo-geo-commerce' ),
 				$base
 			)
 		) . '</p>';
@@ -300,35 +314,147 @@ class RWGCM_Price_Book_Admin {
 			}
 			echo '<li><strong>' . esc_html( $zone['name'] ) . '</strong>: ' . esc_html( implode( '; ', $parts ) ) . '</li>';
 		}
+			$pickup_methods = RWGCM_Shipping_Prices::pickup_methods_for_currency_decision();
+			if ( ! empty( $pickup_methods ) ) {
+				$pickup_parts = array();
+				foreach ( $currencies as $cur ) {
+					$pickup_ok = RWGCM_Shipping_Prices::zones_priced( array( $pickup_methods ), $cur, $base, $hide );
+					$pickup_parts[] = $pickup_ok
+						/* translators: 1: currency. */
+						? sprintf( __( '%1$s carts use %1$s', 'reactwoo-geo-commerce' ), $cur )
+						/* translators: 1: currency, 2: store currency. */
+						: sprintf( __( '%1$s carts stay in %2$s', 'reactwoo-geo-commerce' ), $cur, $base );
+				}
+				echo '<li><strong>' . esc_html__( 'Block local pickup', 'reactwoo-geo-commerce' ) . '</strong>: ' . esc_html( implode( '; ', $pickup_parts ) ) . '</li>';
+			}
 		echo '</ul>';
-		echo '<div class="rwgcm-gateway-matrix rwgcm-shipping-matrix" style="overflow-x: auto;">';
-		echo '<table class="widefat striped"><thead><tr><th>' . esc_html__( 'Zone / method', 'reactwoo-geo-commerce' ) . '</th>';
+		echo '<div class="rwgcm-shipping-currency-picker">';
+		echo '<label for="rwgcm-shipping-currency">' . esc_html__( 'Currency', 'reactwoo-geo-commerce' ) . '</label> ';
+		echo '<select id="rwgcm-shipping-currency">';
 		foreach ( $currencies as $cur ) {
-			echo '<th>' . esc_html( $cur ) . '</th>';
+			echo '<option value="' . esc_attr( $cur ) . '">' . esc_html( $cur ) . '</option>';
+		}
+		echo '</select>';
+		echo '<p class="description">' . esc_html__( 'On a narrow screen this shows one currency column. It does not save anything.', 'reactwoo-geo-commerce' ) . '</p>';
+		echo '</div>';
+		echo '<div class="rwgcm-gateway-matrix rwgcm-shipping-matrix" style="overflow-x: auto;">';
+		echo '<table class="widefat striped"><thead><tr><th scope="col">' . esc_html__( 'Zone / method', 'reactwoo-geo-commerce' ) . '</th>';
+		$first = true;
+		foreach ( $currencies as $cur ) {
+			echo '<th scope="col" class="rwgcm-currency-col' . ( $first ? ' is-selected' : '' ) . '" data-currency="' . esc_attr( $cur ) . '">' . esc_html( $cur ) . '</th>';
+			$first = false;
 		}
 		echo '</tr></thead><tbody>';
 		foreach ( $zones as $zone ) {
 			$url = function_exists( 'admin_url' ) ? admin_url( 'admin.php?page=wc-settings&tab=shipping&zone_id=' . (int) $zone['id'] ) : '';
 			echo '<tr class="rwgcm-shipping-zone"><th scope="row"><a href="' . esc_url( $url ) . '">' . esc_html( $zone['name'] ) . '</a></th>';
+			$first = true;
 			foreach ( $currencies as $cur ) {
 				$ok = $zone['verdicts'][ $cur ];
-				echo '<td><strong>' . esc_html( null === $ok ? '—' : ( $ok ? '✓ ' . $cur : '✗ ' . $base ) ) . '</strong></td>';
+				echo '<td class="rwgcm-currency-col' . ( $first ? ' is-selected' : '' ) . '" data-currency="' . esc_attr( $cur ) . '"><strong>' . esc_html( null === $ok ? '—' : ( $ok ? '✓ ' . $cur : '✗ ' . $base ) ) . '</strong></td>';
+				$first = false;
 			}
 			echo '</tr>';
 			if ( empty( $zone['rows'] ) ) {
-				echo '<tr><td>' . esc_html__( '(no methods)', 'reactwoo-geo-commerce' ) . '</td>' . str_repeat( '<td></td>', count( $currencies ) ) . '</tr>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+				echo '<tr><td>' . esc_html__( '(no methods)', 'reactwoo-geo-commerce' ) . '</td>';
+				$first = true;
+				foreach ( $currencies as $cur ) {
+					echo '<td class="rwgcm-currency-col' . ( $first ? ' is-selected' : '' ) . '" data-currency="' . esc_attr( $cur ) . '"></td>';
+					$first = false;
+				}
+				echo '</tr>';
 			}
 			foreach ( $zone['rows'] as $row ) {
 				$label = $row['title'] . ( $row['enabled'] ? '' : ' (' . __( 'disabled', 'reactwoo-geo-commerce' ) . ')' );
-				echo '<tr class="rwgcm-shipping-method"><td style="padding-left:24px;">' . esc_html( $label ) . ' <code>' . esc_html( $row['id'] ) . '</code></td>';
+				echo '<tr class="rwgcm-shipping-method"><th scope="row">' . esc_html( $label ) . ' <code>' . esc_html( $row['id'] ) . '</code></th>';
+				$first = true;
 				foreach ( $currencies as $cur ) {
 					$cell = $row['cells'][ $cur ];
-					echo '<td>' . esc_html( ( $cell['priced'] ? '✓ ' : '— ' ) . $cell['label'] ) . '</td>';
+					echo '<td class="rwgcm-currency-col' . ( $first ? ' is-selected' : '' ) . '" data-currency="' . esc_attr( $cur ) . '">' . esc_html( ( $cell['priced'] ? '✓ ' : '— ' ) . $cell['label'] ) . '</td>';
+					$first = false;
 				}
 				echo '</tr>';
 			}
 		}
-		echo '</tbody></table></div></div>';
+		echo '</tbody></table></div>';
+		self::render_pickup_cards( $base, $currencies );
+		echo '</div>';
+	}
+
+	/**
+	 * Editable block-pickup amounts. The WooCommerce location list is read-only here.
+	 *
+	 * @param string             $base       Store currency.
+	 * @param array<int, string> $currencies Extra currencies.
+	 * @return void
+	 */
+	public static function render_pickup_cards( $base, array $currencies ) {
+		$locations = RWGCM_Shipping_Prices::stored_pickup_locations();
+		$shared    = RWGCM_Shipping_Prices::pickup_shared_cost();
+		$model     = RWGCM_Shipping_Prices::pickup_admin_model( $locations, $shared, RWGCM_Shipping_Prices::pickup_costs() );
+		echo '<h2>' . esc_html__( 'Block local pickup', 'reactwoo-geo-commerce' ) . '</h2>';
+		echo '<p class="description">' . esc_html__( 'One card per pickup location. The store-currency cost is read only. Amounts save to Geo Commerce and are not written back onto the location.', 'reactwoo-geo-commerce' ) . '</p>';
+		if ( empty( $model['cards'] ) && empty( $model['orphans'] ) ) {
+			echo '<p>' . esc_html__( 'No block-checkout local pickup locations are set. Add them under WooCommerce → Settings → Shipping → Local pickup.', 'reactwoo-geo-commerce' ) . '</p>';
+			return;
+		}
+		echo '<form method="post" class="rwgcm-settings-form rwgcm-pickup-form">';
+		wp_nonce_field( 'rwgcm_price_book_settings' );
+		echo '<input type="hidden" name="rwgcm_price_book_settings_save" value="1" />';
+		echo '<input type="hidden" name="rwgcm_settings_return" value="price-books-shipping" />';
+		echo '<input type="hidden" name="rwgcm_pickup_costs_present" value="1" />';
+		echo '<div class="rwgcm-pickup-cards">';
+		foreach ( $model['cards'] as $card ) {
+			echo '<section class="rwgcm-pickup-card">';
+			echo '<h3>' . esc_html( $card['name'] ) . '</h3>';
+			if ( empty( $card['enabled'] ) ) {
+				echo '<p class="description">' . esc_html__( 'Disabled in WooCommerce. It is not offered, and a blank amount here does not keep the cart in the store currency.', 'reactwoo-geo-commerce' ) . '</p>';
+			}
+			echo '<p>' . esc_html(
+				sprintf(
+					/* translators: 1: store currency, 2: amount. */
+					__( 'Store currency cost (%1$s): %2$s', 'reactwoo-geo-commerce' ),
+					$base,
+					'' === (string) $card['gbp_cost'] ? '0' : (string) $card['gbp_cost']
+				)
+			) . '</p>';
+			echo '<input type="hidden" name="rwgcm_pickup_shown[]" value="' . esc_attr( $card['id'] ) . '" />';
+			foreach ( $currencies as $cur ) {
+				$value = isset( $card['amounts'][ $cur ] ) ? (string) $card['amounts'][ $cur ] : '';
+				$fid   = 'rwgcm-pickup-' . $card['id'] . '-' . $cur;
+				echo '<p><label for="' . esc_attr( $fid ) . '">' . esc_html(
+					sprintf(
+						/* translators: %s: currency code. */
+						__( 'Cost (%s)', 'reactwoo-geo-commerce' ),
+						$cur
+					)
+				) . '</label>';
+				echo '<input type="text" inputmode="decimal" class="regular-text rwgcm-currency-price" id="' . esc_attr( $fid ) . '" name="rwgcm_pickup_cost[' . esc_attr( $card['id'] ) . '][' . esc_attr( $cur ) . ']" value="' . esc_attr( $value ) . '" />';
+				echo '<span class="description">' . esc_html__( 'Leave blank and this location is not priced in that currency.', 'reactwoo-geo-commerce' ) . '</span></p>';
+			}
+			echo '</section>';
+		}
+		foreach ( $model['orphans'] as $orphan ) {
+			$bits = array();
+			foreach ( (array) $orphan['amounts'] as $code => $amount ) {
+				$bits[] = $code . ' ' . $amount;
+			}
+			echo '<section class="rwgcm-pickup-card rwgcm-pickup-card--orphan">';
+			echo '<h3>' . esc_html(
+				sprintf(
+					/* translators: %s: location id. */
+					__( 'Unused amounts for location %s', 'reactwoo-geo-commerce' ),
+					(string) $orphan['id']
+				)
+			) . '</h3>';
+			echo '<p class="description">' . esc_html__( 'WooCommerce no longer has this location id. These amounts are not copied onto another location.', 'reactwoo-geo-commerce' ) . '</p>';
+			echo '<p>' . esc_html( implode( ', ', $bits ) ) . '</p>';
+			echo '<p><label><input type="checkbox" name="rwgcm_pickup_delete[]" value="' . esc_attr( (string) $orphan['id'] ) . '" /> ' . esc_html__( 'Delete these unused amounts', 'reactwoo-geo-commerce' ) . '</label></p>';
+			echo '</section>';
+		}
+		echo '</div>';
+		submit_button( __( 'Save local pickup costs', 'reactwoo-geo-commerce' ) );
+		echo '</form>';
 	}
 
 	/**
