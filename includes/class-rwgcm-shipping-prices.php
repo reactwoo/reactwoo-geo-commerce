@@ -256,9 +256,11 @@ class RWGCM_Shipping_Prices {
 		if ( ! function_exists( 'get_woocommerce_currency' ) || RWGCM_Price_Book_Currency::forces_store_currency() ) {
 			return $out;
 		}
-		get_woocommerce_currency();
+		$active = RWGCM_Price_Book::normalize_currency( (string) get_woocommerce_currency() );
+		$base   = RWGCM_Price_Book_Currency::base_currency();
 		$wanted = RWGCM_Price_Book_Currency::shipping_fallback_currency();
-		if ( '' === $wanted ) {
+		// Store currency, or the cart already showing the visitor currency: no notice.
+		if ( '' === $wanted || $wanted === $base || $active === $wanted ) {
 			return $out;
 		}
 		$country = '';
@@ -622,7 +624,7 @@ JS;
 	 * @return string
 	 */
 	private static function country_name( $code ) {
-		if ( '' !== $code && function_exists( 'WC' ) && WC()->countries ) {
+		if ( '' !== $code && function_exists( 'WC' ) && WC()->countries && method_exists( WC()->countries, 'get_countries' ) ) {
 			$all = WC()->countries->get_countries();
 			if ( isset( $all[ $code ] ) ) {
 				return html_entity_decode( (string) $all[ $code ], ENT_QUOTES );

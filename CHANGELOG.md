@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Currency inputs (flat rate, free-shipping minimum, legacy local pickup, and class costs) show helper text under the field and use `inputmode="decimal"`. Below 782px the Shipping matrix shows one currency column, chosen with a labelled select that does not save. The first column stays readable without sideways scrolling.
 - Shipping-tab reasons: "class costs need a ZAR amount" and "carrier, store currency only".
 
+### Fixed
+- **Cart shipping calculator.** Calculating shipping to a country whose currency is the store currency (GB on a GBP store) clears the "prices are shown in GBP because shipping isn’t priced in ZAR" line. The calculator country is remembered the same way a checkout billing country is, and a fallback left by the previous address is dropped when the visitor currency is the store currency. Checkout already did this.
+
 ### Not in this release
 - Opt-in conversion of numeric costs (phase 2), carrier and table-rate quotes (phase 3), coupon minimums, geo fee conversion, an exchange-rate feed, and per-currency decimals. No shipping zone, zone location, method order, or store-currency cost is migrated or rewritten.
 

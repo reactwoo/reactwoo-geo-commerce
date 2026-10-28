@@ -25,6 +25,7 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 * **When the cart switches:** A cart that needs shipping uses the visitor currency only when every applicable rate, including block local pickup, has an amount in that currency. Otherwise it stays in the store currency, as before. Free-shipping minimums are unchanged.
 * **Checkout blocks:** The Cart and Checkout blocks show the same "prices are shown in …" notice as classic checkout, and remove it when shipping is priced in the visitor currency.
 * **Admin:** Currency fields have a visible helper and a decimal keypad. On a narrow screen the Shipping tab shows one currency column at a time.
+* **Cart:** The shipping calculator clears the "prices are shown in the store currency" notice when the new address uses the store currency.
 
 = 0.5.1 =
 * **Cart notice:** On the classic cart, "Prices are shown in GBP because shipping to … isn't priced in ZAR." is a row inside the cart totals. The shipping calculator replaces that totals block, so the notice stays there, shows once, and goes away when the cart is priced in the visitor currency again. Checkout is unchanged.

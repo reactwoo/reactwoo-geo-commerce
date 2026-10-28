@@ -6,45 +6,40 @@ done
 
 ## Summary
 
-0.6.0 adds manual per-currency amounts for flat-rate shipping-class costs and block-checkout local pickup. A cart that needs shipping uses the visitor currency only when every applicable rate has an amount in that currency. A missing amount keeps the cart in the store currency (GBP). No automatic conversion, no carrier quotes, no zone rewrite. Draft PR only. Not merged and not tagged.
+The classic cart shipping calculator now clears the shipping-currency notice when the new address uses the store currency. A ZAR fallback followed by a GB calculation no longer leaves "Prices are shown in GBP because shipping to United Kingdom (UK) isn't priced in ZAR." Checkout already cleared that notice. Still draft PR #12. Not merged and not tagged. Version stays 0.6.0.
+
+## Root cause
+
+The calculator updates the customer shipping country, but currency still followed the geo visitor (ZA → ZAR). Shipping to GB is not priced in ZAR, so the cart stayed in GBP and the fallback notice was rewritten for the United Kingdom. Checkout posts the billing country GB, so the visitor currency becomes the store currency and the notice is empty.
 
 ## Files changed
 
 | File | Reason |
 |------|--------|
-| includes/class-rwgcm-shipping-prices.php | Class-cost fields and all-or-nothing swap; pickup side option, rate cost before tax, currency decision |
-| includes/class-rwgcm-shipping-block.php | Cart and Checkout block notice script |
-| includes/class-rwgcm-price-book-admin.php | Shipping tab currency select, pickup cards, save |
-| includes/class-rwgcm-admin.php | Enqueue the column script; Shipping tab redirect |
-| admin/css/rwgcm-admin.css | One currency column below 782px; stacked pickup cards |
-| admin/css/rwgcm-shipping-modal.css | Full-width method-modal fields on a phone |
-| admin/js/rwgcm-shipping-currency.js | Currency select does not save |
-| assets/js/shipping-currency-notice.js | Block notice from the Store API string; empty string renders nothing |
-| assets/css/shipping-currency-notice.css | Notice wraps on a narrow screen |
-| tests/test-shipping-prices.php | Class costs, pickup, zones untouched, block notice |
-| tests/test-admin-nav.php | Pickup save returns to the Shipping tab |
-| tests/test-gateway-fallback.php | Version 0.6.0 |
-| reactwoo-geo-commerce.php, readme.txt, CHANGELOG.md | 0.6.0 |
+| includes/class-rwgcm-price-book-currency.php | Remember the calculator country, then resolve again; drop a fallback when the visitor currency is the store currency |
+| includes/class-rwgcm-shipping-prices.php | No notice when the fallback is the store currency or the cart is already in the visitor currency |
+| tests/test-checkout-country.php | ZA fallback, then calculator to GB, notice cleared; calculator back to ZA still explains ZAR |
+| tests/test-shipping-prices.php | Store-currency fallback and an already-matched visitor currency produce no notice |
+| CHANGELOG.md, readme.txt | Note the fix under 0.6.0 |
 
 ## What was not changed
 
-- Phase 2 conversion and phase 3 carrier or table-rate quotes
-- Coupon minimums, geo fees, FX feeds, per-currency decimals
-- Shipping zones, zone locations, method order, and store-currency `cost` / `class_cost_*` / `no_class_cost` / pickup location `cost`
-- Free-shipping minimum behaviour (already manual in 0.5.0; fields gained a visible helper)
-- No merge and no `v*` tag
+- Version (still 0.6.0)
+- Phase 2 and phase 3
+- No merge and no tag
 
 ## Commands run
 
 ```bash
+php -l includes/class-rwgcm-price-book-currency.php
 php -l includes/class-rwgcm-shipping-prices.php
-php -l includes/class-rwgcm-shipping-block.php
-php -l includes/class-rwgcm-price-book-admin.php
-php -l includes/class-rwgcm-admin.php
-for f in tests/*.php; do php "$f" || exit 1; done
+php tests/test-checkout-country.php
+php tests/test-shipping-prices.php
+php tests/test-shipping-cache.php
+php tests/test-store-api-currency.php
 ```
 
-All test files passed (0 failed). No WordPress site is running here, so the staging checklist in the PR is the browser pass.
+All passed (0 failed).
 
 ## Remaining errors
 

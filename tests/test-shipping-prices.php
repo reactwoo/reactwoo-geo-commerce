@@ -211,6 +211,13 @@ assert_true( 'no fallback: empty wrapper is still rendered (fragment target)', '
 $rp->setValue( null, 'ZAR' );
 assert_true( 'fallback: notice text from the current state (no session, no one-shot)', false !== strpos( $S::current_notice(), 'Prices are shown in GBP' ) && false !== strpos( $S::current_notice(), 'priced in ZAR' ) );
 assert_true( 'fallback: stays on every render (persistent)', $S::current_notice() === $S::current_notice() );
+$rp->setValue( null, 'GBP' );
+assert_true( 'fallback equal to the store currency is cleared', '' === $S::current_notice() );
+$GLOBALS['rw_currency'] = 'ZAR';
+$rp->setValue( null, 'ZAR' );
+assert_true( 'notice is cleared when the cart is already in the visitor currency', '' === $S::current_notice() );
+$GLOBALS['rw_currency'] = 'GBP';
+$rp->setValue( null, 'ZAR' );
 $h = $S::notice_html( $S::current_notice(), 'checkout' );
 assert_true( 'fallback: one woocommerce-info inside one wrapper', 1 === substr_count( $h, 'woocommerce-info' ) && 1 === substr_count( $h, 'rwgcm-shipping-currency-notice--checkout' ) );
 assert_true( 'cart wrapper class', false !== strpos( $S::notice_html( 'x', 'cart' ), 'rwgcm-shipping-currency-notice--cart' ) );

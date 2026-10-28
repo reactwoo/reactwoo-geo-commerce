@@ -509,6 +509,12 @@ class RWGCM_Price_Book_Currency {
 			}
 		}
 
+		// A visitor currency that is already the store currency has nothing to explain.
+		// Clear a fallback left by an earlier address in this request (for example
+		// ZAR, then the shipping calculator moves the customer to GB).
+		if ( RWGCM_Price_Book::normalize_currency( $preferred ) === RWGCM_Price_Book::normalize_currency( $base ) ) {
+			self::$shipping_fallback = '';
+		}
 		if ( ! self::cart_is_ready() ) {
 			return $preferred;
 		}
@@ -689,9 +695,10 @@ class RWGCM_Price_Book_Currency {
 	/**
 	 * Write the customer session before the calculator response is flushed.
 	 *
-	 * get_refreshed_fragments then resolves currency from the same shipping
-	 * country the cart totals request just rendered, not from the geo default
-	 * still sitting in the previous session row.
+	 * The calculator is a country the shopper chose. Remember it the same way
+	 * checkout remembers a posted billing country, then resolve again so a
+	 * previous ZAR fallback does not survive a move to the store currency.
+	 * get_refreshed_fragments then uses that same destination.
 	 *
 	 * @return void
 	 */
@@ -700,7 +707,16 @@ class RWGCM_Price_Book_Currency {
 			return;
 		}
 		$wc = WC();
-		if ( ! $wc || ! $wc->session || ! method_exists( $wc->session, 'save_data' ) ) {
+		if ( ! $wc ) {
+			return;
+		}
+		if ( $wc->customer && method_exists( $wc->customer, 'get_shipping_country' ) ) {
+			self::remember_billing_country( $wc->customer->get_shipping_country() );
+		}
+		if ( function_exists( 'get_woocommerce_currency' ) ) {
+			get_woocommerce_currency();
+		}
+		if ( ! $wc->session || ! method_exists( $wc->session, 'save_data' ) ) {
 			return;
 		}
 		$wc->session->save_data();
