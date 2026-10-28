@@ -46,9 +46,21 @@ assert_true( 'flat rate gets a heading', isset( $f['rwgcm_currency_prices'] ) &&
 assert_true( 'flat rate gets Cost (ZAR) and Cost (EUR)', 'Cost (ZAR)' === $f['rwgcm_cost_ZAR']['title'] && 'Cost (EUR)' === $f['rwgcm_cost_EUR']['title'] );
 assert_true( 'fields reuse WooCommerce sanitize_callback (formula validation)', 'rw_sanitize' === $f['rwgcm_cost_ZAR']['sanitize_callback'] );
 assert_true( 'fields default blank with a "not offered" placeholder', '' === $f['rwgcm_cost_ZAR']['default'] && false !== strpos( $f['rwgcm_cost_ZAR']['placeholder'], 'not offered in ZAR' ) );
+assert_true( 'currency field has a visible helper and a decimal keypad', false === $f['rwgcm_cost_ZAR']['desc_tip'] && '' !== $f['rwgcm_cost_ZAR']['description'] && 'decimal' === $f['rwgcm_cost_ZAR']['custom_attributes']['inputmode'] );
 assert_true( 'native fields untouched and first', array( 'title', 'cost' ) === array_slice( array_keys( $f ), 0, 2 ) && $native['cost'] === $f['cost'] );
 $f = $S::add_fields( 'free_shipping', array( 'min_amount' => array( 'type' => 'price' ) ), array( 'ZAR' ) );
 assert_true( 'free shipping gets Minimum order amount (ZAR)', 'Minimum order amount (ZAR)' === $f['rwgcm_min_amount_ZAR']['title'] );
+assert_true( 'free-shipping minimum has a helper under the field', false === $f['rwgcm_min_amount_ZAR']['desc_tip'] && false !== strpos( $f['rwgcm_min_amount_ZAR']['description'], 'store currency' ) && 'decimal' === $f['rwgcm_min_amount_ZAR']['custom_attributes']['inputmode'] );
+$class_fields = array(
+	'cost'           => array( 'title' => 'Cost', 'type' => 'text', 'sanitize_callback' => 'rw_sanitize' ),
+	'class_cost_12'  => array( 'title' => '"Heavy" shipping class cost', 'type' => 'text', 'sanitize_callback' => 'rw_sanitize' ),
+	'no_class_cost'  => array( 'title' => 'No shipping class cost', 'type' => 'text', 'sanitize_callback' => 'rw_sanitize' ),
+);
+$cf = $S::add_fields( 'flat_rate', $class_fields, array( 'ZAR' ) );
+assert_true( 'class cost field key and label', isset( $cf['rwgcm_class_cost_12_ZAR'] ) && false !== strpos( $cf['rwgcm_class_cost_12_ZAR']['title'], 'Heavy' ) && false !== strpos( $cf['rwgcm_class_cost_12_ZAR']['title'], 'ZAR' ) );
+assert_true( 'no-class cost field', 'rwgcm_no_class_cost_ZAR' === $S::manual_component_key( 'no_class_cost', 'ZAR' ) && isset( $cf['rwgcm_no_class_cost_ZAR'] ) && 'rw_sanitize' === $cf['rwgcm_class_cost_12_ZAR']['sanitize_callback'] );
+assert_true( 'class cost helper says a blank keeps the flat rate in the store currency', false !== strpos( $cf['rwgcm_class_cost_12_ZAR']['description'], 'stays in the store currency' ) );
+assert_true( 'native class cost field is not replaced', $class_fields['class_cost_12'] === $cf['class_cost_12'] );
 $f = $S::add_fields( 'local_pickup', array( 'cost' => array() ), array( 'ZAR' ) );
 assert_true( 'local pickup gets Cost (ZAR)', isset( $f['rwgcm_cost_ZAR'] ) );
 assert_true( 'unsupported method unchanged', array( 'x' => 1 ) === $S::add_fields( 'royal_mail', array( 'x' => 1 ), array( 'ZAR' ) ) );
@@ -63,6 +75,9 @@ assert_true( 'swap: ZAR returns the ZAR formula string unchanged', '150 + 5 * [q
 assert_true( 'swap: blank EUR keeps the store value', '10' === $S::swapped_value( 'flat_rate', $set, '10', 'EUR', 'GBP' ) );
 assert_true( 'swap: store currency keeps the store value', '10' === $S::swapped_value( 'flat_rate', $set, '10', 'GBP', 'GBP' ) );
 assert_true( 'swap: free shipping minimum', '1000' === $S::swapped_value( 'free_shipping', array( 'min_amount' => '60', 'rwgcm_min_amount_ZAR' => ' 1000 ' ), '60', 'ZAR', 'GBP' ) );
+$partial = array( 'cost' => '10', 'rwgcm_cost_ZAR' => '230', 'class_cost_12' => '5' );
+assert_true( 'swap: a missing class amount does not swap the base cost', '10' === $S::swapped_value( 'flat_rate', $partial, '10', 'ZAR', 'GBP', 'cost' ) );
+assert_true( 'swap: a missing class amount does not swap the class cost', '5' === $S::swapped_value( 'flat_rate', $partial, '5', 'ZAR', 'GBP', 'class_cost_12' ) );
 
 class RW_Method { public $id; public $instance_settings; public function __construct( $id, $s ) { $this->id = $id; $this->instance_settings = $s; } } // phpcs:ignore
 $m = new RW_Method( 'flat_rate', $set );
@@ -85,9 +100,25 @@ assert_true( 'filter_instance_option: GBP cart keeps the GBP cost', '10' === $S:
 $st = function ( $id, $s, $c = 'ZAR' ) use ( $S ) { return $S::method_status( $id, $s, $c, 'GBP' ); };
 assert_true( 'flat rate with ZAR cost is priced', $st( 'flat_rate', array( 'cost' => '10', 'rwgcm_cost_ZAR' => '150' ) )['priced'] );
 assert_true( 'flat rate without ZAR cost is not priced', 'missing' === $st( 'flat_rate', array( 'cost' => '10' ) )['reason'] );
-assert_true( 'flat rate with class costs is not priced in 0.5.0', 'class_costs' === $st( 'flat_rate', array( 'cost' => '10', 'rwgcm_cost_ZAR' => '150', 'class_cost_12' => '5' ) )['reason'] );
-assert_true( 'flat rate with only no_class_cost is not priced', 'class_costs' === $st( 'flat_rate', array( 'cost' => '10', 'rwgcm_cost_ZAR' => '150', 'no_class_cost' => '2' ) )['reason'] );
+assert_true( 'flat rate with class costs and no ZAR class amount stays unpriced', 'class_costs' === $st( 'flat_rate', array( 'cost' => '10', 'rwgcm_cost_ZAR' => '150', 'class_cost_12' => '5' ) )['reason'] );
+assert_true( 'flat rate with only no_class_cost and no ZAR amount stays unpriced', 'class_costs' === $st( 'flat_rate', array( 'cost' => '10', 'rwgcm_cost_ZAR' => '150', 'no_class_cost' => '2' ) )['reason'] );
 assert_true( 'blank class cost fields do not count', $st( 'flat_rate', array( 'cost' => '10', 'rwgcm_cost_ZAR' => '150', 'class_cost_12' => '', 'no_class_cost' => '' ) )['priced'] );
+assert_true( 'a zero class cost does not need a ZAR amount', $st( 'flat_rate', array( 'cost' => '10', 'rwgcm_cost_ZAR' => '150', 'class_cost_12' => '0' ) )['priced'] );
+$full_class = array( 'cost' => '10', 'rwgcm_cost_ZAR' => '230', 'class_cost_12' => '5', 'rwgcm_class_cost_12_ZAR' => '40', 'no_class_cost' => '2', 'rwgcm_no_class_cost_ZAR' => '15' );
+assert_true( 'flat rate is priced when every class cost has a ZAR amount', $st( 'flat_rate', $full_class )['priced'] );
+assert_true( 'priced class-cost label names the ZAR base and the class amounts', '230 + class 40, 15' === $st( 'flat_rate', $full_class )['amount'] );
+assert_true( 'one missing class amount keeps the method unpriced', 'class_costs' === $st( 'flat_rate', array( 'cost' => '10', 'rwgcm_cost_ZAR' => '230', 'class_cost_12' => '5', 'rwgcm_class_cost_12_ZAR' => '40', 'no_class_cost' => '2' ) )['reason'] );
+assert_true( 'class amount without a base amount is not priced', 'missing' === $st( 'flat_rate', array( 'cost' => '10', 'class_cost_12' => '5', 'rwgcm_class_cost_12_ZAR' => '40' ) )['reason'] );
+assert_true( 'swap: complete class amounts swap the base and the class cost', '230' === $S::swapped_value( 'flat_rate', $full_class, '10', 'ZAR', 'GBP', 'cost' ) && '40' === $S::swapped_value( 'flat_rate', $full_class, '5', 'ZAR', 'GBP', 'class_cost_12' ) && '15' === $S::swapped_value( 'flat_rate', $full_class, '2', 'ZAR', 'GBP', 'no_class_cost' ) );
+$before_swap = $full_class;
+$GLOBALS['rw_currency'] = 'ZAR';
+$cm = new RW_Method( 'flat_rate', $full_class );
+assert_true( 'filter reads the ZAR class cost only when every component is priced', '40' === $S::filter_instance_option( '5', 'class_cost_12', $cm ) && '230' === $S::filter_instance_option( '10', 'cost', $cm ) );
+$pm = new RW_Method( 'flat_rate', $partial );
+assert_true( 'filter does not swap any component while a class amount is missing', '10' === $S::filter_instance_option( '10', 'cost', $pm ) && '5' === $S::filter_instance_option( '5', 'class_cost_12', $pm ) );
+$GLOBALS['rw_currency'] = 'GBP';
+$S::swapped_value( 'flat_rate', $full_class, '10', 'ZAR', 'GBP', 'cost' );
+assert_true( 'swap does not write the instance settings', $before_swap === $full_class );
 assert_true( 'free flat rate (cost 0) is priced in any currency', 'zero' === $st( 'flat_rate', array( 'cost' => '0' ) )['reason'] );
 assert_true( 'free shipping coupon-only is priced', 'coupon_only' === $st( 'free_shipping', array( 'requires' => 'coupon', 'min_amount' => '60' ) )['reason'] );
 assert_true( 'free shipping with no requirement is priced', 'no_minimum' === $st( 'free_shipping', array( 'requires' => '' ) )['reason'] );
@@ -180,6 +211,13 @@ assert_true( 'no fallback: empty wrapper is still rendered (fragment target)', '
 $rp->setValue( null, 'ZAR' );
 assert_true( 'fallback: notice text from the current state (no session, no one-shot)', false !== strpos( $S::current_notice(), 'Prices are shown in GBP' ) && false !== strpos( $S::current_notice(), 'priced in ZAR' ) );
 assert_true( 'fallback: stays on every render (persistent)', $S::current_notice() === $S::current_notice() );
+$rp->setValue( null, 'GBP' );
+assert_true( 'fallback equal to the store currency is cleared', '' === $S::current_notice() );
+$GLOBALS['rw_currency'] = 'ZAR';
+$rp->setValue( null, 'ZAR' );
+assert_true( 'notice is cleared when the cart is already in the visitor currency', '' === $S::current_notice() );
+$GLOBALS['rw_currency'] = 'GBP';
+$rp->setValue( null, 'ZAR' );
 $h = $S::notice_html( $S::current_notice(), 'checkout' );
 assert_true( 'fallback: one woocommerce-info inside one wrapper', 1 === substr_count( $h, 'woocommerce-info' ) && 1 === substr_count( $h, 'rwgcm-shipping-currency-notice--checkout' ) );
 assert_true( 'cart wrapper class', false !== strpos( $S::notice_html( 'x', 'cart' ), 'rwgcm-shipping-currency-notice--cart' ) );
@@ -280,7 +318,7 @@ assert_true( 'overview: cell shows the ZAR cost', 'ZAR 150' === $ov[0]['rows'][0
 assert_true( 'overview: free shipping cell shows the minimum', 'minimum ZAR 1000' === $ov[0]['rows'][1]['cells']['ZAR']['label'] );
 assert_true( 'overview: missing reason', 'no EUR amount' === $ov[0]['rows'][0]['cells']['EUR']['label'] );
 assert_true( 'overview: disabled method flagged', false === $ov[0]['rows'][2]['enabled'] );
-assert_true( 'reason labels for carrier and class costs', false !== strpos( $S::reason_label( array( 'priced' => false, 'reason' => 'unsupported', 'amount' => '' ), 'ZAR' ), 'carrier' ) && false !== strpos( $S::reason_label( array( 'priced' => false, 'reason' => 'class_costs', 'amount' => '' ), 'ZAR' ), 'class' ) );
+assert_true( 'reason labels for carrier and class costs', 'carrier, store currency only' === $S::reason_label( array( 'priced' => false, 'reason' => 'unsupported', 'amount' => '' ), 'ZAR' ) && 'class costs need a ZAR amount' === $S::reason_label( array( 'priced' => false, 'reason' => 'class_costs', 'amount' => '' ), 'ZAR' ) );
 
 // --- computed_priced against zones (WC_Shipping_Zones stand-in) -----------------
 if ( true ) { // Conditional so the class is not hoisted above the earlier "no WooCommerce" checks.
@@ -318,6 +356,116 @@ $out = $S::filter_package_rates( array( 'flat_rate:3' => new RW_Rate( 'flat_rate
 assert_true( 'without the site filter the same rate is tagged GBP', 'GBP' === $out['flat_rate:3']->meta['rwgcm_priced_currency'] && ! isset( $out['flat_rate:3']->meta['rwgcm_priced_source'] ) );
 $GLOBALS['rw_currency'] = 'GBP';
 
+// --- Class costs and block pickup (phase 1) -----------------------------------
+$zone = array(
+	'id'          => 4,
+	'locations'   => array( array( 'code' => 'ZA', 'type' => 'country' ) ),
+	'instance_id' => 9,
+	'settings'    => array( 'cost' => '10', 'class_cost_12' => '5', 'title' => 'Flat' ),
+);
+$zone_before = $zone;
+$saved = $zone['settings'];
+$saved['rwgcm_cost_ZAR'] = '230';
+$saved['rwgcm_class_cost_12_ZAR'] = '80';
+assert_true( 'admin save of ZAR fields adds only rwgcm keys', '10' === $saved['cost'] && '5' === $saved['class_cost_12'] && 'Flat' === $saved['title'] && '230' === $saved['rwgcm_cost_ZAR'] && '80' === $saved['rwgcm_class_cost_12_ZAR'] );
+assert_true( 'zone id, locations and instance id are unchanged', 4 === $zone['id'] && $zone_before['locations'] === $zone['locations'] && 9 === $zone['instance_id'] && $zone_before['settings'] === $zone['settings'] );
+
+$locations = array(
+	array( 'name' => 'Cape Town', 'enabled' => true, 'cost' => '15' ),
+	array( 'id' => 'loc-jhb', 'name' => 'Johannesburg', 'enabled' => true ),
+	array( 'name' => 'Closed', 'enabled' => false ),
+);
+$locations_before = $locations;
+$GLOBALS['rw_opts']['pickup_location_pickup_locations'] = $locations;
+$GLOBALS['rw_opts']['woocommerce_pickup_location_settings'] = array( 'enabled' => 'yes', 'cost' => '10' );
+$GLOBALS['rw_opts'][ $S::OPTION_PICKUP_COSTS ] = array( '0' => array( 'ZAR' => '80' ), 'loc-jhb' => array( 'ZAR' => '90' ), 'gone' => array( 'EUR' => '12' ) );
+$model = $S::pickup_admin_model( $locations, '10', $GLOBALS['rw_opts'][ $S::OPTION_PICKUP_COSTS ] );
+assert_true( 'pickup cards keep the GBP location cost', '15' === $model['cards'][0]['gbp_cost'] && '10' === $model['cards'][1]['gbp_cost'] );
+assert_true( 'explicit location id is used and the index is not guessed onto it', '0' === $model['cards'][0]['id'] && 'loc-jhb' === $model['cards'][1]['id'] );
+assert_true( 'a regenerated id is an orphan and is not copied', 1 === count( $model['orphans'] ) && 'gone' === $model['orphans'][0]['id'] );
+assert_true( 'reading the cards does not change the location list', $locations_before === $locations && $locations_before === $GLOBALS['rw_opts']['pickup_location_pickup_locations'] );
+assert_true( 'GBP method cost is unchanged', '10' === $GLOBALS['rw_opts']['woocommerce_pickup_location_settings']['cost'] );
+$merged = $S::merge_pickup_costs(
+	$GLOBALS['rw_opts'][ $S::OPTION_PICKUP_COSTS ],
+	array( '0' => array( 'ZAR' => '200' ), 'loc-jhb' => array( 'ZAR' => '' ) ),
+	array( '0', 'loc-jhb' ),
+	array( 'gone' ),
+	array( 'ZAR', 'EUR' )
+);
+assert_true( 'merge writes the side option only', array( '0' => array( 'ZAR' => '200' ) ) === $merged );
+assert_true( 'merge does not rewrite locations or the GBP cost', $locations_before === $GLOBALS['rw_opts']['pickup_location_pickup_locations'] && '10' === $GLOBALS['rw_opts']['woocommerce_pickup_location_settings']['cost'] && '15' === $GLOBALS['rw_opts']['pickup_location_pickup_locations'][0]['cost'] );
+assert_true( 'a non-numeric pickup amount is rejected', '' === $S::sanitize_pickup_amount( '10 * [qty]' ) && '230.50' === $S::sanitize_pickup_amount( '230,50' ) );
+assert_true( 'ids that were not on the form are kept', array( 'kept' => array( 'ZAR' => '5' ) ) === $S::merge_pickup_costs( array( 'kept' => array( 'ZAR' => '5' ) ), array(), array(), array(), array( 'ZAR' ) ) );
+
+assert_true( 'pickup with no ZAR amount is not priced', 'missing' === $st( 'pickup_location', array( 'cost' => '10', 'location_id' => '0', 'pickup_costs' => array() ) )['reason'] );
+assert_true( 'pickup with a ZAR amount is priced', $st( 'pickup_location', array( 'cost' => '10', 'location_id' => '0', 'pickup_costs' => array( '0' => array( 'ZAR' => '80' ) ) ) )['priced'] );
+assert_true( 'a zero GBP pickup cost is priced with no amount', 'zero' === $st( 'pickup_location', array( 'cost' => '0', 'location_id' => '0', 'pickup_costs' => array() ) )['reason'] );
+$GLOBALS['rw_currency'] = 'ZAR';
+class RW_Pickup_Method { public $id = 'pickup_location'; } // phpcs:ignore
+$rate_args = array( 'id' => 'pickup_location:0', 'label' => 'Pickup', 'cost' => '10' );
+$swapped_args = $S::filter_add_rate_args( $rate_args, new RW_Pickup_Method() );
+assert_true( 'pickup rate cost is the manual ZAR amount', '80' === $swapped_args['cost'] );
+assert_true( 'applying the ZAR amount does not change the location cost', '15' === $GLOBALS['rw_opts']['pickup_location_pickup_locations'][0]['cost'] && '10' === $GLOBALS['rw_opts']['woocommerce_pickup_location_settings']['cost'] );
+$explicit = $S::filter_add_rate_args( array( 'id' => 'pickup_location:1', 'label' => 'Pickup', 'cost' => '10' ), new RW_Pickup_Method() );
+assert_true( 'a location id on the row is the cost key, not the array index', '90' === $explicit['cost'] );
+$GLOBALS['rw_opts'][ $S::OPTION_PICKUP_COSTS ] = array();
+$kept_gbp = $S::filter_add_rate_args( array( 'id' => 'pickup_location:0', 'label' => 'Pickup', 'cost' => '10' ), new RW_Pickup_Method() );
+assert_true( 'a pickup rate with no manual amount keeps the GBP cost', '10' === $kept_gbp['cost'] );
+$GLOBALS['rw_admin'] = true;
+$GLOBALS['rw_opts'][ $S::OPTION_PICKUP_COSTS ] = array( '0' => array( 'ZAR' => '80' ) );
+assert_true( 'wp-admin does not swap the pickup cost', '10' === $S::filter_add_rate_args( array( 'id' => 'pickup_location:0', 'cost' => '10' ), new RW_Pickup_Method() )['cost'] );
+$GLOBALS['rw_admin'] = false;
+$GLOBALS['rw_currency'] = 'GBP';
+assert_true( 'a GBP cart does not swap the pickup cost', '10' === $S::filter_add_rate_args( array( 'id' => 'pickup_location:0', 'cost' => '10' ), new RW_Pickup_Method() )['cost'] );
+
+$GLOBALS['rw_opts']['woocommerce_free_shipping_2_settings'] = array( 'requires' => 'min_amount', 'min_amount' => '60', 'rwgcm_min_amount_ZAR' => '1000' );
+$GLOBALS['rw_opts'][ $S::OPTION_PICKUP_COSTS ] = array();
+$S::reset_memo();
+assert_true( 'enabled pickup with no ZAR amount keeps a priced zone in GBP', false === $S::computed_priced( 'ZAR', array( $za ) ) );
+$GLOBALS['rw_opts'][ $S::OPTION_PICKUP_COSTS ] = array( '0' => array( 'ZAR' => '80' ), 'loc-jhb' => array( 'ZAR' => '90' ) );
+$S::reset_memo();
+assert_true( 'enabled pickup is priced when every enabled location has a ZAR amount', true === $S::computed_priced( 'ZAR', array( $za ) ) );
+$GLOBALS['rw_opts']['woocommerce_pickup_location_settings']['enabled'] = 'no';
+$S::reset_memo();
+assert_true( 'disabled block pickup does not block the currency', true === $S::computed_priced( 'ZAR', array( $za ) ) );
+$GLOBALS['rw_opts']['woocommerce_pickup_location_settings']['enabled'] = 'yes';
+$GLOBALS['rw_opts']['pickup_location_pickup_locations'][0]['cost'] = '0';
+$GLOBALS['rw_opts'][ $S::OPTION_PICKUP_COSTS ] = array();
+$S::reset_memo();
+assert_true( 'a zero cost on the location needs no amount; the other location still does', false === $S::computed_priced( 'ZAR', array( $za ) ) );
+$GLOBALS['rw_opts'][ $S::OPTION_PICKUP_COSTS ] = array( '0' => array( 'ZAR' => '80' ), 'loc-jhb' => array( 'ZAR' => '90' ) );
+$GLOBALS['rw_currency'] = 'ZAR';
+class RW_Pickup_Rate { public $mid; public $rid; public $meta = array(); public function __construct( $rid ) { $this->mid = 'pickup_location'; $this->rid = $rid; } public function get_method_id() { return $this->mid; } public function get_instance_id() { return 0; } public function get_id() { return $this->rid; } public function add_meta_data( $k, $v ) { $this->meta[ $k ] = $v; } } // phpcs:ignore
+$GLOBALS['rw_opts'][ $S::OPTION_HIDE_UNPRICED ] = 'yes';
+$GLOBALS['rw_opts'][ $S::OPTION_PICKUP_COSTS ] = array( '0' => array( 'ZAR' => '80' ) );
+$S::reset_memo();
+$out = $S::filter_package_rates(
+	array(
+		'flat_rate:1' => new RW_Rate( 'flat_rate', 1 ),
+		'pickup_location:0' => new RW_Pickup_Rate( 'pickup_location:0' ),
+		'pickup_location:1' => new RW_Pickup_Rate( 'pickup_location:1' ),
+	),
+	$za
+);
+assert_true( 'priced pickup location is tagged ZAR', isset( $out['pickup_location:0'] ) && 'ZAR' === $out['pickup_location:0']->meta['rwgcm_priced_currency'] );
+assert_true( 'hide unpriced removes the location that has no ZAR amount and keeps the priced one', ! isset( $out['pickup_location:1'] ) && isset( $out['flat_rate:1'] ) );
+$GLOBALS['rw_opts'][ $S::OPTION_HIDE_UNPRICED ] = 'no';
+$GLOBALS['rw_currency'] = 'GBP';
+unset( $GLOBALS['rw_opts']['woocommerce_pickup_location_settings'], $GLOBALS['rw_opts']['pickup_location_pickup_locations'], $GLOBALS['rw_opts'][ $S::OPTION_PICKUP_COSTS ] );
+$S::reset_memo();
+
+$block_js = file_get_contents( dirname( __DIR__ ) . '/assets/js/shipping-currency-notice.js' );
+assert_true(
+	'checkout block notice is a live region bound to the store API string',
+	is_string( $block_js )
+		&& false !== strpos( $block_js, 'shipping_currency_notice' )
+		&& false !== strpos( $block_js, "role: 'status'" )
+		&& false !== strpos( $block_js, 'rwgcm-shipping-currency-notice--block' )
+);
+assert_true( 'checkout block notice renders nothing when the string is empty', false !== strpos( $block_js, 'if ( ! notice )' ) && false !== strpos( $block_js, 'return null' ) );
+$picker_js = file_get_contents( dirname( __DIR__ ) . '/admin/js/rwgcm-shipping-currency.js' );
+assert_true( 'currency select changes the column and does not save', is_string( $picker_js ) && false !== strpos( $picker_js, 'rwgcm-shipping-currency' ) && false !== strpos( $picker_js, 'addEventListener' ) && false === strpos( $picker_js, 'fetch(' ) && false === strpos( $picker_js, '.submit(' ) );
+
 // --- Wiring (source) ------------------------------------------------------------
 $src   = file_get_contents( dirname( __DIR__ ) . '/includes/class-rwgcm-shipping-prices.php' );
 $plug  = file_get_contents( dirname( __DIR__ ) . '/includes/class-rwgcm-plugin.php' );
@@ -344,6 +492,14 @@ assert_true( 'currency resolver does not call WC_Cart::get_shipping_packages dur
 assert_true( 'admin: Shipping tab and overview', false !== strpos( $admin, 'function render_shipping_overview' ) && false !== strpos( $admin, "'shipping' => array( __( 'Shipping'" ) );
 assert_true( 'admin: overview reuses the sticky matrix layout', false !== strpos( $admin, 'rwgcm-gateway-matrix rwgcm-shipping-matrix' ) );
 assert_true( 'admin: hide setting saved only with its own present field', false !== strpos( $admin, "if ( isset( \$_POST['rwgcm_shipping_settings_present'] ) ) {\n\t\t\tupdate_option( RWGCM_Shipping_Prices::OPTION_HIDE_UNPRICED" ) );
+assert_true( 'admin: pickup costs save from their own present field', false !== strpos( $admin, "if ( isset( \$_POST['rwgcm_pickup_costs_present'] ) )" ) && false !== strpos( $admin, 'RWGCM_Shipping_Prices::OPTION_PICKUP_COSTS' ) );
+assert_true( 'admin: currency select and pickup cards', false !== strpos( $admin, 'rwgcm-shipping-currency' ) && false !== strpos( $admin, 'function render_pickup_cards' ) && false !== strpos( $admin, 'price-books-shipping' ) );
+assert_true( 'location list and GBP pickup settings are never updated', false === strpos( $src . $admin, "update_option( 'pickup_location_pickup_locations'" ) && false === strpos( $src . $admin, "update_option( 'woocommerce_pickup_location_settings'" ) && false === strpos( $src, 'woocommerce_shipping_zone_methods' ) );
+assert_true( 'block notice script is registered for the checkout block', false !== strpos( $src, 'function register_checkout_block' ) && false !== strpos( $src, 'shipping-currency-notice.js' ) );
+$modal_css = file_get_contents( dirname( __DIR__ ) . '/admin/css/rwgcm-shipping-modal.css' );
+$admin_css = file_get_contents( dirname( __DIR__ ) . '/admin/css/rwgcm-admin.css' );
+assert_true( 'method modal fields are full width from 782px down', is_string( $modal_css ) && false !== strpos( $modal_css, 'max-width: 782px' ) && false !== strpos( $modal_css, 'width: 100%' ) );
+assert_true( 'shipping tab shows one currency column below 782px and stacks pickup cards', is_string( $admin_css ) && false !== strpos( $admin_css, '.rwgcm-currency-col.is-selected' ) && false !== strpos( $admin_css, 'flex-direction: column' ) );
 
 echo "\n{$passed} passed, {$failed} failed\n";
 exit( $failed > 0 ? 1 : 0 );

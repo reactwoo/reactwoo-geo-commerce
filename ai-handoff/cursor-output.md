@@ -2,44 +2,44 @@
 
 ## Status
 
-needs-review
+done
 
 ## Summary
 
-0.5.1 keeps the classic-cart shipping-currency notice inside the totals table. The header mini-cart now posts `get_refreshed_fragments` itself after the calculator response, and that request uses the shipping country the calculator saved (the same destination the cart totals used) instead of the geo visitor country still in the previous session. Draft PR only. Not merged and not tagged. Version stays 0.5.1.
+The classic cart shipping calculator now clears the shipping-currency notice when the new address uses the store currency. A ZAR fallback followed by a GB calculation no longer leaves "Prices are shown in GBP because shipping to United Kingdom (UK) isn't priced in ZAR." Checkout already cleared that notice. Still draft PR #12. Not merged and not tagged. Version stays 0.6.0.
 
 ## Root cause
 
-The cart page script only triggered `wc_fragment_refresh`. WooCommerce does not enqueue `wc-cart-fragments` on the cart, so at 1280 nothing listened and no `get_refreshed_fragments` request was sent. Where a listener existed (390), the script armed a refresh on calculator submit, 50ms later, before the new shipping country was stored, and `updated_wc_div` fired another as soon as the HTML arrived. Both ran against the previous session (geo ZA), so both mini-carts came back in ZAR. `ajaxComplete` re-armed that same timer for the fragment response's own completion path only when the calculator data was still attached, and the follow-up merely triggered `wc_fragment_refresh` again, which did not send a later request. A full reload rendered the header from the saved session, which is why only a reload matched the totals.
-
-`get_refreshed_fragments` resolves `get_woocommerce_currency()` from the customer shipping country via the shipping-priced check. Until `woocommerce_calculated_shipping` has written the session, that country is still the geo default. Shipping to ZA is priced in ZAR, so the mini-cart stays R499.00 while the calculator request, which set GB in memory before rendering, shows £23.00.
+The calculator updates the customer shipping country, but currency still followed the geo visitor (ZA → ZAR). Shipping to GB is not priced in ZAR, so the cart stayed in GBP and the fallback notice was rewritten for the United Kingdom. Checkout posts the billing country GB, so the visitor currency becomes the store currency and the notice is empty.
 
 ## Files changed
 
 | File | Reason |
 |------|--------|
-| includes/class-rwgcm-shipping-prices.php | Cart page posts `get_refreshed_fragments` after totals events; debounce ignores its own response and queues a later switch; filterable header selectors |
-| includes/class-rwgcm-price-book-currency.php | Persist the customer session on `woocommerce_calculated_shipping`, before the response is flushed |
-| tests/test-shipping-prices.php | Script, queue, and header-fragment coverage |
-| tests/test-checkout-country.php | Geo ZA + shipping GB resolves GBP; session save |
-| readme.txt, CHANGELOG.md | Describe the refresh; version stays 0.5.1 |
+| includes/class-rwgcm-price-book-currency.php | Remember the calculator country, then resolve again; drop a fallback when the visitor currency is the store currency |
+| includes/class-rwgcm-shipping-prices.php | No notice when the fallback is the store currency or the cart is already in the visitor currency |
+| tests/test-checkout-country.php | ZA fallback, then calculator to GB, notice cleared; calculator back to ZA still explains ZAR |
+| tests/test-shipping-prices.php | Store-currency fallback and an already-matched visitor currency produce no notice |
+| CHANGELOG.md, readme.txt | Note the fix under 0.6.0 |
 
 ## What was not changed
 
-- Checkout notice markup and `woocommerce_update_order_review_fragments`
-- Store API `shipping_currency_notice`
-- Version (still 0.5.1)
+- Version (still 0.6.0)
+- Phase 2 and phase 3
 - No merge and no tag
 
 ## Commands run
 
 ```bash
-php -l includes/class-rwgcm-shipping-prices.php
 php -l includes/class-rwgcm-price-book-currency.php
-php tests/*.php
+php -l includes/class-rwgcm-shipping-prices.php
+php tests/test-checkout-country.php
+php tests/test-shipping-prices.php
+php tests/test-shipping-cache.php
+php tests/test-store-api-currency.php
 ```
 
-490 passed, 0 failed. Raw-byte scan found no redaction marker.
+All passed (0 failed).
 
 ## Remaining errors
 

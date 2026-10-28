@@ -81,6 +81,7 @@ function assert_true( $label, $condition ) { // phpcs:ignore
 	++$failed; echo "FAIL: {$label}\n";
 }
 function rw_currency() { return RWGCM_Price_Book_Currency::filter_currency( 'GBP' ); } // phpcs:ignore
+function get_woocommerce_currency() { return rw_currency(); } // phpcs:ignore
 function rw_cart( array $ids ) { // phpcs:ignore
 	$GLOBALS['rw']['cart'] = array();
 	foreach ( $ids as $id ) {
@@ -210,6 +211,31 @@ assert_true( 'fragment currency: geo ZA and calculator shipping GB (not priced i
 $before = WC()->session->saved;
 RWGCM_Price_Book_Currency::persist_customer_session();
 assert_true( 'calculator writes the customer session before the response is flushed', WC()->session->saved === $before + 1 );
+
+// 9. Classic cart calculator: ZAR fallback, then the shopper calculates shipping to GB.
+// Checkout already drops the notice once billing is GB. The cart must do the same.
+rw_reset();
+rw_books();
+rw_cart( array( 3655 ) );
+$GLOBALS['rw']['ship'] = true;
+$GLOBALS['rw']['opts']['woocommerce_flat_rate_1_settings'] = array( 'cost' => '40' );
+$GLOBALS['rw']['opts']['woocommerce_flat_rate_9_settings'] = array( 'cost' => '5' );
+$GLOBALS['rw']['ship_country'] = 'ZA';
+RWGCM_Shipping_Prices::reset_memo();
+$held = RWGCM_Shipping_Prices::current_notice();
+assert_true( 'unpriced ZA shipping holds the cart in GBP and says so', 'GBP' === rw_currency() && false !== strpos( $held, 'GBP' ) && false !== strpos( $held, 'ZAR' ) );
+$GLOBALS['rw']['ship_country'] = 'GB';
+RWGCM_Shipping_Prices::reset_memo();
+RWGCM_Price_Book_Currency::persist_customer_session();
+assert_true( 'calculator to GB remembers that country', 'GB' === WC()->session->get( 'rwgcm_billing_country' ) );
+assert_true( 'calculator to GB resolves the store currency', 'GBP' === rw_currency() );
+assert_true( 'calculator to GB clears the ZAR fallback notice', '' === RWGCM_Shipping_Prices::current_notice() );
+$GLOBALS['rw']['session'] = array();
+$GLOBALS['rw']['ship_country'] = 'ZA';
+RWGCM_Shipping_Prices::reset_memo();
+RWGCM_Price_Book_Currency::persist_customer_session();
+$back = RWGCM_Shipping_Prices::current_notice();
+assert_true( 'calculator to ZA still explains the ZAR fallback', 'ZA' === WC()->session->get( 'rwgcm_billing_country' ) && 'GBP' === rw_currency() && false !== strpos( $back, 'ZAR' ) );
 
 echo "\n{$passed} passed, {$failed} failed\n";
 exit( $failed > 0 ? 1 : 0 );

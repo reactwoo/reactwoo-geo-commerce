@@ -1,0 +1,33 @@
+/**
+ * Currency fields inside WooCommerce's shipping-method modal.
+ * One column, helper under the input, full width on a phone.
+ */
+
+.wc-backbone-modal .rwgcm-currency-price,
+.wc-shipping-zone-method-fields .rwgcm-currency-price {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.wc-backbone-modal p.description,
+.wc-shipping-zone-method-fields p.description {
+  white-space: normal;
+}
+
+@media (max-width: 782px) {
+  .wc-backbone-modal .form-table th,
+  .wc-backbone-modal .form-table td,
+  .wc-shipping-zone-method-fields .form-table th,
+  .wc-shipping-zone-method-fields .form-table td {
+    display: block;
+    width: auto;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .wc-backbone-modal input.rwgcm-currency-price,
+  .wc-shipping-zone-method-fields input.rwgcm-currency-price {
+    width: 100%;
+    max-width: 100%;
+  }
+}
