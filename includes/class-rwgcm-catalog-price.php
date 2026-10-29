@@ -17,6 +17,55 @@ class RWGCM_Catalog_Price {
 	 */
 	public static function init() {
 		add_filter( 'woocommerce_product_get_price', array( __CLASS__, 'filter_product_price' ), 99, 2 );
+		add_filter( 'woocommerce_product_variation_get_price', array( __CLASS__, 'filter_product_price' ), 99, 2 );
+	}
+
+	/**
+	 * True when the geo rule should change this product's displayed price.
+	 *
+	 * A fixed book price in the active currency replaces the rule. When the
+	 * product has no book price in the visitor currency, the cart charges the
+	 * store currency and applies the rule there, so catalog display must too.
+	 *
+	 * @param \WC_Product $product Product or variation.
+	 * @return bool
+	 */
+	public static function adjustment_applies( $product ) {
+		if ( class_exists( 'RWGCM_Price_Book_Apply', false ) && RWGCM_Price_Book_Apply::allow_base_adjustment( $product ) ) {
+			return true;
+		}
+		return self::charged_in_base_currency( $product );
+	}
+
+	/**
+	 * Visitor currency is not the store currency, and this product is not priced
+	 * in it, so the cart falls back to the store currency and geo-adjusts that amount.
+	 *
+	 * @param object $product Product.
+	 * @return bool
+	 */
+	public static function charged_in_base_currency( $product ) {
+		if ( ! class_exists( 'RWGCM_Price_Book_Currency', false ) || ! class_exists( 'RWGCM_Price_Book', false ) ) {
+			return false;
+		}
+		if ( ! function_exists( 'get_woocommerce_currency' ) || ! is_object( $product ) || ! method_exists( $product, 'get_id' ) ) {
+			return false;
+		}
+		$active = RWGCM_Price_Book::normalize_currency( get_woocommerce_currency() );
+		$base   = RWGCM_Price_Book::normalize_currency( RWGCM_Price_Book_Currency::base_currency() );
+		if ( '' === $active || '' === $base || $active === $base ) {
+			return false;
+		}
+		$book = RWGCM_Price_Book_Currency::get_book( (int) $product->get_id() );
+		if ( RWGCM_Price_Book::has_price( $book, $active ) ) {
+			return false;
+		}
+		return RWGCM_Price_Book::should_apply_base_adjustment(
+			$base,
+			$base,
+			RWGCM_Price_Book::has_price( $book, $base ),
+			RWGCM_Price_Book::base_adjustments_enabled()
+		);
 	}
 
 	/**
@@ -47,7 +96,7 @@ class RWGCM_Catalog_Price {
 		if ( ! apply_filters( 'rwgcm_apply_catalog_price', true, $product ) ) {
 			return $price;
 		}
-		if ( class_exists( 'RWGCM_Price_Book_Apply', false ) && ! RWGCM_Price_Book_Apply::allow_base_adjustment( $product ) ) {
+		if ( ! self::adjustment_applies( $product ) ) {
 			return $price;
 		}
 

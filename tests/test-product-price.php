@@ -499,6 +499,23 @@ override_visitor_country( 'ZA' );
 $gbp_store_za = RWGCM_Product_Price::render( array( 'product_id' => 40, 'format' => 'code' ) );
 assert_has( 'GBP store, ZA visitor renders the ZAR book price', $gbp_store_za, '849.00 ZAR' );
 assert_lacks( 'the percent rule does not stack on a fixed ZAR book price', $gbp_store_za, '721.65' );
+
+// No ZAR book: the cart falls back to GBP and applies the ZA rule. Catalog display must match.
+$GLOBALS['rw_products'][41] = new RW_Product( 41, '100' );
+$za_payable                 = RWGCM_Simulator::pricing_preview( 'ZA', array(), 100 );
+$za_payable_amount          = number_format( (float) $za_payable['adjusted'], 2, '.', '' );
+assert_true( 'simulator prices the GBP-store ZA rule at 85.00', '85.00' === $za_payable_amount );
+assert_true(
+	'cart currency falls back to GBP when the product has no ZAR price',
+	'GBP' === RWGCM_Price_Book::currency_for_lines( 'ZAR', 'GBP', array( false ) )
+);
+$catalog_za = RWGCM_Catalog_Price::filter_product_price( '100', $GLOBALS['rw_products'][41] );
+assert_true( 'catalog price applies the ZA -15% rule for a GBP charge', '85.00' === (string) $catalog_za );
+$za_unpriced = RWGCM_Product_Price::render( array( 'product_id' => 41, 'format' => 'code' ) );
+assert_has( 'GBP-store ZA element shows the discounted price the cart charges', $za_unpriced, $za_payable_amount . ' GBP' );
+assert_lacks( 'GBP-store ZA element does not keep the undiscounted price', $za_unpriced, '100.00' );
+$za_html_price = RWGCM_Price_Book_Apply::filter_price_html( 'stale', $GLOBALS['rw_products'][41] );
+assert_has( 'catalog price HTML uses the discounted GBP amount', $za_html_price, 'GBP 85.00' );
 override_visitor_country( 'US' );
 assert_has( 'GBP store, US visitor renders USD', RWGCM_Product_Price::render( array( 'product_id' => 40, 'format' => 'code' ) ), '49.00 USD' );
 override_visitor_country( 'DE' );

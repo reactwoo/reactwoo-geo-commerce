@@ -202,7 +202,7 @@ class RWGCM_Price_Book_Apply {
 		if ( RWGCM_Price_Book::has_price( $book, $active ) ) {
 			return $html;
 		}
-		$raw = $product->get_price( 'edit' );
+		$raw = self::base_charge_amount( $product );
 		if ( '' === (string) $raw || ! function_exists( 'wc_price' ) ) {
 			return $html;
 		}
@@ -305,7 +305,7 @@ class RWGCM_Price_Book_Apply {
 		if ( RWGCM_Price_Book::has_price( $book, $active ) || ! function_exists( 'wc_price' ) ) {
 			return $data;
 		}
-		$raw = method_exists( $variation, 'get_price' ) ? $variation->get_price( 'edit' ) : '';
+		$raw = self::base_charge_amount( $variation );
 		if ( '' === (string) $raw ) {
 			return $data;
 		}
@@ -384,6 +384,27 @@ class RWGCM_Price_Book_Apply {
 	}
 
 	/**
+	 * Store-currency amount the cart will charge when the visitor currency has no book price.
+	 * Includes the geo pricing rule. A product priced in the visitor currency keeps its raw amount here.
+	 *
+	 * @param object $product Product or variation.
+	 * @return string
+	 */
+	private static function base_charge_amount( $product ) {
+		$edit = ( is_object( $product ) && method_exists( $product, 'get_price' ) ) ? $product->get_price( 'edit' ) : '';
+		if ( ! is_object( $product ) || ! method_exists( $product, 'get_price' ) ) {
+			return (string) $edit;
+		}
+		if ( class_exists( 'RWGCM_Catalog_Price', false ) && RWGCM_Catalog_Price::charged_in_base_currency( $product ) ) {
+			$view = $product->get_price();
+			if ( '' !== (string) $view && is_numeric( (string) $view ) ) {
+				return (string) $view;
+			}
+		}
+		return (string) $edit;
+	}
+
+	/**
 	 * @param object $product Parent product.
 	 * @param string $active  Active currency.
 	 * @return array<int, array{raw: string, book: string}>
@@ -407,7 +428,7 @@ class RWGCM_Price_Book_Apply {
 			if ( ! is_object( $child ) || ! method_exists( $child, 'get_id' ) ) {
 				continue;
 			}
-			$raw  = method_exists( $child, 'get_price' ) ? $child->get_price( 'edit' ) : '';
+			$raw = self::base_charge_amount( $child );
 			$book = RWGCM_Price_Book_Currency::get_book( $child->get_id() );
 			$book_amount = '';
 			if ( RWGCM_Price_Book::has_price( $book, $active ) ) {

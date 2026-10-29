@@ -183,6 +183,10 @@ class RWGCM_Plugin {
 			RWGCM_Weather_Tagging::init();
 		}
 		add_action( 'elementor/loaded', array( __CLASS__, 'boot_elementor' ) );
+		// Elementor fires elementor/loaded on plugins_loaded before this plugin boots.
+		if ( did_action( 'elementor/loaded' ) || class_exists( '\Elementor\Plugin', false ) ) {
+			self::boot_elementor();
+		}
 
 		add_action( 'init', array( __CLASS__, 'register_satellite_updater' ), 1 );
 
@@ -196,9 +200,14 @@ class RWGCM_Plugin {
 	 * @return void
 	 */
 	public static function boot_elementor() {
-		if ( ! did_action( 'elementor/loaded' ) ) {
+		static $done = false;
+		if ( $done ) {
 			return;
 		}
+		if ( ! did_action( 'elementor/loaded' ) && ! class_exists( '\Elementor\Plugin', false ) ) {
+			return;
+		}
+		$done = true;
 		require_once RWGCM_PATH . 'includes/integrations/elementor/class-rwgcm-elementor.php';
 		RWGCM_Elementor::init();
 	}

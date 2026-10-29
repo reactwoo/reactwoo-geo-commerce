@@ -22,10 +22,39 @@ class RWGCM_Elementor_Atomic {
 	 * @return void
 	 */
 	public static function init() {
+		static $done = false;
+		if ( $done ) {
+			return;
+		}
+		$done = true;
 		add_action( 'elementor/widgets/register', array( __CLASS__, 'register_widgets' ) );
 		add_action( 'rest_api_init', array( __CLASS__, 'register_rest' ) );
 		add_action( 'elementor/editor/after_enqueue_scripts', array( __CLASS__, 'enqueue_preview' ) );
 		add_action( 'elementor/preview/enqueue_scripts', array( __CLASS__, 'enqueue_preview' ) );
+		if ( function_exists( 'did_action' ) && did_action( 'rest_api_init' ) ) {
+			self::register_rest();
+		}
+		self::register_widgets_now();
+	}
+
+	/**
+	 * Register atomic widgets when elementor/widgets/register has already fired.
+	 * Inactive atomic experiments return before any atomic class is loaded.
+	 *
+	 * @return void
+	 */
+	private static function register_widgets_now() {
+		if ( ! function_exists( 'did_action' ) || ! did_action( 'elementor/widgets/register' ) ) {
+			return;
+		}
+		if ( ! class_exists( '\Elementor\Plugin', false ) ) {
+			return;
+		}
+		$plugin = \Elementor\Plugin::$instance;
+		if ( ! is_object( $plugin ) || empty( $plugin->widgets_manager ) || ! is_object( $plugin->widgets_manager ) ) {
+			return;
+		}
+		self::register_widgets( $plugin->widgets_manager );
 	}
 
 	/**

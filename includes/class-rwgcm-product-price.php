@@ -267,10 +267,12 @@ class RWGCM_Product_Price {
 		$currency = $use_edit && '' !== $base ? $base : $active;
 		$on_sale  = false;
 		if ( $use_edit ) {
-			$price   = $product->get_price( 'edit' );
-			$regular = method_exists( $product, 'get_regular_price' ) ? $product->get_regular_price( 'edit' ) : $price;
+			// No book price in the visitor currency: the cart charges the store
+			// currency and applies the geo rule. get_price() is that amount.
+			$price   = $product->get_price();
+			$regular = method_exists( $product, 'get_regular_price' ) ? $product->get_regular_price() : $price;
 			if ( method_exists( $product, 'is_on_sale' ) ) {
-				$on_sale = (bool) $product->is_on_sale( 'edit' );
+				$on_sale = (bool) $product->is_on_sale();
 			}
 		} elseif ( self::is_variation( $product ) && function_exists( 'apply_filters' ) ) {
 			$owner   = self::is_product( $parent ) ? $parent : $product;

@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Format `amount`, `symbol`, or `code`. Optional billing-period suffix (`period`, for example `/year`), or the subscription period when the product has one. `from` shows the lowest variation price. `sale` strikes through the regular price when the product is on sale. `fallback` (default "Unavailable") is used when the product is missing, not purchasable, or out of stock.
 - Colour presets map to Elementor global colours and `theme.json` presets. Typography and colour inherit when no preset is chosen. The shortcode does not read `rwgc_cc`, set `DONOTCACHEPAGE`, or send nocache headers.
 
+### Fixed
+- **ZA rule on a GBP store.** When a product has no price in the visitor currency, the cart charges the store currency and applies the country rule. Catalog prices, price HTML, and the product price element now use that same discounted amount (ZA −15% of £100 is £85), instead of the undiscounted store price. A fixed ZAR book price is still shown in ZAR and is not discounted again.
+- **Elementor widgets missing.** Commerce boots after Elementor has fired `elementor/loaded`, so the widgets and the editor preview route never registered. Registration now runs immediately when that action has already fired, and again on `elementor/widgets/register` if it is still pending. Weather widgets use the same path. Atomic elements register only while Elementor's atomic experiment is on.
+
 ## [0.6.0] - 2026-10-28
 
 ### Added
