@@ -33,6 +33,20 @@ class RWGCM_Cache_Purge {
 	private static $busy = false;
 
 	/**
+	 * Exchange-rate saves update several options and fire an action. One request purges once.
+	 *
+	 * @var bool
+	 */
+	private static $exchange_purged = false;
+
+	/**
+	 * While set, an exchange-rate option write does not purge. Used when a refresh stores the same rates.
+	 *
+	 * @var int
+	 */
+	private static $silence_exchange = 0;
+
+	/**
 	 * @return void
 	 */
 	public static function init() {
@@ -103,7 +117,34 @@ class RWGCM_Cache_Purge {
 	 */
 	public static function on_exchange_rates_saved( $payload = null ) {
 		unset( $payload );
-		return self::purge_all( 'exchange_rates' );
+		return self::purge_exchange_once();
+	}
+
+	/**
+	 * Ignore exchange-rate option writes until the matching call with false.
+	 * A cron refresh uses this when the stored rates did not change.
+	 *
+	 * @param bool $on True to silence, false to restore one level.
+	 * @return void
+	 */
+	public static function silence_exchange_purge( $on ) {
+		if ( $on ) {
+			++self::$silence_exchange;
+			return;
+		}
+		if ( self::$silence_exchange > 0 ) {
+			--self::$silence_exchange;
+		}
+	}
+
+	/**
+	 * Clear the once-per-request exchange purge guard. Tests use this between cases.
+	 *
+	 * @return void
+	 */
+	public static function reset_exchange_purge_guard() {
+		self::$exchange_purged  = false;
+		self::$silence_exchange = 0;
 	}
 
 	/**
@@ -416,8 +457,25 @@ class RWGCM_Cache_Purge {
 			return;
 		}
 		if ( in_array( $option, self::exchange_rate_options(), true ) ) {
-			self::purge_all( 'exchange_rates' );
+			if ( self::$silence_exchange > 0 ) {
+				return;
+			}
+			self::purge_exchange_once();
 		}
+	}
+
+	/**
+	 * @return array<string, mixed>
+	 */
+	private static function purge_exchange_once() {
+		if ( self::$exchange_purged ) {
+			return self::last_purge();
+		}
+		$result = self::purge_all( 'exchange_rates' );
+		if ( empty( $result['skipped'] ) ) {
+			self::$exchange_purged = true;
+		}
+		return $result;
 	}
 
 	/**

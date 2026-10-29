@@ -715,11 +715,73 @@ class RWGCM_Exchange {
 		if ( empty( $payload['fetched_at'] ) ) {
 			$payload['fetched_at'] = time();
 		}
-		self::update_option( self::OPTION_CACHE, $payload );
-		if ( function_exists( 'set_transient' ) ) {
-			set_transient( self::TRANSIENT, $payload, self::TTL );
+		$previous = self::read_cache_option();
+		$changed  = ! self::rates_equivalent( $previous, $payload );
+		$quiet    = ! $changed && class_exists( 'RWGCM_Cache_Purge', false );
+		if ( $quiet ) {
+			RWGCM_Cache_Purge::silence_exchange_purge( true );
 		}
-		self::notify_saved( $payload );
+		try {
+			self::update_option( self::OPTION_CACHE, $payload );
+			if ( function_exists( 'set_transient' ) ) {
+				set_transient( self::TRANSIENT, $payload, self::TTL );
+			}
+		} finally {
+			if ( $quiet ) {
+				RWGCM_Cache_Purge::silence_exchange_purge( false );
+			}
+		}
+		if ( $changed ) {
+			self::notify_saved( $payload );
+		}
+	}
+
+	/**
+	 * True when two rate tables quote the same currencies at 6 decimal places.
+	 * fetched_at and the provider name are ignored. Float noise below that
+	 * precision does not count as a change.
+	 *
+	 * @param mixed $before Previous table, or null.
+	 * @param mixed $after  New table, or null.
+	 * @return bool
+	 */
+	public static function rates_equivalent( $before, $after ) {
+		return self::rate_fingerprint( $before ) === self::rate_fingerprint( $after );
+	}
+
+	/**
+	 * @param mixed $table Rate table or null.
+	 * @return string
+	 */
+	public static function rate_fingerprint( $table ) {
+		if ( ! is_array( $table ) ) {
+			return '';
+		}
+		$base = '';
+		if ( isset( $table['base'] ) ) {
+			$base = self::currency_code( $table['base'] );
+		}
+		$raw = ( isset( $table['rates'] ) && is_array( $table['rates'] ) ) ? $table['rates'] : $table;
+		if ( ! is_array( $raw ) ) {
+			return $base . '|';
+		}
+		$rates = array();
+		foreach ( $raw as $code => $rate ) {
+			if ( in_array( (string) $code, array( 'base', 'rates', 'provider', 'fetched_at', 'origin' ), true ) ) {
+				continue;
+			}
+			$code = self::currency_code( $code );
+			if ( '' === $code || ! is_numeric( $rate ) || (float) $rate <= 0 ) {
+				continue;
+			}
+			$rates[ $code ] = number_format( (float) $rate, 6, '.', '' );
+		}
+		ksort( $rates );
+		$parts = array();
+		foreach ( $rates as $code => $rate ) {
+			$parts[] = $code . '=' . $rate;
+		}
+		return $base . '|' . implode( ',', $parts );
 	}
 
 	/**

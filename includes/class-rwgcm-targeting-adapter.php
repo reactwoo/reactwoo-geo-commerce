@@ -98,9 +98,12 @@ class RWGCM_Targeting_Adapter {
 			}
 			$op = isset( $it['operator'] ) ? sanitize_key( (string) $it['operator'] ) : 'in';
 			if ( class_exists( 'RWGC_Target_Operators', false ) && ! RWGC_Target_Operators::is_valid( $op ) ) {
-				$op = 'in';
+				$op = in_array( $op, array( 'is_not', 'not' ), true ) ? 'not_in' : 'in';
 			}
 			$value = isset( $it['value'] ) ? $it['value'] : null;
+			if ( in_array( $op, array( 'in', 'not_in' ), true ) && ! is_array( $value ) ) {
+				$value = self::list_value( $value );
+			}
 			if ( 'weather_facet' === $type && class_exists( 'RWGCM_Weather_Affinity', false ) ) {
 				$value = RWGCM_Weather_Affinity::sanitize_facet_list( $value );
 				if ( empty( $value ) ) {
@@ -136,19 +139,75 @@ class RWGCM_Targeting_Adapter {
 	 * @return bool
 	 */
 	public static function group_matches( array $group, array $context ) {
+		$context  = self::context_with_visitor_country( $context );
 		$snapshot = self::snapshot_from_context( $context );
 
 		if ( $snapshot && class_exists( 'RWGC_Rule_Evaluator', false ) && class_exists( 'RWGC_Targeting_Rule_Set_Schema', false ) ) {
 			$raw = self::legacy_group_to_portable_raw( $group );
 			$set = RWGC_Targeting_Rule_Set_Schema::sanitize( $raw );
-			if ( null !== $set ) {
-				return RWGC_Rule_Evaluator::matches( $set, $snapshot );
+			if ( null !== $set && RWGC_Rule_Evaluator::matches( $set, $snapshot ) ) {
+				return true;
 			}
-			// Pro-only or invalid rows stripped entirely → do not match (avoid accidental “match all”).
-			return self::had_nonempty_targets( $group ) ? false : true;
 		}
 
+		// The 0.8.0 rule UI stores operator "is" and a country code (or name). Geo Core's
+		// portable operators may not treat that as a match, so the commerce rows are checked too.
 		return RWGCM_Condition_Evaluator::group_matches( $group, $context );
+	}
+
+	/**
+	 * The price route knows the visitor country even when a context snapshot has not filled it in yet.
+	 *
+	 * @param array<string, mixed> $context Context.
+	 * @return array<string, mixed>
+	 */
+	private static function context_with_visitor_country( array $context ) {
+		$current = isset( $context['country'] ) && is_scalar( $context['country'] ) ? strtoupper( substr( (string) $context['country'], 0, 2 ) ) : '';
+		if ( strlen( $current ) === 2 ) {
+			$context['country'] = $current;
+			return $context;
+		}
+		$visitor = '';
+		if ( class_exists( 'RWGCM_Pricing_Calc', false ) ) {
+			$visitor = strtoupper( substr( (string) RWGCM_Pricing_Calc::get_visitor_country(), 0, 2 ) );
+		} elseif ( function_exists( 'rwgc_get_visitor_country' ) ) {
+			$visitor = strtoupper( substr( (string) rwgc_get_visitor_country(), 0, 2 ) );
+		}
+		if ( strlen( $visitor ) === 2 ) {
+			$context['country'] = $visitor;
+		}
+		return $context;
+	}
+
+	/**
+	 * @param mixed $value Raw condition value.
+	 * @return array<int, string>
+	 */
+	private static function list_value( $value ) {
+		if ( is_array( $value ) ) {
+			$out = array();
+			foreach ( $value as $item ) {
+				foreach ( self::list_value( $item ) as $part ) {
+					$out[] = $part;
+				}
+			}
+			return $out;
+		}
+		$text = trim( (string) $value );
+		if ( '' === $text ) {
+			return array();
+		}
+		if ( false !== strpos( $text, ',' ) ) {
+			$parts = array();
+			foreach ( explode( ',', $text ) as $part ) {
+				$part = trim( $part );
+				if ( '' !== $part ) {
+					$parts[] = $part;
+				}
+			}
+			return $parts;
+		}
+		return array( $text );
 	}
 
 	/**

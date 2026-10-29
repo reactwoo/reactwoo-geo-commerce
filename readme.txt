@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.9.0
+Stable tag: 0.9.1
 
 WooCommerce rules and personalization on ReactWoo Geo Core.
 
@@ -52,6 +52,10 @@ The product (with its parent and variations), the shop page, product category ar
 Adapters run only when that plugin is active: LiteSpeed (`litespeed_purge_post`, `litespeed_purge_url`), WP Rocket (`rocket_clean_post`, and `rocket_clean_files` for archive URLs), W3 Total Cache (`w3tc_flush_post`, and `w3tc_flush_url` for archive URLs), WP Super Cache (`wpsc_delete_post_cache`; archive URLs have no purge call), and Cloudflare APO (`cloudflare_purge_by_url`, `cloudflare_purge_url`, `cloudflare_purge_everything`) when those hooks are registered. Elementor CSS is regenerated for each affected Elementor post. The last purge time and counts are stored in `rwgcm_last_cache_purge`. Extensions can use the `rwgcm_cache_purged` action. The button requires the `manage_woocommerce` capability and a nonce.
 
 == Changelog ==
+
+= 0.9.1 =
+* **Country price rules on converted prices.** A rule saved in the rule UI (visitor country is South Africa, decrease the price by 15%) applies after a missing ZAR price is converted from the store currency. A fixed ZAR price is unchanged.
+* **Exchange-rate cache purge.** Saving rates, settings, and the provider cache in one request clears the geo cache once. A provider or cron refresh clears it only when a stored rate changes. Rates are compared to 6 decimal places, so a new fetch time alone does not purge.
 
 = 0.9.0 =
 * **Visitor currency when the price book has no amount.** A visitor whose currency has no fixed price-book price is charged the store-currency price (the book price in the store currency when one is set, otherwise the regular or sale price) converted at the current rate, then the matching geo pricing rule. £49 at 22.1 ZAR per GBP with ZA −15% is R920.47 before any rounding or markup. A fixed price in the visitor currency is unchanged and the percent rule is not stacked on it.

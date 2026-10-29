@@ -45,11 +45,23 @@ function get_option( $key, $default = false ) { // phpcs:ignore
 }
 function update_option( $key, $value, $autoload = null ) { // phpcs:ignore
 	unset( $autoload );
+	$existed = is_array( $GLOBALS['rw_options'] ) && array_key_exists( $key, $GLOBALS['rw_options'] );
+	$old     = $existed ? $GLOBALS['rw_options'][ $key ] : null;
 	$GLOBALS['rw_options'][ $key ] = $value;
+	if ( class_exists( 'RWGCM_Cache_Purge', false ) ) {
+		if ( $existed ) {
+			RWGCM_Cache_Purge::on_updated_option( $key, $old, $value );
+		} else {
+			RWGCM_Cache_Purge::on_added_option( $key, $value );
+		}
+	}
 	return true;
 }
 function do_action( $tag, $payload = null ) { // phpcs:ignore
 	$GLOBALS['rw_actions'][ $tag ][] = $payload;
+	if ( 'rwgcm_exchange_rates_saved' === $tag && class_exists( 'RWGCM_Cache_Purge', false ) ) {
+		RWGCM_Cache_Purge::on_exchange_rates_saved( $payload );
+	}
 }
 function get_post_meta( $id, $key, $single = false ) { // phpcs:ignore
 	unset( $single );
@@ -498,6 +510,91 @@ assert_true( 'manual rates stay on the purge option', in_array( 'rwgcm_exchange_
 assert_true( 'settings changes purge', in_array( 'rwgcm_exchange_settings', $names, true ) );
 assert_true( 'provider cache changes purge', in_array( 'rwgcm_exchange_rates_cache', $names, true ) );
 
+assert_true(
+	'rate tables match at 6 decimal places',
+	RWGCM_Exchange::rates_equivalent(
+		array( 'base' => 'GBP', 'rates' => array( 'ZAR' => '22.1' ), 'fetched_at' => 1 ),
+		array( 'base' => 'GBP', 'rates' => array( 'ZAR' => 22.1000004 ), 'fetched_at' => 99, 'provider' => 'ecb' )
+	)
+);
+assert_true(
+	'a real rate change is not treated as the same table',
+	! RWGCM_Exchange::rates_equivalent(
+		array( 'base' => 'GBP', 'rates' => array( 'ZAR' => '22.1' ) ),
+		array( 'base' => 'GBP', 'rates' => array( 'ZAR' => '22.2' ) )
+	)
+);
+assert_true(
+	'a new currency is a rate change',
+	! RWGCM_Exchange::rates_equivalent(
+		array( 'base' => 'GBP', 'rates' => array( 'ZAR' => '22.1' ) ),
+		array( 'base' => 'GBP', 'rates' => array( 'ZAR' => '22.1', 'USD' => '1.27' ) )
+	)
+);
+
+/**
+ * @return int
+ */
+function rw_exchange_purge_count() {
+	$count = 0;
+	foreach ( (array) ( isset( $GLOBALS['rw_actions']['rwgcm_cache_purged'] ) ? $GLOBALS['rw_actions']['rwgcm_cache_purged'] : array() ) as $payload ) {
+		if ( is_array( $payload ) && isset( $payload['reason'] ) && 'exchange_rates' === $payload['reason'] ) {
+			++$count;
+		}
+	}
+	return $count;
+}
+
+RWGCM_Cache_Purge::reset_exchange_purge_guard();
+$GLOBALS['rw_options']['rwgcm_exchange_rates_cache'] = array(
+	'base'       => 'GBP',
+	'rates'      => array( 'ZAR' => '22.1' ),
+	'provider'   => 'ecb',
+	'fetched_at' => 1,
+);
+$purges_before = rw_exchange_purge_count();
+$actions_before = isset( $GLOBALS['rw_actions']['rwgcm_exchange_rates_saved'] ) ? count( $GLOBALS['rw_actions']['rwgcm_exchange_rates_saved'] ) : 0;
+RWGCM_Exchange::write_cache(
+	array(
+		'base'       => 'GBP',
+		'rates'      => array( 'ZAR' => 22.1000004 ),
+		'provider'   => 'ecb',
+		'fetched_at' => 50,
+	)
+);
+assert_true( 'an unchanged cron refresh does not purge', rw_exchange_purge_count() === $purges_before );
+assert_true( 'an unchanged cron refresh does not fire the saved action', $actions_before === ( isset( $GLOBALS['rw_actions']['rwgcm_exchange_rates_saved'] ) ? count( $GLOBALS['rw_actions']['rwgcm_exchange_rates_saved'] ) : 0 ) );
+assert_true( 'an unchanged refresh still stores the new fetch time', isset( $GLOBALS['rw_options']['rwgcm_exchange_rates_cache']['fetched_at'] ) && 50 === (int) $GLOBALS['rw_options']['rwgcm_exchange_rates_cache']['fetched_at'] );
+RWGCM_Cache_Purge::reset_exchange_purge_guard();
+$purges_before = rw_exchange_purge_count();
+RWGCM_Exchange::write_cache(
+	array(
+		'base'       => 'GBP',
+		'rates'      => array( 'ZAR' => '23' ),
+		'provider'   => 'ecb',
+		'fetched_at' => 60,
+	)
+);
+assert_true( 'a cron refresh purges once when a rate changes', 1 === ( rw_exchange_purge_count() - $purges_before ) );
+RWGCM_Cache_Purge::reset_exchange_purge_guard();
+$purges_before = rw_exchange_purge_count();
+RWGCM_Exchange::persist(
+	array(
+		'mode'     => 'auto',
+		'source'   => 'manual',
+		'provider' => 'ecb',
+		'api_key'  => '',
+		'rounding' => 'none',
+		'markup'   => '0',
+	),
+	array(
+		'base'  => 'GBP',
+		'rates' => array( 'ZAR' => '22.1' ),
+	),
+	false
+);
+assert_true( 'saving settings and manual rates purges once', 1 === ( rw_exchange_purge_count() - $purges_before ) );
+
 $_POST = array(
 	'_wpnonce'                => 'ok',
 	'rwgcm_exchange_mode'     => 'auto',
@@ -533,6 +630,104 @@ $GLOBALS['rw_options']['rwgcm_exchange_rates'] = array(
 	'rates' => array( 'ZAR' => '23' ),
 );
 assert_true( 'a rate change alters the variation price hash token', $token !== RWGCM_Exchange::cache_token() );
+
+// Rule ID 1 as the 0.8.0 admin UI saves it (class-rwgcm-admin-rules.php rule_array_from_post).
+// Geo Core rejects operator "is", and its portable match returns false. The visitor country still applies.
+class RWGCM_DB { // phpcs:ignore
+	public static function rules_table_exists() { return true; }
+}
+class RWGCM_Rule_Store { // phpcs:ignore
+	public static function count_by_status( $status ) { unset( $status ); return 1; }
+	public static function get_all_rules() { return array( $GLOBALS['rw_ui_rule'] ); }
+}
+class RWGC_Context_Snapshot { // phpcs:ignore
+	public static function from_array( array $context ) { return (object) $context; }
+}
+class RWGC_Targeting_Rule_Set_Schema { // phpcs:ignore
+	public static function sanitize( $raw ) { return is_array( $raw ) ? $raw : null; }
+	public static function sanitize_condition_type_string( $type ) { return sanitize_key( (string) $type ); }
+}
+class RWGC_Target_Operators { // phpcs:ignore
+	public static function is_valid( $op ) { return in_array( $op, array( 'in', 'not_in' ), true ); }
+	public static function evaluate( $actual, $op, $expected ) { unset( $actual, $op, $expected ); return false; }
+}
+class RWGC_Rule_Evaluator { // phpcs:ignore
+	public static function matches( $set, $snapshot ) { unset( $set, $snapshot ); return false; }
+}
+function rwgc_get_context_snapshot() { return array(); } // phpcs:ignore
+
+require_once dirname( __DIR__ ) . '/includes/class-rwgcm-condition-library.php';
+require_once dirname( __DIR__ ) . '/includes/class-rwgcm-rule-summary.php';
+require_once dirname( __DIR__ ) . '/includes/class-rwgcm-condition-evaluator.php';
+require_once dirname( __DIR__ ) . '/includes/class-rwgcm-targeting-adapter.php';
+require_once dirname( __DIR__ ) . '/includes/class-rwgcm-rule-evaluator.php';
+require_once dirname( __DIR__ ) . '/includes/class-rwgcm-diagnostics.php';
+
+$GLOBALS['rw_ui_rule'] = array(
+	'id'         => 1,
+	'label'      => 'ZA percent -15',
+	'status'     => 'active',
+	'priority'   => 100,
+	'scope'      => array(
+		'type' => 'global',
+		'ids'  => array(),
+	),
+	'conditions' => array(
+		'match' => 'all',
+		'items' => array(
+			array(
+				'field'    => 'visitor.country',
+				'target'   => 'country',
+				'operator' => 'is',
+				'value'    => 'ZA',
+				'label'    => 'South Africa',
+			),
+		),
+	),
+	'actions'    => array(
+		array(
+			'type'  => 'price_adjustment',
+			'mode'  => 'percent',
+			'value' => -15.0,
+		),
+	),
+	'meta'       => array(
+		'source'                 => 'admin_generic_rules',
+		'use_portable_targeting' => false,
+		'portable_targeting'     => '',
+	),
+);
+$ui_summary = RWGCM_Rule_Summary::summarize_rule( $GLOBALS['rw_ui_rule'] );
+assert_true(
+	'the stored 0.8.0 UI rule reads as the South Africa 15% decrease',
+	'If visitor country is South Africa, decrease the product price by 15%.' === $ui_summary
+);
+
+$GLOBALS['rw_options']['rwgcm_exchange_settings'] = array(
+	'mode'     => 'auto',
+	'source'   => 'manual',
+	'provider' => 'ecb',
+	'api_key'  => '',
+	'rounding' => 'none',
+	'markup'   => '0',
+);
+$GLOBALS['rw_options']['rwgcm_exchange_rates'] = array(
+	'base'  => 'GBP',
+	'rates' => array( 'ZAR' => '22.16' ),
+);
+$ui_price = (string) $GLOBALS['rw_products'][1049]->get_price();
+assert_true( 'the UI rule discounts the converted £49 price', '922.96' === $ui_price );
+$ui_html = RWGCM_Product_Price::render( array( 'product_id' => 1049, 'format' => 'code' ) );
+assert_has( 'the price element includes the 15% country rule', $ui_html, '922.96 ZAR' );
+assert_lacks( 'the price element is not the undiscounted conversion', $ui_html, '1,085.84' );
+$ui_cart_product = $GLOBALS['rw_products'][1049];
+RWGCM_Price_Book_Apply::apply_cart_prices( new RW_Cart( array( array( 'data' => $ui_cart_product ) ) ) );
+assert_true( 'the cart charges the discounted converted price', '922.96' === (string) $ui_cart_product->charged );
+$fixed_ui = (string) $GLOBALS['rw_products'][1299]->get_price();
+assert_true( 'a fixed ZAR book price still ignores the UI percent rule', '1299.00' === $fixed_ui );
+
+$GLOBALS['rw_ui_rule']['conditions']['items'][0]['value'] = 'South Africa';
+assert_true( 'a country stored as its name still discounts the converted price', '922.96' === (string) $GLOBALS['rw_products'][1049]->get_price() );
 
 echo "\n{$passed} passed, {$failed} failed\n";
 exit( $failed > 0 ? 1 : 0 );
