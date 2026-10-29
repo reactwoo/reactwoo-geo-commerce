@@ -149,7 +149,7 @@ class RWGCM_Cache_Purge {
 			$message = ( isset( $result['error'] ) && 'forbidden' === $result['error'] )
 				? __( 'You need permission to manage WooCommerce to clear the geo cache.', 'reactwoo-geo-commerce' )
 				: __( 'The link you followed has expired.', 'reactwoo-geo-commerce' );
-			wp_die( esc_html( $message ) );
+			wp_die( esc_html( $message ), '', array( 'response' => 403 ) );
 		}
 		wp_safe_redirect( admin_url( 'admin.php?page=rwgcm-settings&rwgcm_cache_cleared=1' ) );
 		exit;

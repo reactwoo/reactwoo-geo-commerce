@@ -431,7 +431,7 @@ class RWGCM_Cache_Safe_Price {
 			$message = ( isset( $result['error'] ) && 'forbidden' === $result['error'] )
 				? __( 'You need permission to manage WooCommerce to change this setting.', 'reactwoo-geo-commerce' )
 				: __( 'The link you followed has expired.', 'reactwoo-geo-commerce' );
-			wp_die( esc_html( $message ) );
+			wp_die( esc_html( $message ), '', array( 'response' => 403 ) );
 		}
 		wp_safe_redirect( admin_url( 'admin.php?page=rwgcm-settings&rwgcm_cache_saved=1' ) );
 		exit;
@@ -681,13 +681,27 @@ class RWGCM_Cache_Safe_Price {
 	}
 
 	/**
+	 * REST is often still on init when the vary cookie would be set, before
+	 * REST_REQUEST exists. The URI is enough to keep the cookie off the response.
+	 *
+	 * @return bool
+	 */
+	private static function is_rest_request() {
+		if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+			return true;
+		}
+		$uri = isset( $_SERVER['REQUEST_URI'] ) ? (string) $_SERVER['REQUEST_URI'] : '';
+		return false !== strpos( $uri, '/wp-json/' ) || false !== strpos( $uri, 'rest_route=' );
+	}
+
+	/**
 	 * @return bool
 	 */
 	private static function is_background_request() {
 		if ( defined( 'WP_CLI' ) && WP_CLI ) {
 			return true;
 		}
-		if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+		if ( self::is_rest_request() ) {
 			return true;
 		}
 		if ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) {

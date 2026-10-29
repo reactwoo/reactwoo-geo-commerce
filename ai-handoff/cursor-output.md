@@ -6,7 +6,7 @@ done
 
 ## Summary
 
-Geo Commerce 0.8.0 adds a cache purge service and cache-safe geo prices. Version header, `RWGCM_VERSION`, and the readme stable tag are 0.8.0. Not tagged and not merged.
+Geo Commerce 0.8.0 adds a cache purge service and cache-safe geo prices. Staging QA on 22ccc7b: the price route now applies visitor-country price books and pricing rules, REST responses do not set `rwgc_country`, and a refused Clear Geo cache request returns 403. Not tagged and not merged.
 
 ## Root cause
 

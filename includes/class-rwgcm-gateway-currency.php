@@ -136,6 +136,10 @@ class RWGCM_Gateway_Currency {
 	 * @return string|null Mapped currency, or null to leave the request alone.
 	 */
 	public static function currency_override_for_request( $store_currency, array $context ) {
+		// The geo price route keeps the visitor currency chosen by the price-book filter.
+		if ( ! empty( $context['price_api'] ) ) {
+			return null;
+		}
 		if ( ! empty( $context['cron'] ) || ! empty( $context['cli'] ) || ! empty( $context['rest'] ) || ! empty( $context['syncing'] ) ) {
 			return null;
 		}
@@ -465,8 +469,9 @@ class RWGCM_Gateway_Currency {
 		$tab     = isset( $get['tab'] ) ? sanitize_key( wp_unslash( $get['tab'] ) ) : '';
 		$section = isset( $get['section'] ) ? self::normalize_gateway_id( wp_unslash( $get['section'] ) ) : '';
 		$uri     = isset( $_SERVER['REQUEST_URI'] ) ? (string) $_SERVER['REQUEST_URI'] : '';
-		$rest    = ( defined( 'REST_REQUEST' ) && REST_REQUEST ) || false !== strpos( $uri, '/wp-json/' ) || false !== strpos( $uri, 'rest_route=' );
-		$store   = $rest && ( false !== strpos( $uri, '/wc/store/' ) || false !== strpos( $uri, 'rest_route=/wc/store/' ) || false !== strpos( $uri, 'rest_route=%2Fwc%2Fstore%2F' ) );
+		$price_api = class_exists( 'RWGCM_Price_Book_Currency', false ) && RWGCM_Price_Book_Currency::is_geo_price_request_uri( $uri );
+		$rest      = ( ( defined( 'REST_REQUEST' ) && REST_REQUEST ) || false !== strpos( $uri, '/wp-json/' ) || false !== strpos( $uri, 'rest_route=' ) ) && ! $price_api;
+		$store     = ! $price_api && $rest && ( false !== strpos( $uri, '/wc/store/' ) || false !== strpos( $uri, 'rest_route=/wc/store/' ) || false !== strpos( $uri, 'rest_route=%2Fwc%2Fstore%2F' ) );
 		$charged = array();
 		if ( class_exists( 'RWGCM_Price_Book', false ) ) {
 			foreach ( RWGCM_Price_Book::country_currency_map() as $currency ) {
@@ -481,6 +486,7 @@ class RWGCM_Gateway_Currency {
 			'cli'        => defined( 'WP_CLI' ) && WP_CLI,
 			'rest'       => $rest,
 			'store_api'  => $store,
+			'price_api'  => $price_api,
 			'syncing'    => class_exists( 'RWGCM_Price_Book_Currency', false ) && RWGCM_Price_Book_Currency::is_product_sync(),
 			'admin'      => function_exists( 'is_admin' ) && is_admin(),
 			'front_ajax' => function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() && isset( $_REQUEST['wc-ajax'] ), // phpcs:ignore WordPress.Security.NonceVerification.Recommended

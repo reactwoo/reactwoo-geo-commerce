@@ -592,6 +592,102 @@ assert_true( 'classic element name is rwgcm-product-price', is_string( $classic 
 assert_true( 'atomic element name is rwgcm-product-price-atomic', is_string( $atomic ) && false !== strpos( $atomic, "return 'rwgcm-product-price-atomic';" ) && false !== strpos( $atomic, 'RWGCM_Product_Price::render' ) );
 $boot = file_get_contents( dirname( __DIR__ ) . '/includes/class-rwgcm-plugin.php' );
 assert_true( 'plugin boots the shared price renderer and block', is_string( $boot ) && false !== strpos( $boot, 'RWGCM_Product_Price::init' ) && false !== strpos( $boot, 'RWGCM_Product_Price_Block::init' ) );
+require_once dirname( __DIR__ ) . '/includes/class-rwgcm-cache-safe-price.php';
+
+$GLOBALS['rw_options']['woocommerce_currency'] = 'GBP';
+$GLOBALS['rw_products'][42]                    = new RW_Product( 42, '30' );
+$GLOBALS['rw_books'][42]                       = RWGCM_Price_Book::sanitize_book(
+	array(
+		'USD' => array( 'regular' => '49' ),
+		'EUR' => array(
+			'regular' => '45',
+			'sale'    => '40',
+		),
+	)
+);
+$rest_uris = array(
+	'/wp-json/rwgcm/v1/prices?items=%5B%5D',
+	'/wp-json/rwgcm/v1/price?product_id=42',
+	'/?rest_route=%2Frwgcm%2Fv1%2Fprices',
+);
+foreach ( $rest_uris as $rest_uri ) {
+	$_SERVER['REQUEST_URI'] = $rest_uri;
+	assert_true(
+		'the geo price route does not force the store currency (' . $rest_uri . ')',
+		RWGCM_Price_Book_Currency::is_geo_price_request_uri( $rest_uri ) && ! RWGCM_Price_Book_Currency::forces_store_currency()
+	);
+	override_visitor_country( 'ZA' );
+	$za_rest = RWGCM_Cache_Safe_Price::build_prices_response(
+		array(
+			array(
+				'context'    => 'element',
+				'product_id' => 42,
+				'format'     => 'code',
+				'country'    => 'US',
+			),
+		),
+		'203.0.113.42'
+	);
+	assert_true( 'ZA price route responds 200', isset( $za_rest['status'] ) && 200 === (int) $za_rest['status'] );
+	$za_html = isset( $za_rest['body']['html'] ) ? $za_rest['body']['html'] : '';
+	assert_has( 'ZA on the price route is the GBP -15% amount', $za_html, '25.50 GBP' );
+	assert_lacks( 'ZA on the price route is not the undiscounted GBP price', $za_html, '30.00' );
+	assert_true( 'a country query argument does not switch the ZA price to USD', false === strpos( $za_html, 'USD' ) );
+
+	override_visitor_country( 'US' );
+	$us_rest = RWGCM_Cache_Safe_Price::build_prices_response(
+		array(
+			array(
+				'context'    => 'element',
+				'product_id' => 42,
+				'format'     => 'code',
+			),
+		),
+		'203.0.113.43'
+	);
+	$us_html = isset( $us_rest['body']['html'] ) ? $us_rest['body']['html'] : '';
+	assert_has( 'US on the price route is the fixed book price', $us_html, '49.00 USD' );
+	assert_lacks( 'the ZA percent rule does not stack on the USD book price', $us_html, '41.65' );
+
+	override_visitor_country( 'DE' );
+	$de_rest = RWGCM_Cache_Safe_Price::build_prices_response(
+		array(
+			array(
+				'context'    => 'catalog',
+				'product_id' => 42,
+			),
+		),
+		'203.0.113.44'
+	);
+	$de_html = isset( $de_rest['body']['html'] ) ? $de_rest['body']['html'] : '';
+	assert_has( 'DE catalog price route shows the EUR sale amount', $de_html, '40.00' );
+	assert_has( 'DE catalog price route is labelled EUR', $de_html, 'EUR' );
+	assert_lacks( 'the ZA percent rule does not stack on the EUR book price', $de_html, '34.00' );
+
+	override_visitor_country( 'DE' );
+	$de_element = RWGCM_Cache_Safe_Price::build_prices_response(
+		array(
+			array(
+				'context'    => 'element',
+				'product_id' => 42,
+				'format'     => 'code',
+				'sale'       => 'yes',
+			),
+		),
+		'203.0.113.45'
+	);
+	$de_element_html = isset( $de_element['body']['html'] ) ? $de_element['body']['html'] : '';
+	assert_has( 'DE element shows the EUR regular price', $de_element_html, '45.00 EUR' );
+	assert_has( 'DE element shows the EUR sale price', $de_element_html, '40.00 EUR' );
+}
+$_SERVER['REQUEST_URI'] = '/wp-json/wc/v3/products/42';
+override_visitor_country( 'ZA' );
+assert_true( 'WooCommerce REST still forces the store currency', RWGCM_Price_Book_Currency::forces_store_currency() );
+$wc_rest = RWGCM_Product_Price::render( array( 'product_id' => 42, 'format' => 'code' ) );
+assert_has( 'WooCommerce REST keeps the undiscounted store price for ZA', $wc_rest, '30.00 GBP' );
+assert_lacks( 'WooCommerce REST does not apply the ZA rule', $wc_rest, '25.50' );
+$_SERVER['REQUEST_URI'] = $saved_uri;
+
 $plugin = file_get_contents( dirname( __DIR__ ) . '/reactwoo-geo-commerce.php' );
 $readme = file_get_contents( dirname( __DIR__ ) . '/readme.txt' );
 assert_true(

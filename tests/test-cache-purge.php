@@ -189,6 +189,18 @@ namespace {
 	function wp_verify_nonce( $nonce, $action ) { // phpcs:ignore
 		return isset( $GLOBALS['rw_nonces'][ $action ] ) && (string) $GLOBALS['rw_nonces'][ $action ] === (string) $nonce;
 	}
+	function wp_die( $message = '', $title = '', $args = array() ) { // phpcs:ignore
+		unset( $title );
+		$code = 500;
+		if ( is_array( $args ) && isset( $args['response'] ) ) {
+			$code = (int) $args['response'];
+		}
+		$GLOBALS['rw_die'] = array(
+			'message' => $message,
+			'code'    => $code,
+		);
+		throw new RuntimeException( 'wp_die' );
+	}
 	function rocket_clean_post( $id ) { // phpcs:ignore
 		$GLOBALS['rw_calls']['rocket_clean_post'][] = (int) $id;
 	}
@@ -430,6 +442,25 @@ namespace {
 	$_POST['_wpnonce'] = 'ok';
 	$cleared = RWGCM_Cache_Purge::process_clear_cache_request();
 	assert_true( 'a valid Clear Geo cache request purges', ! empty( $cleared['ok'] ) && isset( $cleared['purge']['reason'] ) && 'manual' === $cleared['purge']['reason'] );
+
+	$GLOBALS['rw_caps'] = array();
+	$_POST['_wpnonce']  = 'ok';
+	$died               = false;
+	try {
+		RWGCM_Cache_Purge::handle_clear_cache();
+	} catch ( RuntimeException $e ) {
+		$died = 'wp_die' === $e->getMessage();
+	}
+	assert_true( 'a refused Clear Geo cache request for capability is HTTP 403', $died && isset( $GLOBALS['rw_die']['code'] ) && 403 === (int) $GLOBALS['rw_die']['code'] );
+	$GLOBALS['rw_caps']['manage_woocommerce'] = true;
+	$_POST['_wpnonce']                        = 'wrong';
+	$died                                     = false;
+	try {
+		RWGCM_Cache_Purge::handle_clear_cache();
+	} catch ( RuntimeException $e ) {
+		$died = 'wp_die' === $e->getMessage();
+	}
+	assert_true( 'a refused Clear Geo cache request for nonce is HTTP 403', $died && isset( $GLOBALS['rw_die']['code'] ) && 403 === (int) $GLOBALS['rw_die']['code'] );
 
 	$loops = 0;
 	add_action(

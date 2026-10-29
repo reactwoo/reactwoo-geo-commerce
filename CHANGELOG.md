@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Clear Geo cache** on Geo Commerce → Settings. The form requires `manage_woocommerce` and a nonce. The last purge time and counts are stored in `rwgcm_last_cache_purge`. `rwgcm_cache_purged` fires with the reason, post ids, URLs, and counts.
 - **Cache-safe price mode** (`off` / `auto` / `ajax`, option `rwgcm_cache_safe_price_mode`, default `auto`). Front-end requests can set the `rwgc_country` cookie from `rwgc_get_visitor_country()`. LiteSpeed vary is registered with `litespeed_vary_cookies` and `X-LiteSpeed-Vary: cookie=rwgc_country`. Auto prints AJAX placeholders only when a known page cache is active and does not vary by that cookie. The placeholder calls public `GET /wp-json/rwgcm/v1/prices` (alias `/price`), with `Cache-Control: no-store`, no nonce, and a per-IP limit (`rwgcm_price_rate_limit`, default 40/minute). The script batches placeholders. Country resolution on that request is Geo Core's, not the cookie and not a query argument.
 
+### Fixed
+- **Geo price route.** `GET /wp-json/rwgcm/v1/prices` and `/price` apply the visitor-country price book and `rwgcm_pricing` rules. Other `/wp-json/` routes still stay on the store currency. A fixed book price is not discounted again by a percent rule. A £30 product is £25.50 for ZA (−15%, no ZAR book), $49 for US, and €45/€40 for DE.
+- The `rwgc_country` vary cookie is not set on REST responses, including when `REST_REQUEST` is not defined yet.
+- A refused Clear Geo cache request (capability or nonce) returns HTTP 403.
+
 ### Changed
 - With no cache plugin and mode `auto` or `off`, catalog and price-element HTML stay server-rendered and the vary cookie is not set.
 - Saving the cache-safe mode purges the geo cache so the next page uses the new HTML shape.
