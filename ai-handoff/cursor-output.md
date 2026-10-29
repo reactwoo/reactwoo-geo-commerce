@@ -6,47 +6,46 @@ done
 
 ## Summary
 
-Localised product price for Geo Commerce 0.7.0. Shortcode, Gutenberg block, and both Elementor widgets share `RWGCM_Product_Price`. Amounts come from WooCommerce's filtered price getters, so price books and pricing rules match the product page. Not merged and not tagged.
+Staging fixes on the 0.7.0 product-price branch. A GBP-store ZA visitor with no ZAR book price now sees the −15% rule on the catalog and in the price element, matching the cart. Elementor classic widgets (including weather) and the atomic element register after Elementor has already loaded. Atomic widgets stay unloaded while the experiment is off. Not merged and not tagged.
+
+## Root cause
+
+1. Catalog currency stays on the visitor currency (ZAR) even when the product has no ZAR book. `allow_base_adjustment()` then skips the geo rule, and price HTML printed the raw GBP amount. The cart falls back to GBP for that line and applies the rule.
+2. `elementor/loaded` fires on `plugins_loaded` before Geo Commerce boots, so `boot_elementor()` never ran. No widgets and no preview route.
 
 ## Files changed
 
 | File | Reason |
 |------|--------|
-| includes/class-rwgcm-product-price.php | Shared renderer, shortcode, cache notes |
-| includes/class-rwgcm-product-price-block.php | Server-rendered `rwgcm/product-price` block |
-| blocks/product-price/block.json, blocks/product-price/index.js | Block metadata and editor controls |
-| assets/css/product-price.css | BEM styles, inherited type, site colour variables |
-| includes/integrations/elementor/class-rwgcm-elementor-product-price.php | Classic widget `rwgcm-product-price` |
-| includes/integrations/elementor/class-rwgcm-elementor-atomic-product-price.php | Atomic element `rwgcm-product-price-atomic` |
-| includes/integrations/elementor/templates/product-price.html.twig | Atomic editor shell |
-| includes/integrations/elementor/class-rwgcm-elementor.php | Register the classic widget |
-| includes/integrations/elementor/class-rwgcm-elementor-atomic.php | Register the atomic element and preview |
-| includes/class-rwgcm-plugin.php | Boot the renderer and block |
-| reactwoo-geo-commerce.php, readme.txt, CHANGELOG.md | Version 0.7.0 |
-| tests/test-product-price.php | Country, rule, tax, sale, From, fallback, cache |
-| tests/test-gateway-fallback.php | Version assertion is now 0.7.0 |
+| includes/class-rwgcm-catalog-price.php | Apply the rule when the cart will charge the store currency |
+| includes/class-rwgcm-catalog-price-variable.php | Same guard for variation prices |
+| includes/class-rwgcm-price-book-apply.php | Price HTML uses that discounted store-currency amount |
+| includes/class-rwgcm-product-price.php | Element shows the same amount |
+| includes/class-rwgcm-plugin.php | Boot Elementor if `elementor/loaded` already fired |
+| includes/integrations/elementor/class-rwgcm-elementor.php | Register classic widgets if `elementor/widgets/register` already fired |
+| includes/integrations/elementor/class-rwgcm-elementor-atomic.php | Same for atomic widgets and the preview route; inactive experiment returns before loading atomic classes |
+| tests/test-product-price.php | GBP-store ZA −15% case |
+| tests/test-elementor-widgets.php | Late Elementor boot, weather widgets, atomic on/off |
+| CHANGELOG.md, readme.txt | Note the fixes under 0.7.0 |
 
 ## What was not changed
 
-- Pricing math (`RWGCM_Pricing_Calc`, price-book filters). A fixed book price still replaces a percent rule, same as the product page.
-- No merge and no tag.
+- A fixed ZAR book price is still shown in ZAR and is not discounted again.
+- Version stays 0.7.0. No merge and no tag.
 
 ## Commands run
 
 ```bash
-php -l includes/class-rwgcm-product-price.php
-php -l includes/class-rwgcm-product-price-block.php
-php -l includes/integrations/elementor/class-rwgcm-elementor-product-price.php
-php -l includes/integrations/elementor/class-rwgcm-elementor-atomic-product-price.php
 php tests/test-product-price.php
-php tests/test-gateway-fallback.php
+php tests/test-elementor-widgets.php
+php tests/test-*.php
 python3 scripts/package_zip.py
 ```
 
-`tests/test-product-price.php`: 68 passed, 0 failed.
-`tests/test-gateway-fallback.php`: 17 passed, 0 failed.
-`python3 scripts/package_zip.py` wrote `reactwoo-geo-commerce-0.7.0.zip` (130 entries). The zip contains the renderer, block, both Elementor classes, the Twig shell, and `assets/css/product-price.css`. The zip is gitignored.
-Every `tests/test-*.php` script passed (0 failed).
+`tests/test-product-price.php`: 74 passed, 0 failed.
+`tests/test-elementor-widgets.php`: 14 passed, 0 failed.
+Every `tests/test-*.php` script passed.
+`reactwoo-geo-commerce-0.7.0.zip` rebuilt (130 entries, gitignored) and contains the updated catalog, price, and Elementor classes.
 
 ## Remaining errors
 
