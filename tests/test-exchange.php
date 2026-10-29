@@ -71,6 +71,9 @@ function get_post_meta( $id, $key, $single = false ) { // phpcs:ignore
 	return '';
 }
 function get_woocommerce_currency() { // phpcs:ignore
+	if ( ! empty( $GLOBALS['rw_force_currency'] ) ) {
+		return (string) $GLOBALS['rw_force_currency'];
+	}
 	return RWGCM_Price_Book_Currency::filter_currency( (string) get_option( 'woocommerce_currency', 'GBP' ) );
 }
 function get_woocommerce_currency_symbol( $code = '' ) { // phpcs:ignore
@@ -639,6 +642,12 @@ class RWGCM_DB { // phpcs:ignore
 class RWGCM_Rule_Store { // phpcs:ignore
 	public static function count_by_status( $status ) { unset( $status ); return 1; }
 	public static function get_all_rules() { return array( $GLOBALS['rw_ui_rule'] ); }
+	public static function set_purge_on_write( $purge ) { unset( $purge ); }
+	public static function update_rule( $id, $rule ) {
+		unset( $id );
+		$GLOBALS['rw_ui_rule'] = $rule;
+		return true;
+	}
 }
 class RWGC_Context_Snapshot { // phpcs:ignore
 	public static function from_array( array $context ) { return (object) $context; }
@@ -728,6 +737,66 @@ assert_true( 'a fixed ZAR book price still ignores the UI percent rule', '1299.0
 
 $GLOBALS['rw_ui_rule']['conditions']['items'][0]['value'] = 'South Africa';
 assert_true( 'a country stored as its name still discounts the converted price', '922.96' === (string) $GLOBALS['rw_products'][1049]->get_price() );
+
+$GLOBALS['rw_force_currency'] = 'GBP';
+$fallback = new ReflectionProperty( 'RWGCM_Price_Book_Currency', 'shipping_fallback' );
+$fallback->setAccessible( true );
+$fallback->setValue( null, 'ZAR' );
+$GLOBALS['rw_options']['rwgcm_exchange_settings']['rounding'] = 'none';
+assert_true( 'shipping fallback is the store currency', RWGCM_Price_Book_Apply::shipping_fallback_to_store() );
+$with_zar = (string) $GLOBALS['rw_products'][1299]->get_price();
+assert_true( 'fallback applies -15% to the GBP book even when a ZAR book exists', '41.65' === $with_zar );
+assert_true( 'fallback does not charge the fixed ZAR price', '1299.00' !== $with_zar );
+$no_zar = (string) $GLOBALS['rw_products'][1049]->get_price();
+assert_true( 'fallback applies -15% to the GBP book when there is no ZAR price', '41.65' === $no_zar );
+$GLOBALS['rw_products'][1500] = new RW_Product( 1500, '100' );
+$GLOBALS['rw_books'][1500]    = RWGCM_Price_Book::sanitize_book( array( 'ZAR' => array( 'regular' => '800' ) ) );
+assert_true( 'fallback applies -15% to the regular price when only a ZAR book exists', '85.00' === (string) $GLOBALS['rw_products'][1500]->get_price() );
+$cart_product = $GLOBALS['rw_products'][1049];
+RWGCM_Price_Book_Apply::apply_cart_prices( new RW_Cart( array( array( 'data' => $cart_product ) ) ) );
+RWGCM_Pricing_Apply::apply_rules( new RW_Cart( array( array( 'data' => $cart_product ) ) ) );
+assert_true( 'the cart charges the ruled store amount once', '41.65' === (string) $cart_product->charged );
+$fallback->setValue( null, '' );
+assert_true( 'a GBP book is not discounted when the visitor currency is already GBP', '49.00' === (string) $GLOBALS['rw_products'][1049]->get_price() );
+$GLOBALS['rw_force_currency'] = 'ZAR';
+assert_true( 'a fixed ZAR price is not discounted while ZAR is charged', '1299.00' === (string) $GLOBALS['rw_products'][1299]->get_price() );
+$GLOBALS['rw_force_currency'] = '';
+
+require_once dirname( __DIR__ ) . '/includes/class-rwgcm-action-resolver.php';
+require_once dirname( __DIR__ ) . '/includes/class-rwgcm-rule-sanitizer.php';
+require_once dirname( __DIR__ ) . '/includes/class-rwgcm-rule-migration.php';
+$saved_country = RWGCM_Rule_Sanitizer::sanitize_rule(
+	array(
+		'label'      => 'ZA',
+		'status'     => 'active',
+		'priority'   => 100,
+		'scope'      => array( 'type' => 'global', 'ids' => array() ),
+		'conditions' => array(
+			'match' => 'all',
+			'items' => array(
+				array(
+					'field'    => 'visitor.country',
+					'target'   => 'country',
+					'operator' => 'is',
+					'value'    => 'South Africa',
+					'label'    => 'South Africa',
+				),
+			),
+		),
+		'actions'    => array(
+			array(
+				'type'  => 'price_adjustment',
+				'mode'  => 'percent',
+				'value' => -15,
+			),
+		),
+	)
+);
+assert_true( 'saving a rule stores the country name as ZA', is_array( $saved_country ) && 'ZA' === $saved_country['conditions']['items'][0]['value'] );
+$GLOBALS['rw_ui_rule']['conditions']['items'][0]['value'] = 'South Africa';
+$migrated = RWGCM_Rule_Migration::maybe_normalize_country_names();
+assert_true( 'upgrade rewrites a stored country name to ZA', 1 === $migrated && 'ZA' === $GLOBALS['rw_ui_rule']['conditions']['items'][0]['value'] );
+assert_true( 'the country migration does not run twice', 0 === RWGCM_Rule_Migration::maybe_normalize_country_names() );
 
 echo "\n{$passed} passed, {$failed} failed\n";
 exit( $failed > 0 ? 1 : 0 );

@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.9.1
+Stable tag: 0.9.2
 
 WooCommerce rules and personalization on ReactWoo Geo Core.
 
@@ -52,6 +52,11 @@ The product (with its parent and variations), the shop page, product category ar
 Adapters run only when that plugin is active: LiteSpeed (`litespeed_purge_post`, `litespeed_purge_url`), WP Rocket (`rocket_clean_post`, and `rocket_clean_files` for archive URLs), W3 Total Cache (`w3tc_flush_post`, and `w3tc_flush_url` for archive URLs), WP Super Cache (`wpsc_delete_post_cache`; archive URLs have no purge call), and Cloudflare APO (`cloudflare_purge_by_url`, `cloudflare_purge_url`, `cloudflare_purge_everything`) when those hooks are registered. Elementor CSS is regenerated for each affected Elementor post. The last purge time and counts are stored in `rwgcm_last_cache_purge`. Extensions can use the `rwgcm_cache_purged` action. The button requires the `manage_woocommerce` capability and a nonce.
 
 == Changelog ==
+
+= 0.9.2 =
+* **Rule changes clear cached prices.** Saving, enabling, disabling, or deleting a generic pricing rule purges once per request. A rule for one product purges that product. A global rule, or a category rule whose products cannot be listed, purges the catalog. Saving legacy `rwgcm_pricing` does the same.
+* **Shipping fallback.** When the cart stays in the store currency because shipping is not priced in the visitor currency, the geo price rule is applied to the store-currency amount. That is true for a product with a fixed visitor-currency price and for one without. A fixed price in the currency actually being charged is not discounted again when that currency was chosen for the visitor.
+* **Country codes.** A country condition saved as a name, such as South Africa, is stored as ZA. Existing rules are rewritten once on upgrade.
 
 = 0.9.1 =
 * **Country price rules on converted prices.** A rule saved in the rule UI (visitor country is South Africa, decrease the price by 15%) applies after a missing ZAR price is converted from the store currency. A fixed ZAR price is unchanged.

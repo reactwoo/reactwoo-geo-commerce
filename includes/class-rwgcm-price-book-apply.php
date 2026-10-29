@@ -38,7 +38,18 @@ class RWGCM_Price_Book_Apply {
 	}
 
 	/**
-	 * Geo rules should not run when the fixed book or a non-base currency is in effect.
+	 * Whether the catalog and cart should run a geo rule on the store-currency price.
+	 *
+	 * A fixed book price in the currency actually being charged is the final price.
+	 * The rule is not stacked on it. That is a ZAR book while the cart is in ZAR,
+	 * and a GBP book while the visitor currency is already GBP.
+	 *
+	 * When shipping is not priced in the visitor currency, the cart falls back to
+	 * the store currency. The visitor-currency book is not charged. The store-currency
+	 * amount (the book's store-currency price if set, otherwise the regular or sale
+	 * price) gets the matching rule, whether or not a visitor-currency book exists.
+	 * That adjustment is applied in prices_for(), so this method returns false and
+	 * the cart does not apply the rule a second time.
 	 *
 	 * @param WC_Product $product Product.
 	 * @return bool
@@ -50,6 +61,9 @@ class RWGCM_Price_Book_Apply {
 		if ( ! class_exists( 'RWGCM_Price_Book', false ) || ! class_exists( 'RWGCM_Price_Book_Currency', false ) ) {
 			return true;
 		}
+		if ( self::shipping_fallback_to_store() ) {
+			return false;
+		}
 		$base  = RWGCM_Price_Book_Currency::base_currency();
 		$book  = RWGCM_Price_Book_Currency::get_book( $product->get_id() );
 		$uses  = RWGCM_Price_Book::has_price( $book, $base );
@@ -60,6 +74,24 @@ class RWGCM_Price_Book_Apply {
 			$uses,
 			RWGCM_Price_Book::base_adjustments_enabled()
 		);
+	}
+
+	/**
+	 * True when the cart wanted another currency but shipping kept the store currency.
+	 *
+	 * @return bool
+	 */
+	public static function shipping_fallback_to_store() {
+		if ( ! class_exists( 'RWGCM_Price_Book_Currency', false ) || ! function_exists( 'get_woocommerce_currency' ) ) {
+			return false;
+		}
+		$active = RWGCM_Price_Book::normalize_currency( get_woocommerce_currency() );
+		$base   = RWGCM_Price_Book::normalize_currency( RWGCM_Price_Book_Currency::base_currency() );
+		if ( '' === $active || $active !== $base ) {
+			return false;
+		}
+		$wanted = RWGCM_Price_Book::normalize_currency( RWGCM_Price_Book_Currency::shipping_fallback_currency() );
+		return '' !== $wanted && $wanted !== $base;
 	}
 
 	/**
@@ -380,6 +412,12 @@ class RWGCM_Price_Book_Apply {
 			return null;
 		}
 		$book = RWGCM_Price_Book_Currency::get_book( $product->get_id() );
+		if ( self::shipping_fallback_to_store() && class_exists( 'RWGCM_Exchange', false ) ) {
+			$ruled = RWGCM_Exchange::ruled_store_prices( $product );
+			if ( is_array( $ruled ) ) {
+				return $ruled;
+			}
+		}
 		if ( RWGCM_Price_Book::has_price( $book, $active ) ) {
 			return RWGCM_Price_Book::resolve_prices( $book[ $active ] );
 		}
