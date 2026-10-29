@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.7.0
+Stable tag: 0.8.0
 
 WooCommerce rules and personalization on ReactWoo Geo Core.
 
@@ -12,12 +12,43 @@ WooCommerce rules and personalization on ReactWoo Geo Core.
 
 Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo Core** and **WooCommerce**. See Geo Core `docs/phases/phase-7.md` for integration checklist.
 
+Cache-safe price mode (Settings) defaults to Auto. With no page-cache plugin, prices stay in the page HTML. See the FAQ for what AJAX mode does and does not cover.
+
 == Installation ==
 
 1. Install WooCommerce and ReactWoo Geo Core.
 2. Activate this plugin.
 
+== Frequently Asked Questions ==
+
+= What does cache-safe price mode do? =
+
+* **Off** leaves prices in the page HTML and does not set the `rwgc_country` vary cookie.
+* **Auto** (default) matches Off when no known page cache is active. LiteSpeed is treated as varied: Geo Commerce registers `rwgc_country` on `litespeed_vary_cookies` and sends `X-LiteSpeed-Vary`, so each country can have its own cached page and the price stays in the HTML. Auto switches to AJAX when a known page cache is active and is not varied by `rwgc_country`.
+* **AJAX** prints a placeholder for the price element and for catalog price HTML. The browser loads the localised price from `GET /wp-json/rwgcm/v1/prices` (and `/price`).
+
+The cookie value is the Geo Core visitor country. The REST route does not trust the cookie or a `country` query argument. It is public, does not use a nonce, and sends `Cache-Control: no-store`. One batched request covers the placeholders on the page. Requests are limited per IP (filter `rwgcm_price_rate_limit`, default 40 a minute).
+
+= Which caches count as varied? =
+
+LiteSpeed varies when cache-safe mode is not Off. WP Rocket varies only when `rwgc_country` is already on `rocket_cache_dynamic_cookies`. W3 Total Cache varies when that cookie is in its configuration, or listed on `rwgcm_w3tc_vary_cookies`. WP Super Cache and Cloudflare APO are not varied.
+
+= What stays server-rendered? =
+
+Cart, checkout, the mini-cart, cart fragments, order emails, wp-admin, and the block editor. Catalog AJAX covers the shop, the product page, and product taxonomy archives. Homepage loops, the Store API, and product-collection blocks stay server-rendered. Variation dropdown prices (`woocommerce_available_variation`) stay server-rendered, so a cached product page that is not varied can still show the cached country's variation price after a variation is chosen. JSON-LD is left as the server rendered it. With JavaScript disabled the placeholder does not show a country price.
+
+= What does Clear Geo cache purge? =
+
+The product (with its parent and variations), the shop page, product category archives, and posts that use `[rwgcm_price]`, the `rwgcm/product-price` block, or the Elementor widgets `rwgcm-product-price` and `rwgcm-product-price-atomic`. That usage list is updated on `save_post`. The same purge runs when a price book (`_rwgcm_price_book`), the `rwgcm_pricing` option, or exchange rates are saved (`rwgcm_exchange_rates`, the `rwgcm_exchange_rate_options` filter, or the `rwgcm_exchange_rates_saved` action).
+
+Adapters run only when that plugin is active: LiteSpeed (`litespeed_purge_post`, `litespeed_purge_url`), WP Rocket (`rocket_clean_post`, and `rocket_clean_files` for archive URLs), W3 Total Cache (`w3tc_flush_post`, and `w3tc_flush_url` for archive URLs), WP Super Cache (`wpsc_delete_post_cache`; archive URLs have no purge call), and Cloudflare APO (`cloudflare_purge_by_url`, `cloudflare_purge_url`, `cloudflare_purge_everything`) when those hooks are registered. Elementor CSS is regenerated for each affected Elementor post. The last purge time and counts are stored in `rwgcm_last_cache_purge`. Extensions can use the `rwgcm_cache_purged` action. The button requires the `manage_woocommerce` capability and a nonce.
+
 == Changelog ==
+
+= 0.8.0 =
+* **Cache purge.** Saving a price book, country pricing rules, or exchange rates purges the product (parent and variations), the shop, product category archives, and posts that use the price shortcode, block, or Elementor price widgets. A usage index tracks those posts on save. Adapters run only when LiteSpeed, WP Rocket, W3 Total Cache, WP Super Cache, or the Cloudflare plugin is active. Elementor CSS is regenerated for affected Elementor posts.
+* **Clear Geo cache.** Settings includes the button for users who can `manage_woocommerce`. The last purge stores the time and counts. The `rwgcm_cache_purged` action fires for extensions.
+* **Cache-safe prices.** A `rwgc_country` vary cookie follows the Geo Core visitor country and is registered with LiteSpeed (`litespeed_vary_cookies` and `X-LiteSpeed-Vary`). Cache-safe price mode is Off, Auto, or AJAX. Auto uses AJAX when a known page cache is active and not varied by country. AJAX placeholders load the price from a public, nonce-free REST route with `Cache-Control: no-store`. Cart and checkout stay server-rendered. With no cache plugin, Auto keeps today's server-rendered prices and does not set the cookie. Limits are in the FAQ.
 
 = 0.7.0 =
 * **Product price:** Shortcode `[rwgcm_price]`, Gutenberg block `rwgcm/product-price`, and Elementor widgets `rwgcm-product-price` (classic) and `rwgcm-product-price-atomic` (V4) share one renderer. The amount comes from WooCommerce's filtered price getters, so price books and pricing rules match the product page, including tax display. A country rule such as ZA −15% is included when the cart would charge the store currency. Options cover the format (amount, symbol, or currency code), a billing-period suffix, a From prefix for the lowest variation, the struck-through regular price when on sale, and fallback text when the product is missing, not purchasable, or out of stock. Colour controls use site colour variables. The shortcode follows Geo Core's country cache vary and does not mark the page uncacheable.

@@ -41,6 +41,27 @@
 	color: var(--e-global-color-text, var(--wp--preset--color--contrast, var(--wp--preset--color--foreground, inherit)));
 }
 
+.rwgcm-price--pending .rwgcm-price__pending {
+	display: inline-block;
+	min-width: 4em;
+	min-height: 0.9em;
+	vertical-align: middle;
+	border-radius: 0.2em;
+	background: rgba(0, 0, 0, 0.12);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.rwgcm-price--pending .rwgcm-price__pending {
+		animation: rwgcm-price-pulse 1.2s ease-in-out infinite;
+	}
+}
+
+@keyframes rwgcm-price-pulse {
+	50% {
+		opacity: 0.45;
+	}
+}
+
 .rwgcm-price .screen-reader-text {
 	border: 0;
 	clip: rect(1px, 1px, 1px, 1px);

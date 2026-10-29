@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-29
+
+### Added
+- **Cache purge.** `RWGCM_Cache_Purge` runs when `_rwgcm_price_book` is saved, when the `rwgcm_pricing` option is saved, and when exchange rates are saved (`rwgcm_exchange_rates`, option names from `rwgcm_exchange_rate_options`, or the `rwgcm_exchange_rates_saved` action). Targets are the product with its parent and variations, the shop page, product category archives, and posts in the price-element usage index. The index updates on `save_post` for `[rwgcm_price]`, the `rwgcm/product-price` block, and Elementor widgets `rwgcm-product-price` and `rwgcm-product-price-atomic`.
+- **Cache adapters,** each gated on that plugin being active: LiteSpeed (`litespeed_purge_post`, `litespeed_purge_url`), WP Rocket (`rocket_clean_post`, plus `rocket_clean_files` for archive URLs), W3 Total Cache (`w3tc_flush_post`, plus `w3tc_flush_url` for archive URLs), WP Super Cache (`wpsc_delete_post_cache`), and Cloudflare APO (`cloudflare_purge_by_url`, `cloudflare_purge_url`, `cloudflare_purge_everything` when those hooks are registered). Elementor post CSS is regenerated for each affected Elementor document.
+- **Clear Geo cache** on Geo Commerce → Settings. The form requires `manage_woocommerce` and a nonce. The last purge time and counts are stored in `rwgcm_last_cache_purge`. `rwgcm_cache_purged` fires with the reason, post ids, URLs, and counts.
+- **Cache-safe price mode** (`off` / `auto` / `ajax`, option `rwgcm_cache_safe_price_mode`, default `auto`). Front-end requests can set the `rwgc_country` cookie from `rwgc_get_visitor_country()`. LiteSpeed vary is registered with `litespeed_vary_cookies` and `X-LiteSpeed-Vary: cookie=rwgc_country`. Auto prints AJAX placeholders only when a known page cache is active and does not vary by that cookie. The placeholder calls public `GET /wp-json/rwgcm/v1/prices` (alias `/price`), with `Cache-Control: no-store`, no nonce, and a per-IP limit (`rwgcm_price_rate_limit`, default 40/minute). The script batches placeholders. Country resolution on that request is Geo Core's, not the cookie and not a query argument.
+
+### Changed
+- With no cache plugin and mode `auto` or `off`, catalog and price-element HTML stay server-rendered and the vary cookie is not set.
+- Saving the cache-safe mode purges the geo cache so the next page uses the new HTML shape.
+
+### Limits
+- Cart, checkout, mini-cart, cart fragments, order emails, wp-admin, and editor previews stay server-rendered.
+- Catalog placeholders cover the shop, the single product, and product taxonomy archives. Other `get_price_html()` callers, Store API product grids, and product-collection blocks stay server-rendered.
+- `woocommerce_available_variation` price HTML stays server-rendered, so an unvaried cached product page can still inject that response's variation price after the customer picks a variation.
+- JSON-LD is not rewritten. Without JavaScript the placeholder does not show a country price.
+- WP Rocket counts as varied only when `rwgc_country` is already on `rocket_cache_dynamic_cookies`. W3 Total Cache counts as varied when the cookie is in its config or `rwgcm_w3tc_vary_cookies`. WP Super Cache and Cloudflare APO are not varied. WP Super Cache has no archive-URL purge; category URLs are cleared through LiteSpeed and Cloudflare when those adapters run.
+- Cloudflare URL purge runs when the Cloudflare plugin is active and a purge hook is registered. APO's own `save_post` purge does not see a price-book meta update, which is why these hooks exist.
+
 ## [0.7.0] - 2026-10-29
 
 ### Added

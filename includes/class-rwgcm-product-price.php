@@ -10,6 +10,8 @@
  * way catalog prices do, and it does not read the `rwgc_cc` cookie, define
  * DONOTCACHEPAGE, or send nocache headers. Geo Core varies full-page caches with
  * that cookie and the LiteSpeed vary group `rwgc_cc_{ISO2}`.
+ * Cache-safe price mode can replace this HTML with a placeholder. That mode lives
+ * in `RWGCM_Cache_Safe_Price` and still resolves the country with Geo Core.
  *
  * @package ReactWoo_Geo_Commerce
  */
@@ -40,7 +42,7 @@ class RWGCM_Product_Price {
 	 * @return string
 	 */
 	public static function cache_compatibility_notes() {
-		return 'The [rwgcm_price] shortcode prints the same country-specific amount as the product page. It follows rwgc_get_visitor_country() from Geo Core. It does not read the rwgc_cc cookie, define DONOTCACHEPAGE, or send nocache headers. Geo Core varies full-page caches with the rwgc_cc cookie and the LiteSpeed vary group rwgc_cc_{ISO2}, both taken from the server-resolved country. A page cache that ignores that vary serves one country\'s price to everyone.';
+		return 'The [rwgcm_price] shortcode prints the same country-specific amount as the product page. It follows rwgc_get_visitor_country() from Geo Core. It does not read the rwgc_cc cookie, define DONOTCACHEPAGE, or send nocache headers. Geo Core varies full-page caches with the rwgc_cc cookie and the LiteSpeed vary group rwgc_cc_{ISO2}, both taken from the server-resolved country. A page cache that ignores that vary serves one country\'s price to everyone. Cache-safe price mode (off, auto, or ajax) can print a placeholder that loads the price from the uncached REST route instead. Cart and checkout stay server-rendered.';
 	}
 
 	/**
@@ -54,7 +56,7 @@ class RWGCM_Product_Price {
 			'rwgcm-product-price',
 			RWGCM_URL . 'assets/css/product-price.css',
 			array(),
-			defined( 'RWGCM_VERSION' ) ? RWGCM_VERSION : '0.7.0'
+			defined( 'RWGCM_VERSION' ) ? RWGCM_VERSION : '0.8.0'
 		);
 	}
 
@@ -72,6 +74,17 @@ class RWGCM_Product_Price {
 	 */
 	public static function render( $raw ) {
 		$args = self::parse_args( $raw );
+		if ( class_exists( 'RWGCM_Cache_Safe_Price', false ) && RWGCM_Cache_Safe_Price::should_placeholder( 'element' ) ) {
+			if ( (int) $args['product_id'] <= 0 && (int) $args['variation_id'] <= 0 ) {
+				$current = self::current_product();
+				if ( self::is_product( $current ) ) {
+					$args['product_id'] = (int) $current->get_id();
+				}
+			}
+			self::enqueue();
+			RWGCM_Cache_Safe_Price::enqueue_assets();
+			return RWGCM_Cache_Safe_Price::element_placeholder( $args );
+		}
 		self::enqueue();
 
 		$product = self::resolve_product( $args );
