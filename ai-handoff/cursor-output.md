@@ -46,6 +46,7 @@ python3 scripts/package_zip.py
 `tests/test-product-price.php`: 68 passed, 0 failed.
 `tests/test-gateway-fallback.php`: 17 passed, 0 failed.
 `python3 scripts/package_zip.py` wrote `reactwoo-geo-commerce-0.7.0.zip` (130 entries). The zip contains the renderer, block, both Elementor classes, the Twig shell, and `assets/css/product-price.css`. The zip is gitignored.
+Every `tests/test-*.php` script passed (0 failed).
 
 ## Remaining errors
 
