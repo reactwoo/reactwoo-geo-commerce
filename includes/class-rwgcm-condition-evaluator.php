@@ -150,6 +150,49 @@ class RWGCM_Condition_Evaluator {
 	}
 
 	/**
+	 * Store a country condition as ISO codes. A name such as "South Africa" becomes ZA.
+	 * Lists and comma-separated values are normalized the same way. Unknown text is kept.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return mixed
+	 */
+	public static function normalize_country_value( $value ) {
+		if ( is_array( $value ) ) {
+			$out = array();
+			foreach ( $value as $item ) {
+				$normalized = self::normalize_country_value( $item );
+				if ( is_array( $normalized ) ) {
+					foreach ( $normalized as $part ) {
+						$out[] = $part;
+					}
+				} elseif ( is_string( $normalized ) && '' !== $normalized ) {
+					$out[] = $normalized;
+				}
+			}
+			return array_values( $out );
+		}
+		$text = trim( (string) $value );
+		if ( '' === $text ) {
+			return '';
+		}
+		if ( false !== strpos( $text, ',' ) ) {
+			$parts = array();
+			foreach ( explode( ',', $text ) as $part ) {
+				$part = self::normalize_country_value( $part );
+				if ( is_string( $part ) && '' !== $part ) {
+					$parts[] = $part;
+				}
+			}
+			return implode( ',', $parts );
+		}
+		if ( preg_match( '/^[A-Za-z]{2}$/', $text ) ) {
+			return strtoupper( $text );
+		}
+		$code = self::country_name_code( $text );
+		return '' !== $code ? $code : $text;
+	}
+
+	/**
 	 * @param string $name Country name.
 	 * @return string ISO2 or empty.
 	 */

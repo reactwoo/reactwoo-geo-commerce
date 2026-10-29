@@ -47,6 +47,13 @@ class RWGCM_Cache_Purge {
 	private static $silence_exchange = 0;
 
 	/**
+	 * Pricing-rule saves purge once per request.
+	 *
+	 * @var bool
+	 */
+	private static $pricing_purged = false;
+
+	/**
 	 * @return void
 	 */
 	public static function init() {
@@ -145,6 +152,31 @@ class RWGCM_Cache_Purge {
 	public static function reset_exchange_purge_guard() {
 		self::$exchange_purged  = false;
 		self::$silence_exchange = 0;
+	}
+
+	/**
+	 * Clear the once-per-request pricing-rule purge guard. Tests use this between cases.
+	 *
+	 * @return void
+	 */
+	public static function reset_pricing_purge_guard() {
+		self::$pricing_purged = false;
+	}
+
+	/**
+	 * A generic pricing rule was saved, enabled, disabled, or deleted.
+	 * One request purges once. A product scope purges those products. Anything
+	 * wider, or a scope we cannot resolve, purges the catalog.
+	 *
+	 * @param array<string, mixed>|null $rule     New rule, or null on delete.
+	 * @param array<string, mixed>|null $previous Previous rule.
+	 * @return array<string, mixed>
+	 */
+	public static function on_pricing_rule_changed( $rule, $previous = null ) {
+		if ( ! self::rule_adjusts_price( $rule ) && ! self::rule_adjusts_price( $previous ) ) {
+			return array();
+		}
+		return self::purge_pricing_once( self::pricing_rule_product_ids( $rule, $previous ) );
 	}
 
 	/**
@@ -453,7 +485,7 @@ class RWGCM_Cache_Purge {
 			return;
 		}
 		if ( self::is_pricing_option( $option ) ) {
-			self::purge_all( 'pricing_rules' );
+			self::purge_pricing_once( null );
 			return;
 		}
 		if ( in_array( $option, self::exchange_rate_options(), true ) ) {
@@ -462,6 +494,141 @@ class RWGCM_Cache_Purge {
 			}
 			self::purge_exchange_once();
 		}
+	}
+
+	/**
+	 * @param int[]|null $product_ids Null purges the whole catalog.
+	 * @return array<string, mixed>
+	 */
+	private static function purge_pricing_once( $product_ids ) {
+		if ( self::$pricing_purged ) {
+			return self::last_purge();
+		}
+		if ( null === $product_ids ) {
+			$result = self::purge_all( 'pricing_rules' );
+		} else {
+			$result = self::purge_product_ids( $product_ids, 'pricing_rules' );
+		}
+		if ( empty( $result['skipped'] ) ) {
+			self::$pricing_purged = true;
+		}
+		return $result;
+	}
+
+	/**
+	 * @param int[]  $product_ids Product ids.
+	 * @param string $reason      Reason.
+	 * @return array<string, mixed>
+	 */
+	public static function purge_product_ids( array $product_ids, $reason ) {
+		$posts = array();
+		foreach ( $product_ids as $product_id ) {
+			$posts = array_merge( $posts, self::related_product_ids( $product_id ) );
+		}
+		$posts = self::id_list( $posts );
+		if ( empty( $posts ) ) {
+			return self::purge_all( $reason );
+		}
+		$shop = self::shop_page_id();
+		if ( $shop > 0 ) {
+			$posts[] = $shop;
+		}
+		$posts = array_merge( $posts, self::usage_post_ids() );
+		$urls  = array_merge( self::archive_urls( $posts ), self::permalinks( $posts ) );
+		return self::execute( $posts, $urls, (string) $reason, false );
+	}
+
+	/**
+	 * @param array<string, mixed>|null $rule     Rule.
+	 * @param array<string, mixed>|null $previous Previous rule.
+	 * @return int[]|null Null means the whole catalog.
+	 */
+	private static function pricing_rule_product_ids( $rule, $previous ) {
+		$ids = self::scope_product_ids( $rule );
+		if ( null === $ids ) {
+			return null;
+		}
+		$old = self::scope_product_ids( $previous );
+		if ( null === $old ) {
+			return null;
+		}
+		return self::id_list( array_merge( $ids, $old ) );
+	}
+
+	/**
+	 * @param array<string, mixed>|null $rule Rule.
+	 * @return int[]|null
+	 */
+	private static function scope_product_ids( $rule ) {
+		if ( ! is_array( $rule ) ) {
+			return array();
+		}
+		$scope = isset( $rule['scope'] ) && is_array( $rule['scope'] ) ? $rule['scope'] : array();
+		$type  = isset( $scope['type'] ) ? (string) $scope['type'] : 'global';
+		$ids   = isset( $scope['ids'] ) && is_array( $scope['ids'] ) ? $scope['ids'] : array();
+		if ( 'product' === $type && ! empty( $ids ) ) {
+			return array_map( 'intval', $ids );
+		}
+		if ( 'product_category' === $type && ! empty( $ids ) ) {
+			return self::products_in_categories( $ids );
+		}
+		return null;
+	}
+
+	/**
+	 * @param array<int, mixed> $term_ids Category ids.
+	 * @return int[]|null Null when the product list cannot be resolved.
+	 */
+	private static function products_in_categories( array $term_ids ) {
+		if ( ! function_exists( 'get_posts' ) ) {
+			return null;
+		}
+		$terms = array();
+		foreach ( $term_ids as $term_id ) {
+			$term_id = (int) $term_id;
+			if ( $term_id > 0 ) {
+				$terms[] = $term_id;
+			}
+		}
+		if ( empty( $terms ) ) {
+			return null;
+		}
+		$posts = get_posts(
+			array(
+				'post_type'              => 'product',
+				'post_status'            => 'publish',
+				'fields'                 => 'ids',
+				'posts_per_page'         => -1,
+				'nopaging'               => true,
+				'no_found_rows'          => true,
+				'update_post_meta_cache' => false,
+				'update_post_term_cache' => false,
+				'tax_query'              => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query
+					array(
+						'taxonomy' => 'product_cat',
+						'field'    => 'term_id',
+						'terms'    => $terms,
+					),
+				),
+			)
+		);
+		return is_array( $posts ) ? self::id_list( $posts ) : null;
+	}
+
+	/**
+	 * @param array<string, mixed>|null $rule Rule.
+	 * @return bool
+	 */
+	private static function rule_adjusts_price( $rule ) {
+		if ( ! is_array( $rule ) || empty( $rule['actions'] ) || ! is_array( $rule['actions'] ) ) {
+			return false;
+		}
+		foreach ( $rule['actions'] as $action ) {
+			if ( is_array( $action ) && isset( $action['type'] ) && 'price_adjustment' === $action['type'] ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

@@ -876,6 +876,37 @@ class RWGCM_Exchange {
 	}
 
 	/**
+	 * Store-currency prices with the matching geo rule applied and no conversion.
+	 * Used when the cart fell back to the store currency.
+	 *
+	 * @param object $product Product.
+	 * @return array{regular: string, sale: string, signup_fee: string, active: string, on_sale: bool}|null
+	 */
+	public static function ruled_store_prices( $product ) {
+		$store = self::store_amounts( $product );
+		if ( null === $store ) {
+			return null;
+		}
+		$regular = self::apply_rule_amount( $store['regular'], $product );
+		$sale    = '';
+		$on_sale = ! empty( $store['on_sale'] ) && '' !== (string) $store['sale'];
+		if ( $on_sale ) {
+			$sale = self::apply_rule_amount( $store['sale'], $product );
+			if ( '' === $sale || (float) $sale >= (float) $regular ) {
+				$sale    = '';
+				$on_sale = false;
+			}
+		}
+		return array(
+			'regular'    => $regular,
+			'sale'       => $sale,
+			'signup_fee' => isset( $store['signup_fee'] ) ? (string) $store['signup_fee'] : '',
+			'active'     => $on_sale ? $sale : $regular,
+			'on_sale'    => $on_sale,
+		);
+	}
+
+	/**
 	 * @param object $product Product.
 	 * @return array{regular: string, sale: string, signup_fee: string, active: string, on_sale: bool}|null
 	 */
@@ -933,20 +964,49 @@ class RWGCM_Exchange {
 			$amount = max( 0, $amount + (float) $rule['value'] );
 		}
 		$converted = $amount * (float) $quote['effective'];
-		$pre_rule  = $converted;
-		if ( is_array( $rule ) && ( ! isset( $rule['type'] ) || 'fixed_line' !== $rule['type'] ) ) {
-			$converted = $converted * ( 1 + ( (float) $rule['value'] / 100 ) );
+		return self::finish_ruled_amount( $converted, $converted, $rule, $product );
+	}
+
+	/**
+	 * Apply a geo rule to a store-currency figure. Fixed-line and percent both
+	 * use that currency because nothing is being converted.
+	 *
+	 * @param mixed  $amount  Store amount.
+	 * @param object $product Product.
+	 * @return string
+	 */
+	private static function apply_rule_amount( $amount, $product ) {
+		$figure = (float) $amount;
+		$rule   = self::rule_for( $product );
+		$base   = $figure;
+		if ( is_array( $rule ) && isset( $rule['type'] ) && 'fixed_line' === $rule['type'] ) {
+			$figure = max( 0, $figure + (float) $rule['value'] );
 		}
-		if ( $converted < 0 ) {
-			$converted = 0.0;
+		return self::finish_ruled_amount( $figure, $base, $rule, $product );
+	}
+
+	/**
+	 * @param float                        $amount  Amount after a fixed-line change, before percent.
+	 * @param float                        $pre_rule Amount passed to the adjustment filter as the base.
+	 * @param array<string, mixed>|null    $rule    Rule or null.
+	 * @param object                       $product Product.
+	 * @return string
+	 */
+	private static function finish_ruled_amount( $amount, $pre_rule, $rule, $product ) {
+		$figure = (float) $amount;
+		if ( is_array( $rule ) && ( ! isset( $rule['type'] ) || 'fixed_line' !== $rule['type'] ) ) {
+			$figure = $figure * ( 1 + ( (float) $rule['value'] / 100 ) );
+		}
+		if ( $figure < 0 ) {
+			$figure = 0.0;
 		}
 		if ( is_array( $rule ) && function_exists( 'apply_filters' ) ) {
-			$filtered = apply_filters( 'rwgcm_adjusted_unit_price', $converted, $pre_rule, $rule, $product, array(), '' );
+			$filtered = apply_filters( 'rwgcm_adjusted_unit_price', $figure, $pre_rule, $rule, $product, array(), '' );
 			if ( is_numeric( $filtered ) ) {
-				$converted = max( 0, (float) $filtered );
+				$figure = max( 0, (float) $filtered );
 			}
 		}
-		return self::round_amount( $converted );
+		return self::round_amount( $figure );
 	}
 
 	/**

@@ -408,6 +408,37 @@ namespace {
 		}
 	}
 	assert_true( 'one save purges exchange rates once', 1 === ( $exchange_after - $exchange_before ) );
+	RWGCM_Cache_Purge::reset_pricing_purge_guard();
+	$pricing_before = isset( $GLOBALS['rw_did']['rwgcm_cache_purged'] ) ? count( $GLOBALS['rw_did']['rwgcm_cache_purged'] ) : 0;
+	$product_rule   = array(
+		'scope'   => array( 'type' => 'product', 'ids' => array( 11 ) ),
+		'actions' => array( array( 'type' => 'price_adjustment', 'mode' => 'percent', 'value' => -15 ) ),
+	);
+	RWGCM_Cache_Purge::on_pricing_rule_changed( $product_rule );
+	RWGCM_Cache_Purge::on_pricing_rule_changed( $product_rule );
+	$pricing_events = array_slice( (array) $GLOBALS['rw_did']['rwgcm_cache_purged'], $pricing_before );
+	assert_true( 'saving a product pricing rule purges once', 1 === count( $pricing_events ) );
+	$scoped_posts = isset( $pricing_events[0][0]['post_ids'] ) ? $pricing_events[0][0]['post_ids'] : array();
+	assert_true( 'a product-scoped rule purges that product and its parent', in_array( 11, $scoped_posts, true ) && in_array( 10, $scoped_posts, true ) );
+	assert_true( 'the scoped purge reason is pricing_rules', isset( $pricing_events[0][0]['reason'] ) && 'pricing_rules' === $pricing_events[0][0]['reason'] );
+	RWGCM_Cache_Purge::reset_pricing_purge_guard();
+	$badge_before = count( $GLOBALS['rw_did']['rwgcm_cache_purged'] );
+	RWGCM_Cache_Purge::on_pricing_rule_changed(
+		array(
+			'scope'   => array( 'type' => 'global', 'ids' => array() ),
+			'actions' => array( array( 'type' => 'product_badge', 'text' => 'Hi' ) ),
+		)
+	);
+	assert_true( 'a badge-only rule does not purge prices', count( $GLOBALS['rw_did']['rwgcm_cache_purged'] ) === $badge_before );
+	RWGCM_Cache_Purge::reset_pricing_purge_guard();
+	$global_rule = array(
+		'scope'   => array( 'type' => 'global', 'ids' => array() ),
+		'actions' => array( array( 'type' => 'price_adjustment', 'mode' => 'percent', 'value' => -15 ) ),
+	);
+	RWGCM_Cache_Purge::on_pricing_rule_changed( $global_rule );
+	$global_event = $GLOBALS['rw_did']['rwgcm_cache_purged'][ count( $GLOBALS['rw_did']['rwgcm_cache_purged'] ) - 1 ][0];
+	$global_posts = isset( $global_event['post_ids'] ) && is_array( $global_event['post_ids'] ) ? $global_event['post_ids'] : array();
+	assert_true( 'a global pricing rule purges the catalog', isset( $global_event['reason'] ) && 'pricing_rules' === $global_event['reason'] && in_array( 12, $global_posts, true ) && in_array( 10, $global_posts, true ) );
 	RWGCM_Cache_Purge::on_deleted_option( 'rwgcm_pricing' );
 	assert_true( 'deleting pricing rules purges', 'pricing_rules' === RWGCM_Cache_Purge::last_purge()['reason'] );
 
