@@ -63,6 +63,10 @@ function did_action( $hook = '' ) { // phpcs:ignore
 function rwgc_get_visitor_country() { // phpcs:ignore
 	return (string) $GLOBALS['rw_visitor_country'];
 }
+function current_user_can( $cap ) { // phpcs:ignore
+	unset( $cap );
+	return ! empty( $GLOBALS['rw_can_preview'] );
+}
 function get_option( $key, $default = false ) { // phpcs:ignore
 	if ( is_array( $GLOBALS['rw_options'] ) && array_key_exists( $key, $GLOBALS['rw_options'] ) ) {
 		return $GLOBALS['rw_options'][ $key ];
@@ -520,6 +524,37 @@ override_visitor_country( 'US' );
 assert_has( 'GBP store, US visitor renders USD', RWGCM_Product_Price::render( array( 'product_id' => 40, 'format' => 'code' ) ), '49.00 USD' );
 override_visitor_country( 'DE' );
 assert_has( 'GBP store, DE visitor renders EUR', RWGCM_Product_Price::render( array( 'product_id' => 40, 'format' => 'code' ) ), '45.00 EUR' );
+
+$saved_uri = $_SERVER['REQUEST_URI'];
+$_SERVER['REQUEST_URI'] = '/wp-json/wp/v2/block-renderer/rwgcm/product-price';
+$GLOBALS['rw_can_preview'] = true;
+$_SERVER['HTTP_REFERER'] = 'https://example.test/wp-admin/post.php?post=40&action=edit&rwgc_preview_country=ZA';
+override_visitor_country( 'GB' );
+$editor_book = RWGCM_Product_Price::render( array( 'product_id' => 40, 'format' => 'code' ) );
+assert_has( 'Gutenberg preview uses the simulated ZA country for a ZAR book', $editor_book, '849.00 ZAR' );
+unset( $_SERVER['HTTP_REFERER'] );
+$editor_base = RWGCM_Product_Price::render( array( 'product_id' => 40, 'format' => 'code' ) );
+assert_has( 'editor preview without a simulated country stays on GBP', $editor_base, '100.00 GBP' );
+assert_lacks( 'editor preview without a simulated country does not show the ZAR book', $editor_base, '849.00' );
+$_GET['elementor-preview'] = '40';
+$_GET['rwgc_preview_country'] = 'ZA';
+$editor_rule = RWGCM_Product_Price::render( array( 'product_id' => 41, 'format' => 'code' ) );
+assert_has( 'Elementor preview country applies the ZA rule on the GBP charge', $editor_rule, '85.00 GBP' );
+unset( $_GET['elementor-preview'], $_GET['rwgc_preview_country'] );
+$GLOBALS['rw_can_preview'] = false;
+$_SERVER['REQUEST_URI'] = $saved_uri;
+
+require_once dirname( __DIR__ ) . '/includes/class-rwgcm-weather-affinity.php';
+require_once dirname( __DIR__ ) . '/includes/class-rwgcm-weather-strip.php';
+require_once dirname( __DIR__ ) . '/includes/class-rwgcm-weather-products-display.php';
+$_SERVER['REQUEST_URI'] = '/wp-json/wp/v2/block-renderer/rwgcm/weather-products';
+$strip_editor = RWGCM_Weather_Strip::render( array( 'fallback' => 'hide' ) );
+$products_editor = RWGCM_Weather_Products_Display::render( array() );
+assert_has( 'weather strip shows an editor placeholder when weather is missing', $strip_editor, 'rwgcm-weather-strip--editor-placeholder' );
+assert_has( 'weather products show an editor placeholder when weather is missing', $products_editor, 'rwgcm-weather-products--editor-placeholder' );
+$_SERVER['REQUEST_URI'] = $saved_uri;
+$strip_front = RWGCM_Weather_Strip::render( array( 'fallback' => 'hide' ) );
+assert_true( 'weather strip stays empty on the storefront when weather is missing', '' === $strip_front );
 
 assert_true( 'rendering does not mark the page uncacheable', ! defined( 'DONOTCACHEPAGE' ) );
 $notes = RWGCM_Product_Price::cache_compatibility_notes();

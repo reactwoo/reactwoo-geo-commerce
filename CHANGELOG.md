@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **ZA rule on a GBP store.** When a product has no price in the visitor currency, the cart charges the store currency and applies the country rule. Catalog prices, price HTML, and the product price element now use that same discounted amount (ZA −15% of £100 is £85), instead of the undiscounted store price. A fixed ZAR book price is still shown in ZAR and is not discounted again.
 - **Elementor widgets missing.** Commerce boots after Elementor has fired `elementor/loaded`, so the widgets and the editor preview route never registered. Registration now runs immediately when that action has already fired, and again on `elementor/widgets/register` if it is still pending. Weather widgets use the same path. Atomic elements register only while Elementor's atomic experiment is on.
+- **Atomic product price on Elementor 4.3.** `Atomic_Widget_Base` is not loaded when widget registration starts, so a `class_exists` check without autoload skipped `rwgcm-product-price-atomic`. The V4 experiment is checked first, then the base class is autoloaded. Registration also runs later on `elementor/elements/elements_registered`.
+- **Editor preview country.** Gutenberg and Elementor previews use Geo Core's `rwgc_preview_country` (request or the editor page referer) or the rule-tester preview country when one is set. With no simulated country they stay on the store currency. Weather products and the weather strip show a placeholder in the editor when visitor weather is missing.
 
 ## [0.6.0] - 2026-10-28
 

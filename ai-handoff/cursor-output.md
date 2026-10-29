@@ -6,46 +6,41 @@ done
 
 ## Summary
 
-Staging fixes on the 0.7.0 product-price branch. A GBP-store ZA visitor with no ZAR book price now sees the −15% rule on the catalog and in the price element, matching the cart. Elementor classic widgets (including weather) and the atomic element register after Elementor has already loaded. Atomic widgets stay unloaded while the experiment is off. Not merged and not tagged.
+Elementor 4.3 atomic product price registers after the V4 experiment autoloads Atomic_Widget_Base. Editor previews use Geo Core's simulated country when one is set, and stay on the store currency otherwise. Weather widgets show an editor placeholder when weather data is missing.
 
 ## Root cause
 
-1. Catalog currency stays on the visitor currency (ZAR) even when the product has no ZAR book. `allow_base_adjustment()` then skips the geo rule, and price HTML printed the raw GBP amount. The cart falls back to GBP for that line and applies the rule.
-2. `elementor/loaded` fires on `plugins_loaded` before Geo Commerce boots, so `boot_elementor()` never ran. No widgets and no preview route.
+1. `is_active()` called `class_exists( Atomic_Widget_Base, false )` before Elementor had loaded that class, so `rwgcm-product-price-atomic` never registered.
+2. Gutenberg block preview and the Elementor editor are REST or builder requests that force the store currency. `rwgc_preview_country` on the editor URL was not applied to the pricing rule, which still read `rwgc_get_visitor_country()`.
 
 ## Files changed
 
 | File | Reason |
 |------|--------|
-| includes/class-rwgcm-catalog-price.php | Apply the rule when the cart will charge the store currency |
-| includes/class-rwgcm-catalog-price-variable.php | Same guard for variation prices |
-| includes/class-rwgcm-price-book-apply.php | Price HTML uses that discounted store-currency amount |
-| includes/class-rwgcm-product-price.php | Element shows the same amount |
-| includes/class-rwgcm-plugin.php | Boot Elementor if `elementor/loaded` already fired |
-| includes/integrations/elementor/class-rwgcm-elementor.php | Register classic widgets if `elementor/widgets/register` already fired |
-| includes/integrations/elementor/class-rwgcm-elementor-atomic.php | Same for atomic widgets and the preview route; inactive experiment returns before loading atomic classes |
-| tests/test-product-price.php | GBP-store ZA −15% case |
-| tests/test-elementor-widgets.php | Late Elementor boot, weather widgets, atomic on/off |
-| CHANGELOG.md, readme.txt | Note the fixes under 0.7.0 |
-
-## What was not changed
-
-- A fixed ZAR book price is still shown in ZAR and is not discounted again.
-- Version stays 0.7.0. No merge and no tag.
+| includes/integrations/elementor/class-rwgcm-elementor-atomic.php | Experiment check first, autoload the base class, register again on `elementor/elements/elements_registered` |
+| includes/class-rwgcm-price-book-currency.php | Editor preview country from the request, referer, or rule-tester payload |
+| includes/class-rwgcm-pricing-calc.php | Pricing rules use that preview country |
+| includes/class-rwgcm-weather-strip.php | Editor placeholder when weather is missing |
+| includes/class-rwgcm-weather-products-display.php | Editor placeholder when weather is missing |
+| tests/test-elementor-atomic-autoload.php | Autoload test |
+| tests/test-product-price.php | Editor country and weather placeholder |
+| CHANGELOG.md | Notes under 0.7.0 |
 
 ## Commands run
 
 ```bash
 php tests/test-product-price.php
 php tests/test-elementor-widgets.php
+php tests/test-elementor-atomic-autoload.php
 php tests/test-*.php
 python3 scripts/package_zip.py
 ```
 
-`tests/test-product-price.php`: 74 passed, 0 failed.
+`tests/test-product-price.php`: 81 passed, 0 failed.
 `tests/test-elementor-widgets.php`: 14 passed, 0 failed.
+`tests/test-elementor-atomic-autoload.php`: 9 passed, 0 failed.
 Every `tests/test-*.php` script passed.
-`reactwoo-geo-commerce-0.7.0.zip` rebuilt (130 entries, gitignored) and contains the updated catalog, price, and Elementor classes.
+`reactwoo-geo-commerce-0.7.0.zip` rebuilt.
 
 ## Remaining errors
 

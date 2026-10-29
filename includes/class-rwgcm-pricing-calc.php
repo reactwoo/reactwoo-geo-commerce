@@ -18,6 +18,12 @@ class RWGCM_Pricing_Calc {
 	 * @return string
 	 */
 	public static function get_visitor_country() {
+		if ( class_exists( 'RWGCM_Price_Book_Currency', false ) ) {
+			$preview = RWGCM_Price_Book_Currency::editor_preview_country();
+			if ( '' !== $preview ) {
+				return $preview;
+			}
+		}
 		if ( ! function_exists( 'rwgc_get_visitor_country' ) ) {
 			return '';
 		}

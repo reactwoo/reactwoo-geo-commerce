@@ -145,6 +145,10 @@ class RWGCM_Price_Book_Currency {
 		if ( ! empty( $flags['syncing'] ) || ! empty( $flags['cron'] ) || ! empty( $flags['cli'] ) ) {
 			return true;
 		}
+		if ( self::is_editor_preview_request() ) {
+			// No simulated country: keep the store currency. A preview country is applied below.
+			return '' === self::editor_preview_country();
+		}
 		if ( ! empty( $flags['rest'] ) && empty( $flags['store_api'] ) ) {
 			return true;
 		}
@@ -190,10 +194,154 @@ class RWGCM_Price_Book_Currency {
 	 * @return string
 	 */
 	public static function visitor_country() {
+		$preview = self::editor_preview_country();
+		if ( '' !== $preview ) {
+			return $preview;
+		}
 		if ( ! function_exists( 'rwgc_get_visitor_country' ) ) {
 			return '';
 		}
 		return RWGCM_Price_Book::normalize_country( rwgc_get_visitor_country() );
+	}
+
+	/**
+	 * Elementor editor, its preview iframe, the atomic preview route, or a Gutenberg block preview.
+	 *
+	 * @return bool
+	 */
+	public static function is_editor_preview_request() {
+		$action = isset( $_GET['action'] ) ? self::preview_scalar( $_GET['action'] ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$action = function_exists( 'sanitize_key' ) ? sanitize_key( $action ) : strtolower( preg_replace( '/[^a-z0-9_\-]/', '', $action ) );
+		if ( isset( $_GET['elementor-preview'] ) || 'elementor' === $action ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			return true;
+		}
+		if ( function_exists( 'rwgc_is_builder_edit_request' ) && rwgc_is_builder_edit_request() ) {
+			return true;
+		}
+		$uri = isset( $_SERVER['REQUEST_URI'] ) ? (string) $_SERVER['REQUEST_URI'] : '';
+		if ( false !== strpos( $uri, 'block-renderer/rwgcm/' ) || false !== strpos( $uri, 'rwgcm/v1/elementor-preview' ) ) {
+			return true;
+		}
+		if ( class_exists( '\Elementor\Plugin', false ) ) {
+			$plugin = \Elementor\Plugin::$instance;
+			if ( is_object( $plugin ) && isset( $plugin->preview ) && is_object( $plugin->preview ) && method_exists( $plugin->preview, 'is_preview_mode' ) && $plugin->preview->is_preview_mode() ) {
+				return true;
+			}
+			if ( is_object( $plugin ) && isset( $plugin->editor ) && is_object( $plugin->editor ) && method_exists( $plugin->editor, 'is_edit_mode' ) && $plugin->editor->is_edit_mode() ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Geo Core preview country for this editor request (`rwgc_preview_country` or the rule-tester payload).
+	 * Empty when the editor has no simulated country, so the price stays in the store currency.
+	 *
+	 * @return string
+	 */
+	public static function editor_preview_country() {
+		if ( ! self::is_editor_preview_request() || ! self::user_may_preview_country() ) {
+			return '';
+		}
+		$key = class_exists( 'RWGC_Preview', false ) ? RWGC_Preview::QUERY_VAR : 'rwgc_preview_country';
+		$iso = self::normalize_preview_iso( self::request_param( $key ) );
+		if ( '' === $iso ) {
+			$iso = self::preview_iso_from_referer( $key );
+		}
+		if ( '' === $iso ) {
+			$iso = self::rule_tester_preview_country();
+		}
+		return $iso;
+	}
+
+	/**
+	 * @return bool
+	 */
+	private static function user_may_preview_country() {
+		$geo = class_exists( 'RWGC_Preview', false ) && method_exists( 'RWGC_Preview', 'can_preview_geo' ) && RWGC_Preview::can_preview_geo();
+		$tester = class_exists( 'RWGC_Rule_Tester_Frontend_Preview', false )
+			&& method_exists( 'RWGC_Rule_Tester_Frontend_Preview', 'can_preview' )
+			&& RWGC_Rule_Tester_Frontend_Preview::can_preview();
+		if ( $geo || $tester ) {
+			return true;
+		}
+		if ( class_exists( 'RWGC_Preview', false ) || class_exists( 'RWGC_Rule_Tester_Frontend_Preview', false ) ) {
+			return false;
+		}
+		return function_exists( 'current_user_can' ) && current_user_can( 'edit_posts' );
+	}
+
+	/**
+	 * @param string $key Query key.
+	 * @return string
+	 */
+	private static function request_param( $key ) {
+		if ( isset( $_GET[ $key ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			return self::preview_scalar( $_GET[ $key ] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		}
+		if ( isset( $_POST[ $key ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			return self::preview_scalar( $_POST[ $key ] ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		}
+		return '';
+	}
+
+	/**
+	 * @param string $key Query key.
+	 * @return string
+	 */
+	private static function preview_iso_from_referer( $key ) {
+		$referer = isset( $_SERVER['HTTP_REFERER'] ) ? (string) $_SERVER['HTTP_REFERER'] : '';
+		if ( '' === $referer ) {
+			return '';
+		}
+		$parts = function_exists( 'wp_parse_url' ) ? wp_parse_url( $referer ) : parse_url( $referer );
+		if ( ! is_array( $parts ) || empty( $parts['query'] ) || ! is_string( $parts['query'] ) ) {
+			return '';
+		}
+		$args = array();
+		parse_str( $parts['query'], $args );
+		if ( ! isset( $args[ $key ] ) ) {
+			return '';
+		}
+		return self::normalize_preview_iso( self::preview_scalar( $args[ $key ] ) );
+	}
+
+	/**
+	 * @return string
+	 */
+	private static function rule_tester_preview_country() {
+		if ( ! class_exists( 'RWGC_Rule_Tester_Frontend_Preview', false ) || ! method_exists( 'RWGC_Rule_Tester_Frontend_Preview', 'is_active' ) || ! RWGC_Rule_Tester_Frontend_Preview::is_active() ) {
+			return '';
+		}
+		if ( ! method_exists( 'RWGC_Rule_Tester_Frontend_Preview', 'get_payload' ) ) {
+			return '';
+		}
+		$payload = RWGC_Rule_Tester_Frontend_Preview::get_payload();
+		if ( ! is_array( $payload ) || empty( $payload['context'] ) || ! is_array( $payload['context'] ) || ! isset( $payload['context']['country'] ) ) {
+			return '';
+		}
+		return self::normalize_preview_iso( self::preview_scalar( $payload['context']['country'] ) );
+	}
+
+	/**
+	 * @param mixed $value Raw value.
+	 * @return string
+	 */
+	private static function preview_scalar( $value ) {
+		if ( function_exists( 'wp_unslash' ) ) {
+			$value = wp_unslash( $value );
+		}
+		return is_scalar( $value ) ? (string) $value : '';
+	}
+
+	/**
+	 * @param string $raw Raw ISO.
+	 * @return string
+	 */
+	private static function normalize_preview_iso( $raw ) {
+		$raw = function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $raw ) : trim( (string) $raw );
+		return RWGCM_Price_Book::normalize_country( $raw );
 	}
 
 	/**
