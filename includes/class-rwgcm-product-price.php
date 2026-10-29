@@ -272,16 +272,18 @@ class RWGCM_Product_Price {
 		$base     = class_exists( 'RWGCM_Price_Book_Currency', false ) ? (string) RWGCM_Price_Book_Currency::base_currency() : $active;
 		$use_edit = (bool) $force_base;
 		if ( ! $use_edit && '' !== $active && '' !== $base && $active !== $base && class_exists( 'RWGCM_Price_Book', false ) && class_exists( 'RWGCM_Price_Book_Currency', false ) ) {
-			$book = RWGCM_Price_Book_Currency::get_book( (int) $product->get_id() );
-			if ( ! RWGCM_Price_Book::has_price( $book, $active ) ) {
+			$book    = RWGCM_Price_Book_Currency::get_book( (int) $product->get_id() );
+			$convert = class_exists( 'RWGCM_Exchange', false ) && RWGCM_Exchange::supplies_product( $product, $active );
+			if ( ! RWGCM_Price_Book::has_price( $book, $active ) && ! $convert ) {
 				$use_edit = true;
 			}
 		}
 		$currency = $use_edit && '' !== $base ? $base : $active;
 		$on_sale  = false;
 		if ( $use_edit ) {
-			// No book price in the visitor currency: the cart charges the store
-			// currency and applies the geo rule. get_price() is that amount.
+			// No book price and no exchange rate: the cart charges the store
+			// currency. get_price() is that amount, including a geo rule when
+			// the product has no fixed store-currency book price.
 			$price   = $product->get_price();
 			$regular = method_exists( $product, 'get_regular_price' ) ? $product->get_regular_price() : $price;
 			if ( method_exists( $product, 'is_on_sale' ) ) {

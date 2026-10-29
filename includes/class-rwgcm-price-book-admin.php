@@ -46,7 +46,7 @@ class RWGCM_Price_Book_Admin {
 	public static function render_panel() {
 		echo '<div id="rwgcm_price_book_product_data" class="panel woocommerce_options_panel hidden">';
 		echo '<div class="options_group">';
-		echo '<p class="form-field" style="padding: 0 12px;">' . esc_html__( 'Fixed prices in each currency. Before checkout the currency follows Geo Core’s visitor country. Once a billing country is entered, that country decides. The country map is edited under Commerce → Price books. These amounts are not converted.', 'reactwoo-geo-commerce' ) . '</p>';
+		echo '<p class="form-field" style="padding: 0 12px;">' . esc_html__( 'Fixed prices in each currency. Before checkout the currency follows Geo Core’s visitor country. Once a billing country is entered, that country decides. The country map is edited under Commerce → Price books. A fixed amount is used as entered. A currency left blank can be converted from the store price when an exchange rate exists (Geo Commerce → Settings).', 'reactwoo-geo-commerce' ) . '</p>';
 		echo '<input type="hidden" name="rwgcm_price_book_present" value="1" />';
 		self::render_currency_inputs( 'rwgcm_price_book', self::product_book_from_global(), true );
 		echo '</div></div>';
@@ -93,7 +93,7 @@ class RWGCM_Price_Book_Admin {
 		$book = RWGCM_Price_Book_Currency::get_book( $variation->ID );
 		echo '<div class="form-row form-row-full rwgcm-price-book-variation">';
 		echo '<p class="form-row form-row-full"><strong>' . esc_html__( 'Price book', 'reactwoo-geo-commerce' ) . '</strong><br/>';
-		echo '<span class="description">' . esc_html__( 'Recurring price, optional sale price, and sign-up fee in each currency. Leave a currency blank to fall back to the store currency.', 'reactwoo-geo-commerce' ) . '</span></p>';
+		echo '<span class="description">' . esc_html__( 'Recurring price, optional sale price, and sign-up fee in each currency. Leave a currency blank to use the store price, converted when an exchange rate exists.', 'reactwoo-geo-commerce' ) . '</span></p>';
 		echo '<input type="hidden" name="variable_rwgcm_price_book_present[' . esc_attr( (string) $loop ) . ']" value="1" />';
 		self::render_currency_inputs( 'variable_rwgcm_price_book[' . (int) $loop . ']', $book, true, true );
 		echo '</div>';

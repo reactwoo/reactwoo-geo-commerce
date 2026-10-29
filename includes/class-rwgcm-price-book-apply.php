@@ -146,7 +146,11 @@ class RWGCM_Price_Book_Apply {
 		unset( $product, $for_display );
 		$currency = function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : '';
 		$force    = class_exists( 'RWGCM_Price_Book_Currency', false ) && RWGCM_Price_Book_Currency::forces_store_currency();
-		return RWGCM_Price_Book::variation_prices_hash( $hash, $currency, $force );
+		$hash     = RWGCM_Price_Book::variation_prices_hash( $hash, $currency, $force );
+		if ( class_exists( 'RWGCM_Exchange', false ) ) {
+			$hash['rwgcm_exchange'] = RWGCM_Exchange::cache_token();
+		}
+		return $hash;
 	}
 
 	/**
@@ -164,6 +168,20 @@ class RWGCM_Price_Book_Apply {
 		$active = get_woocommerce_currency();
 		$book   = RWGCM_Price_Book_Currency::get_book( $product->get_id() );
 		if ( ! RWGCM_Price_Book::has_price( $book, $active ) ) {
+			if ( class_exists( 'RWGCM_Exchange', false ) && RWGCM_Exchange::supplies_product( $product, $active ) ) {
+				$source = $fee;
+				$base   = RWGCM_Price_Book_Currency::base_currency();
+				if ( RWGCM_Price_Book::has_price( $book, $base ) ) {
+					$base_prices = RWGCM_Price_Book::resolve_prices( $book[ RWGCM_Price_Book::normalize_currency( $base ) ] );
+					if ( is_array( $base_prices ) && '' !== $base_prices['signup_fee'] ) {
+						$source = $base_prices['signup_fee'];
+					}
+				}
+				$converted = RWGCM_Exchange::convert_fee( $source, $active );
+				if ( null !== $converted ) {
+					return $converted;
+				}
+			}
 			return $fee;
 		}
 		$prices = RWGCM_Price_Book::resolve_prices( $book[ RWGCM_Price_Book::normalize_currency( $active ) ] );
@@ -200,6 +218,9 @@ class RWGCM_Price_Book_Apply {
 		}
 		$book = RWGCM_Price_Book_Currency::get_book( $product->get_id() );
 		if ( RWGCM_Price_Book::has_price( $book, $active ) ) {
+			return $html;
+		}
+		if ( class_exists( 'RWGCM_Exchange', false ) && RWGCM_Exchange::supplies_product( $product, $active ) ) {
 			return $html;
 		}
 		$raw = self::base_charge_amount( $product );
@@ -305,6 +326,9 @@ class RWGCM_Price_Book_Apply {
 		if ( RWGCM_Price_Book::has_price( $book, $active ) || ! function_exists( 'wc_price' ) ) {
 			return $data;
 		}
+		if ( class_exists( 'RWGCM_Exchange', false ) && RWGCM_Exchange::supplies_product( $variation, $active ) ) {
+			return $data;
+		}
 		$raw = self::base_charge_amount( $variation );
 		if ( '' === (string) $raw ) {
 			return $data;
@@ -356,10 +380,16 @@ class RWGCM_Price_Book_Apply {
 			return null;
 		}
 		$book = RWGCM_Price_Book_Currency::get_book( $product->get_id() );
-		if ( ! RWGCM_Price_Book::has_price( $book, $active ) ) {
-			return null;
+		if ( RWGCM_Price_Book::has_price( $book, $active ) ) {
+			return RWGCM_Price_Book::resolve_prices( $book[ $active ] );
 		}
-		return RWGCM_Price_Book::resolve_prices( $book[ $active ] );
+		if ( class_exists( 'RWGCM_Exchange', false ) ) {
+			$converted = RWGCM_Exchange::prices_for_product( $product, $active );
+			if ( is_array( $converted ) ) {
+				return $converted;
+			}
+		}
+		return null;
 	}
 
 	/**
@@ -435,6 +465,11 @@ class RWGCM_Price_Book_Apply {
 				$resolved = RWGCM_Price_Book::resolve_prices( $book[ RWGCM_Price_Book::normalize_currency( $active ) ] );
 				if ( is_array( $resolved ) ) {
 					$book_amount = $resolved['active'];
+				}
+			} elseif ( class_exists( 'RWGCM_Exchange', false ) ) {
+				$converted = RWGCM_Exchange::prices_for_product( $child, $active );
+				if ( is_array( $converted ) ) {
+					$book_amount = $converted['active'];
 				}
 			}
 			$rows[] = array(

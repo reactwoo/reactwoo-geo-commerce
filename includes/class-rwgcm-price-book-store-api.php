@@ -231,7 +231,10 @@ class RWGCM_Price_Book_Store_Api {
 	 * @return bool
 	 */
 	public static function line_priced_in( $product_id, $currency ) {
-		return RWGCM_Price_Book::has_price( RWGCM_Price_Book_Currency::get_book( $product_id ), $currency );
+		if ( RWGCM_Price_Book::has_price( RWGCM_Price_Book_Currency::get_book( $product_id ), $currency ) ) {
+			return true;
+		}
+		return class_exists( 'RWGCM_Exchange', false ) && RWGCM_Exchange::supplies( (int) $product_id, $currency );
 	}
 
 	/**

@@ -87,6 +87,7 @@ class RWGCM_Plugin {
 
 		require_once RWGCM_PATH . 'includes/class-rwgcm-price-book.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-price-book-currency.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-exchange.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-price-book-apply.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-price-book-order.php';
 		require_once RWGCM_PATH . 'includes/class-rwgcm-price-book-store-api.php';
@@ -131,6 +132,7 @@ class RWGCM_Plugin {
 		RWGCM_Shipping::init();
 		RWGCM_Shipping_Prices::init();
 		RWGCM_Coupon_Geo::init();
+		RWGCM_Exchange::init();
 		RWGCM_Price_Book_Currency::init();
 		RWGCM_Price_Book_Apply::init();
 		RWGCM_Price_Book_Order::init();

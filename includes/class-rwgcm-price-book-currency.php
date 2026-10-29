@@ -1008,8 +1008,12 @@ class RWGCM_Price_Book_Currency {
 			if ( empty( $item['data'] ) || ! is_object( $item['data'] ) || ! method_exists( $item['data'], 'get_id' ) ) {
 				continue;
 			}
-			$book       = self::get_book( $item['data']->get_id() );
-			$supports[] = RWGCM_Price_Book::has_price( $book, $currency );
+			$book    = self::get_book( $item['data']->get_id() );
+			$priced  = RWGCM_Price_Book::has_price( $book, $currency );
+			if ( ! $priced && class_exists( 'RWGCM_Exchange', false ) ) {
+				$priced = RWGCM_Exchange::supplies_product( $item['data'], $currency );
+			}
+			$supports[] = $priced;
 		}
 		if ( ! empty( $supports ) ) {
 			$shipping   = RWGCM_Price_Book::shipping_supports_currency( $currency, self::base_currency(), self::cart_needs_shipping(), self::shipping_priced( $currency ) );
