@@ -18,11 +18,18 @@ class RWGCM_Price_Book_Order {
 
 	const META_SOURCE = '_rwgcm_price_book_source';
 
+	const META_RATE = '_rwgcm_exchange_rate';
+
+	const META_RATE_BASE = '_rwgcm_exchange_rate_base';
+
+	const META_RATE_SOURCE = '_rwgcm_exchange_rate_source';
+
 	/**
 	 * @return void
 	 */
 	public static function init() {
 		add_action( 'woocommerce_checkout_create_order', array( __CLASS__, 'on_checkout_create_order' ), 20, 2 );
+		add_action( 'woocommerce_checkout_update_order_meta', array( __CLASS__, 'on_checkout_update_order_meta' ), 20, 1 );
 		add_action( 'woocommerce_store_api_checkout_update_order_meta', array( __CLASS__, 'on_store_api_checkout_update_order_meta' ), 20, 1 );
 		add_action( 'woocommerce_checkout_subscription_created', array( __CLASS__, 'on_subscription_created' ), 10, 2 );
 		add_action( 'wcs_renewal_order_created', array( __CLASS__, 'on_renewal_order_created' ), 5, 2 );
@@ -49,6 +56,7 @@ class RWGCM_Price_Book_Order {
 		$meta   = self::checkout_meta( $billing, $active );
 		$order->set_currency( $meta['currency'] );
 		self::write_meta( $order, $meta );
+		self::record_exchange_rate( $order );
 	}
 
 	/**
@@ -70,6 +78,7 @@ class RWGCM_Price_Book_Order {
 			$active = (string) $order->get_currency();
 		}
 		self::write_meta( $order, self::checkout_meta( $billing, $active ) );
+		self::record_exchange_rate( $order );
 		if ( method_exists( $order, 'get_id' ) && (int) $order->get_id() > 0 && method_exists( $order, 'save' ) ) {
 			$order->save();
 		}
@@ -105,6 +114,57 @@ class RWGCM_Price_Book_Order {
 			'currency' => $currency,
 			'source'   => $source,
 		);
+	}
+
+	/**
+	 * Classic checkout has line items by the time this fires.
+	 *
+	 * @param int|object $order_id Order id, or an order object.
+	 * @return void
+	 */
+	public static function on_checkout_update_order_meta( $order_id ) {
+		$order = $order_id;
+		if ( ! is_object( $order ) && function_exists( 'wc_get_order' ) ) {
+			$order = wc_get_order( $order_id );
+		}
+		self::record_exchange_rate( $order );
+		if ( is_object( $order ) && method_exists( $order, 'get_id' ) && (int) $order->get_id() > 0 && method_exists( $order, 'save' ) ) {
+			$order->save();
+		}
+	}
+
+	/**
+	 * Store the rate that was multiplied into a converted line. Fixed book
+	 * prices do not record a rate.
+	 *
+	 * @param object|null $order Order.
+	 * @return void
+	 */
+	public static function record_exchange_rate( $order ) {
+		if ( ! is_object( $order ) || ! method_exists( $order, 'update_meta_data' ) || ! class_exists( 'RWGCM_Exchange', false ) ) {
+			return;
+		}
+		if ( class_exists( 'RWGCM_Price_Book_Currency', false ) && RWGCM_Price_Book_Currency::is_renewal_request() ) {
+			return;
+		}
+		$currency = method_exists( $order, 'get_currency' ) ? (string) $order->get_currency() : '';
+		$ids      = array();
+		if ( method_exists( $order, 'get_items' ) ) {
+			foreach ( $order->get_items( 'line_item' ) as $item ) {
+				if ( ! is_object( $item ) || ! method_exists( $item, 'get_product_id' ) ) {
+					continue;
+				}
+				$variation = method_exists( $item, 'get_variation_id' ) ? (int) $item->get_variation_id() : 0;
+				$ids[]     = $variation > 0 ? $variation : (int) $item->get_product_id();
+			}
+		}
+		$meta = RWGCM_Exchange::order_rate_meta( $currency, $ids );
+		if ( null === $meta ) {
+			return;
+		}
+		$order->update_meta_data( self::META_RATE, $meta['rate'] );
+		$order->update_meta_data( self::META_RATE_BASE, $meta['base'] );
+		$order->update_meta_data( self::META_RATE_SOURCE, $meta['source'] );
 	}
 
 	/**
@@ -189,6 +249,22 @@ class RWGCM_Price_Book_Order {
 		echo esc_html__( 'Currency', 'reactwoo-geo-commerce' ) . ': <code>' . esc_html( strtoupper( $currency ) ) . '</code>';
 		if ( is_string( $source ) && '' !== $source ) {
 			echo '<br/>' . esc_html__( 'Chosen from', 'reactwoo-geo-commerce' ) . ': <code>' . esc_html( $source ) . '</code>';
+		}
+		$rate = $order->get_meta( self::META_RATE, true );
+		$base = $order->get_meta( self::META_RATE_BASE, true );
+		if ( is_string( $rate ) && '' !== $rate ) {
+			$pair = ( is_string( $base ) && '' !== $base ) ? strtoupper( $base ) : '';
+			echo '<br/>' . esc_html__( 'Exchange rate', 'reactwoo-geo-commerce' ) . ': <code>' . esc_html( $rate ) . '</code>';
+			if ( '' !== $pair ) {
+				echo ' ' . esc_html(
+					sprintf(
+						/* translators: 1: order currency, 2: store currency, 3: rate */
+						__( '%1$s per 1 %2$s', 'reactwoo-geo-commerce' ),
+						strtoupper( (string) $currency ),
+						$pair
+					)
+				);
+			}
 		}
 		echo '</p></div>';
 	}

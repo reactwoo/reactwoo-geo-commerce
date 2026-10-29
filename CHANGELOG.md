@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-29
+
+### Added
+- **Exchange rates.** `RWGCM_Exchange` converts a store-currency amount into the visitor currency when that currency has no fixed `_rwgcm_price_book` price. The store amount is the book price in the store currency when one is set, otherwise the regular or sale price. A fixed-line geo rule is applied in the store currency, then the amount is multiplied by the rate and by `(1 + markup%)`, then a percent rule is applied, then rounding. A fixed price in the visitor currency is not converted and the percent rule is not stacked on it.
+- **Settings** (Geo Commerce → Settings): conversion Auto or Off, source Manual or Automatic, provider ECB (keyless daily reference XML) or open.er-api.com (optional ExchangeRate-API v6 key), rounding none / whole units / .99, and a markup percent. Manual rates are units of each currency per 1 store-currency unit, stored in the existing `rwgcm_exchange_rates` option. Provider rates are stored in `rwgcm_exchange_rates_cache` and the 12-hour transient `rwgcm_exchange_rates_fresh`. WP-Cron hook `rwgcm_exchange_rates_refresh` refetches. A failed fetch keeps the last-good table, then manual rates. No rate keeps the store currency. Nothing in this path throws.
+- **Order meta** when a line was converted: `_rwgcm_exchange_rate` (units of the order currency per 1 store-currency unit, after markup), `_rwgcm_exchange_rate_base`, and `_rwgcm_exchange_rate_source`. The order admin note shows the rate.
+
+### Changed
+- Catalog price HTML, the `[rwgcm_price]` shortcode, the `rwgcm/product-price` block, the Elementor widgets `rwgcm-product-price` and `rwgcm-product-price-atomic`, `GET /wp-json/rwgcm/v1/prices`, cart and checkout line prices, and Store API product prices use the converted amount. A line that can be converted counts as priced in the visitor currency, so the cart can leave the store currency. Shipping that is not priced in that currency still keeps the cart in the store currency.
+- Saving `rwgcm_exchange_rates`, `rwgcm_exchange_settings`, or `rwgcm_exchange_rates_cache` (and the existing `rwgcm_exchange_rates_saved` action) runs the 0.8.0 geo cache purge. The variation price hash includes the rate table.
+
+### Default
+- Conversion mode defaults to **Auto** and the source defaults to **Manual** with an empty rate table. Auto converts only when a rate exists, so a site with no rates keeps 0.8.0 behaviour: a missing visitor-currency book price stays in the store currency, and a fixed store-currency book price is not passed through the geo percent rule. Off forces that fallback even after rates are saved.
+
 ## [0.8.0] - 2026-10-29
 
 ### Added

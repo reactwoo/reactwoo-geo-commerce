@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.8.0
+Stable tag: 0.9.0
 
 WooCommerce rules and personalization on ReactWoo Geo Core.
 
@@ -33,6 +33,14 @@ The cookie value is the Geo Core visitor country. The REST route does not trust 
 
 LiteSpeed varies when cache-safe mode is not Off. WP Rocket varies only when `rwgc_country` is already on `rocket_cache_dynamic_cookies`. W3 Total Cache varies when that cookie is in its configuration, or listed on `rwgcm_w3tc_vary_cookies`. WP Super Cache and Cloudflare APO are not varied.
 
+= What if the visitor currency has no price-book amount? =
+
+Auto (the default) converts the store-currency price when a rate exists: the price-book amount in the store currency if one is set, otherwise the regular or sale price. The geo pricing rule runs after that conversion. A fixed price in the visitor currency wins and is not discounted again. The same amount is shown on the catalog, the price shortcode, the block, the Elementor widgets, and the cache-safe price route, and it is what the cart, checkout, and Store API charge. The order stores the currency and the rate.
+
+Off, or Auto with no rate, keeps the store currency. A fixed store-currency book price is then not run through the geo percent rule. Rates are entered under Geo Commerce → Settings (manual, or ECB / open.er-api.com). They refresh every 12 hours. A failed fetch uses the last saved provider rates, then manual rates. Saving rates clears the geo cache.
+
+A cart that needs shipping still uses the store currency when shipping is not priced in the visitor currency. On that request the displayed total is the store-currency total.
+
 = What stays server-rendered? =
 
 Cart, checkout, the mini-cart, cart fragments, order emails, wp-admin, and the block editor. Catalog AJAX covers the shop, the product page, and product taxonomy archives. Homepage loops, the Store API, and product-collection blocks stay server-rendered. Variation dropdown prices (`woocommerce_available_variation`) stay server-rendered, so a cached product page that is not varied can still show the cached country's variation price after a variation is chosen. JSON-LD is left as the server rendered it. With JavaScript disabled the placeholder does not show a country price.
@@ -44,6 +52,12 @@ The product (with its parent and variations), the shop page, product category ar
 Adapters run only when that plugin is active: LiteSpeed (`litespeed_purge_post`, `litespeed_purge_url`), WP Rocket (`rocket_clean_post`, and `rocket_clean_files` for archive URLs), W3 Total Cache (`w3tc_flush_post`, and `w3tc_flush_url` for archive URLs), WP Super Cache (`wpsc_delete_post_cache`; archive URLs have no purge call), and Cloudflare APO (`cloudflare_purge_by_url`, `cloudflare_purge_url`, `cloudflare_purge_everything`) when those hooks are registered. Elementor CSS is regenerated for each affected Elementor post. The last purge time and counts are stored in `rwgcm_last_cache_purge`. Extensions can use the `rwgcm_cache_purged` action. The button requires the `manage_woocommerce` capability and a nonce.
 
 == Changelog ==
+
+= 0.9.0 =
+* **Visitor currency when the price book has no amount.** A visitor whose currency has no fixed price-book price is charged the store-currency price (the book price in the store currency when one is set, otherwise the regular or sale price) converted at the current rate, then the matching geo pricing rule. £49 at 22.1 ZAR per GBP with ZA −15% is R920.47 before any rounding or markup. A fixed price in the visitor currency is unchanged and the percent rule is not stacked on it.
+* **Where it applies.** Catalog price HTML, `[rwgcm_price]`, the `rwgcm/product-price` block, both Elementor price widgets, `GET /wp-json/rwgcm/v1/prices`, the cart, checkout, and the Store API use that amount. The order stores the currency and the rate that was used (`_rwgcm_exchange_rate`).
+* **Rates.** Geo Commerce → Settings. Source is manual rates or an automatic provider (ECB reference rates, or open.er-api.com with an optional API key). Rates are cached for 12 hours and refreshed by WP-Cron. If the fetch fails, the last saved provider rates are used, then manual rates. With no rate the store currency is kept. Rounding can be none, whole units, or .99. An optional markup percent is applied to the rate. Saving rates clears the geo cache.
+* **Default.** Conversion is Auto: it runs only when a rate exists. The source starts on Manual with no rates, so an upgrade does not change prices until a rate is entered or a provider fetch succeeds. Off keeps the 0.8.0 store-currency fallback even when rates exist. A cart that needs shipping still stays in the store currency when shipping is not priced in the visitor currency.
 
 = 0.8.0 =
 * **Cache purge.** Saving a price book, country pricing rules, or exchange rates purges the product (parent and variations), the shop, product category archives, and posts that use the price shortcode, block, or Elementor price widgets. A usage index tracks those posts on save. Adapters run only when LiteSpeed, WP Rocket, W3 Total Cache, WP Super Cache, or the Cloudflare plugin is active. Elementor CSS is regenerated for affected Elementor posts.
