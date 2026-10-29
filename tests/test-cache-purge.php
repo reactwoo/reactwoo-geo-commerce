@@ -390,6 +390,24 @@ namespace {
 	assert_true( 'saving exchange rates purges', 'exchange_rates' === RWGCM_Cache_Purge::last_purge()['reason'] );
 	RWGCM_Cache_Purge::on_exchange_rates_saved( array( 'EUR' => 1.1 ) );
 	assert_true( 'rwgcm_exchange_rates_saved purges', 'exchange_rates' === RWGCM_Cache_Purge::last_purge()['reason'] );
+	RWGCM_Cache_Purge::reset_exchange_purge_guard();
+	$exchange_before = 0;
+	foreach ( (array) ( isset( $GLOBALS['rw_did']['rwgcm_cache_purged'] ) ? $GLOBALS['rw_did']['rwgcm_cache_purged'] : array() ) as $purged_call ) {
+		if ( isset( $purged_call[0]['reason'] ) && 'exchange_rates' === $purged_call[0]['reason'] ) {
+			++$exchange_before;
+		}
+	}
+	RWGCM_Cache_Purge::on_updated_option( 'rwgcm_exchange_rates', array( 'ZAR' => '22.1' ), array( 'base' => 'GBP', 'rates' => array( 'ZAR' => '22.2' ) ) );
+	RWGCM_Cache_Purge::on_added_option( 'rwgcm_exchange_rates', array( 'base' => 'GBP', 'rates' => array( 'ZAR' => '22.2' ) ) );
+	RWGCM_Cache_Purge::on_deleted_option( 'rwgcm_exchange_rates' );
+	RWGCM_Cache_Purge::on_exchange_rates_saved( array( 'ZAR' => '22.2' ) );
+	$exchange_after = 0;
+	foreach ( (array) ( isset( $GLOBALS['rw_did']['rwgcm_cache_purged'] ) ? $GLOBALS['rw_did']['rwgcm_cache_purged'] : array() ) as $purged_call ) {
+		if ( isset( $purged_call[0]['reason'] ) && 'exchange_rates' === $purged_call[0]['reason'] ) {
+			++$exchange_after;
+		}
+	}
+	assert_true( 'one save purges exchange rates once', 1 === ( $exchange_after - $exchange_before ) );
 	RWGCM_Cache_Purge::on_deleted_option( 'rwgcm_pricing' );
 	assert_true( 'deleting pricing rules purges', 'pricing_rules' === RWGCM_Cache_Purge::last_purge()['reason'] );
 

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-10-29
+
+### Fixed
+- Saving exchange rates purges the geo cache once per request. Updating the manual table, the settings option, the provider cache, and the `rwgcm_exchange_rates_saved` action in the same request no longer runs a separate purge for each.
+- An automatic or cron refresh (`RWGCM_Exchange::write_cache()`) purges only when a rate changed. Tables are compared at 6 decimal places. `fetched_at` and the provider name do not count. An unchanged refresh still stores the new fetch time.
+
 ## [0.9.0] - 2026-10-29
 
 ### Added

@@ -6,47 +6,38 @@ done
 
 ## Summary
 
-Geo Commerce 0.9.0 converts a missing visitor-currency price-book amount from the store-currency price, then applies the geo pricing rule. A fixed visitor-currency price is unchanged. Not tagged and not merged.
+Geo Commerce 0.9.0 is tagged `v0.9.0` on `52ed619` and published. Geo Commerce 0.9.1 dedupes the exchange-rate cache purge. Not tagged and not merged.
 
 ## Root cause
 
-`row_for()` labelled a product with no visitor-currency book price as the store currency. `should_apply_base_adjustment()` returns false when a fixed store-currency book price exists, so a rule such as ZA −15% never ran and the visitor was charged the full store price.
-
-## Default
-
-Conversion mode defaults to **Auto** and the rate source defaults to **Manual** with an empty table. Auto converts only when a rate exists, so an upgrade with no rates keeps 0.8.0 behaviour. Off keeps that fallback even after rates are saved.
+Saving rates updated several options and fired `rwgcm_exchange_rates_saved`, and each signal purged. A cron refresh also rewrote `fetched_at`, so the cache option change purged even when the rates were the same.
 
 ## Files changed
 
 | File | Reason |
 |------|--------|
-| includes/class-rwgcm-exchange.php | Rates, provider fetch, conversion, rounding, markup, settings save |
-| includes/class-rwgcm-price-book-apply.php | Use converted prices for getters, HTML, variations, cart, and signup fees |
-| includes/class-rwgcm-product-price.php | Keep the visitor currency when a rate can fill a missing book price |
-| includes/class-rwgcm-price-book-currency.php | A convertible line counts as priced, so the cart can leave the store currency |
-| includes/class-rwgcm-price-book-store-api.php | Store API and the checkout guard treat a converted line as priced |
-| includes/class-rwgcm-price-book-order.php | Record the rate, base, and source on the order |
-| includes/class-rwgcm-plugin.php | Boot the exchange service |
-| includes/class-rwgcm-price-book-admin.php | Tell merchants a blank currency can be converted |
-| admin/views/settings-commerce.php | Manual rates, provider, rounding, and markup |
-| reactwoo-geo-commerce.php, readme.txt, CHANGELOG.md | 0.9.0 |
-| tests/test-exchange.php | Conversion, fixed price, missing rate, rounding, cart parity |
-| tests/test-product-price.php, tests/test-cache-safe-price.php, tests/test-gateway-fallback.php | Version assertions moved to 0.9.0 |
+| includes/class-rwgcm-cache-purge.php | One exchange-rate purge per request; silence when a refresh says the rates did not change |
+| includes/class-rwgcm-exchange.php | Compare rate tables at 6 decimal places; skip the saved action when a refresh is unchanged |
+| reactwoo-geo-commerce.php, readme.txt, CHANGELOG.md | 0.9.1 |
+| tests/test-cache-purge.php, tests/test-exchange.php | One purge per save; cron purges only when a rate changes |
+| tests/test-product-price.php, tests/test-cache-safe-price.php, tests/test-gateway-fallback.php | Version assertions moved to 0.9.1 |
 
 ## What was not changed
 
-Shipping still keeps a cart in the store currency when shipping is not priced in the visitor currency. Fixed book prices are not discounted. No tag and no merge.
+Price-book and pricing-rule purges. Conversion behaviour. No tag and no merge for 0.9.1.
 
 ## Commands run
 
 ```bash
 php tests/test-exchange.php
+php tests/test-cache-purge.php
 for f in tests/test-*.php; do php "$f"; done
 ```
 
-`tests/test-exchange.php`: 74 passed, 0 failed.
+`tests/test-exchange.php`: 82 passed, 0 failed.
+`tests/test-cache-purge.php`: 47 passed, 0 failed.
 Every `tests/test-*.php` script passed.
 
 ## Remaining errors
 
-None. The settings screen was not opened in a browser; this environment has no WordPress site. The form, nonce, and capability are covered by the unit tests and the settings template.
+None.

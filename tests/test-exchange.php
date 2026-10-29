@@ -45,11 +45,23 @@ function get_option( $key, $default = false ) { // phpcs:ignore
 }
 function update_option( $key, $value, $autoload = null ) { // phpcs:ignore
 	unset( $autoload );
+	$existed = is_array( $GLOBALS['rw_options'] ) && array_key_exists( $key, $GLOBALS['rw_options'] );
+	$old     = $existed ? $GLOBALS['rw_options'][ $key ] : null;
 	$GLOBALS['rw_options'][ $key ] = $value;
+	if ( class_exists( 'RWGCM_Cache_Purge', false ) ) {
+		if ( $existed ) {
+			RWGCM_Cache_Purge::on_updated_option( $key, $old, $value );
+		} else {
+			RWGCM_Cache_Purge::on_added_option( $key, $value );
+		}
+	}
 	return true;
 }
 function do_action( $tag, $payload = null ) { // phpcs:ignore
 	$GLOBALS['rw_actions'][ $tag ][] = $payload;
+	if ( 'rwgcm_exchange_rates_saved' === $tag && class_exists( 'RWGCM_Cache_Purge', false ) ) {
+		RWGCM_Cache_Purge::on_exchange_rates_saved( $payload );
+	}
 }
 function get_post_meta( $id, $key, $single = false ) { // phpcs:ignore
 	unset( $single );
@@ -497,6 +509,91 @@ $names = RWGCM_Cache_Purge::exchange_rate_options();
 assert_true( 'manual rates stay on the purge option', in_array( 'rwgcm_exchange_rates', $names, true ) );
 assert_true( 'settings changes purge', in_array( 'rwgcm_exchange_settings', $names, true ) );
 assert_true( 'provider cache changes purge', in_array( 'rwgcm_exchange_rates_cache', $names, true ) );
+
+assert_true(
+	'rate tables match at 6 decimal places',
+	RWGCM_Exchange::rates_equivalent(
+		array( 'base' => 'GBP', 'rates' => array( 'ZAR' => '22.1' ), 'fetched_at' => 1 ),
+		array( 'base' => 'GBP', 'rates' => array( 'ZAR' => 22.1000004 ), 'fetched_at' => 99, 'provider' => 'ecb' )
+	)
+);
+assert_true(
+	'a real rate change is not treated as the same table',
+	! RWGCM_Exchange::rates_equivalent(
+		array( 'base' => 'GBP', 'rates' => array( 'ZAR' => '22.1' ) ),
+		array( 'base' => 'GBP', 'rates' => array( 'ZAR' => '22.2' ) )
+	)
+);
+assert_true(
+	'a new currency is a rate change',
+	! RWGCM_Exchange::rates_equivalent(
+		array( 'base' => 'GBP', 'rates' => array( 'ZAR' => '22.1' ) ),
+		array( 'base' => 'GBP', 'rates' => array( 'ZAR' => '22.1', 'USD' => '1.27' ) )
+	)
+);
+
+/**
+ * @return int
+ */
+function rw_exchange_purge_count() {
+	$count = 0;
+	foreach ( (array) ( isset( $GLOBALS['rw_actions']['rwgcm_cache_purged'] ) ? $GLOBALS['rw_actions']['rwgcm_cache_purged'] : array() ) as $payload ) {
+		if ( is_array( $payload ) && isset( $payload['reason'] ) && 'exchange_rates' === $payload['reason'] ) {
+			++$count;
+		}
+	}
+	return $count;
+}
+
+RWGCM_Cache_Purge::reset_exchange_purge_guard();
+$GLOBALS['rw_options']['rwgcm_exchange_rates_cache'] = array(
+	'base'       => 'GBP',
+	'rates'      => array( 'ZAR' => '22.1' ),
+	'provider'   => 'ecb',
+	'fetched_at' => 1,
+);
+$purges_before = rw_exchange_purge_count();
+$actions_before = isset( $GLOBALS['rw_actions']['rwgcm_exchange_rates_saved'] ) ? count( $GLOBALS['rw_actions']['rwgcm_exchange_rates_saved'] ) : 0;
+RWGCM_Exchange::write_cache(
+	array(
+		'base'       => 'GBP',
+		'rates'      => array( 'ZAR' => 22.1000004 ),
+		'provider'   => 'ecb',
+		'fetched_at' => 50,
+	)
+);
+assert_true( 'an unchanged cron refresh does not purge', rw_exchange_purge_count() === $purges_before );
+assert_true( 'an unchanged cron refresh does not fire the saved action', $actions_before === ( isset( $GLOBALS['rw_actions']['rwgcm_exchange_rates_saved'] ) ? count( $GLOBALS['rw_actions']['rwgcm_exchange_rates_saved'] ) : 0 ) );
+assert_true( 'an unchanged refresh still stores the new fetch time', isset( $GLOBALS['rw_options']['rwgcm_exchange_rates_cache']['fetched_at'] ) && 50 === (int) $GLOBALS['rw_options']['rwgcm_exchange_rates_cache']['fetched_at'] );
+RWGCM_Cache_Purge::reset_exchange_purge_guard();
+$purges_before = rw_exchange_purge_count();
+RWGCM_Exchange::write_cache(
+	array(
+		'base'       => 'GBP',
+		'rates'      => array( 'ZAR' => '23' ),
+		'provider'   => 'ecb',
+		'fetched_at' => 60,
+	)
+);
+assert_true( 'a cron refresh purges once when a rate changes', 1 === ( rw_exchange_purge_count() - $purges_before ) );
+RWGCM_Cache_Purge::reset_exchange_purge_guard();
+$purges_before = rw_exchange_purge_count();
+RWGCM_Exchange::persist(
+	array(
+		'mode'     => 'auto',
+		'source'   => 'manual',
+		'provider' => 'ecb',
+		'api_key'  => '',
+		'rounding' => 'none',
+		'markup'   => '0',
+	),
+	array(
+		'base'  => 'GBP',
+		'rates' => array( 'ZAR' => '22.1' ),
+	),
+	false
+);
+assert_true( 'saving settings and manual rates purges once', 1 === ( rw_exchange_purge_count() - $purges_before ) );
 
 $_POST = array(
 	'_wpnonce'                => 'ok',
