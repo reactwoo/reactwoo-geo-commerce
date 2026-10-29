@@ -64,8 +64,10 @@ class RWGCM_Elementor_Atomic {
 		}
 		require_once RWGCM_PATH . 'includes/integrations/elementor/class-rwgcm-elementor-atomic-weather-products.php';
 		require_once RWGCM_PATH . 'includes/integrations/elementor/class-rwgcm-elementor-atomic-weather-strip.php';
+		require_once RWGCM_PATH . 'includes/integrations/elementor/class-rwgcm-elementor-atomic-product-price.php';
 		$widgets_manager->register( new RWGCM_Elementor_Atomic_Weather_Products() );
 		$widgets_manager->register( new RWGCM_Elementor_Atomic_Weather_Strip() );
+		$widgets_manager->register( new RWGCM_Elementor_Atomic_Product_Price() );
 	}
 
 	/**
@@ -100,6 +102,8 @@ class RWGCM_Elementor_Atomic {
 			$html = RWGCM_Weather_Products_Display::render( self::products_args( $settings ) );
 		} elseif ( 'weather-strip' === $widget && class_exists( 'RWGCM_Weather_Strip', false ) ) {
 			$html = RWGCM_Weather_Strip::render( self::strip_args( $settings ) );
+		} elseif ( 'product-price' === $widget && class_exists( 'RWGCM_Product_Price', false ) ) {
+			$html = RWGCM_Product_Price::render( $settings );
 		}
 		return rest_ensure_response(
 			array(
@@ -118,8 +122,12 @@ class RWGCM_Elementor_Atomic {
 		if ( class_exists( 'RWGCM_Weather_Strip', false ) ) {
 			RWGCM_Weather_Strip::register_assets();
 		}
+		if ( class_exists( 'RWGCM_Product_Price', false ) ) {
+			RWGCM_Product_Price::register_assets();
+		}
 		wp_enqueue_style( 'rwgcm-weather-products' );
 		wp_enqueue_style( 'rwgcm-weather-strip' );
+		wp_enqueue_style( 'rwgcm-product-price' );
 		wp_register_script(
 			'rwgcm-elementor-atomic-preview',
 			RWGCM_URL . 'assets/js/rwgcm-elementor-atomic-preview.js',
@@ -136,6 +144,7 @@ class RWGCM_Elementor_Atomic {
 				'styles' => array(
 					RWGCM_URL . 'assets/css/weather-products.css?ver=' . rawurlencode( RWGCM_VERSION ),
 					RWGCM_URL . 'assets/css/weather-strip.css?ver=' . rawurlencode( RWGCM_VERSION ),
+					RWGCM_URL . 'assets/css/product-price.css?ver=' . rawurlencode( RWGCM_VERSION ),
 				),
 			)
 		);

@@ -6,40 +6,46 @@ done
 
 ## Summary
 
-The classic cart shipping calculator now clears the shipping-currency notice when the new address uses the store currency. A ZAR fallback followed by a GB calculation no longer leaves "Prices are shown in GBP because shipping to United Kingdom (UK) isn't priced in ZAR." Checkout already cleared that notice. Still draft PR #12. Not merged and not tagged. Version stays 0.6.0.
-
-## Root cause
-
-The calculator updates the customer shipping country, but currency still followed the geo visitor (ZA → ZAR). Shipping to GB is not priced in ZAR, so the cart stayed in GBP and the fallback notice was rewritten for the United Kingdom. Checkout posts the billing country GB, so the visitor currency becomes the store currency and the notice is empty.
+Localised product price for Geo Commerce 0.7.0. Shortcode, Gutenberg block, and both Elementor widgets share `RWGCM_Product_Price`. Amounts come from WooCommerce's filtered price getters, so price books and pricing rules match the product page. Not merged and not tagged.
 
 ## Files changed
 
 | File | Reason |
 |------|--------|
-| includes/class-rwgcm-price-book-currency.php | Remember the calculator country, then resolve again; drop a fallback when the visitor currency is the store currency |
-| includes/class-rwgcm-shipping-prices.php | No notice when the fallback is the store currency or the cart is already in the visitor currency |
-| tests/test-checkout-country.php | ZA fallback, then calculator to GB, notice cleared; calculator back to ZA still explains ZAR |
-| tests/test-shipping-prices.php | Store-currency fallback and an already-matched visitor currency produce no notice |
-| CHANGELOG.md, readme.txt | Note the fix under 0.6.0 |
+| includes/class-rwgcm-product-price.php | Shared renderer, shortcode, cache notes |
+| includes/class-rwgcm-product-price-block.php | Server-rendered `rwgcm/product-price` block |
+| blocks/product-price/block.json, blocks/product-price/index.js | Block metadata and editor controls |
+| assets/css/product-price.css | BEM styles, inherited type, site colour variables |
+| includes/integrations/elementor/class-rwgcm-elementor-product-price.php | Classic widget `rwgcm-product-price` |
+| includes/integrations/elementor/class-rwgcm-elementor-atomic-product-price.php | Atomic element `rwgcm-product-price-atomic` |
+| includes/integrations/elementor/templates/product-price.html.twig | Atomic editor shell |
+| includes/integrations/elementor/class-rwgcm-elementor.php | Register the classic widget |
+| includes/integrations/elementor/class-rwgcm-elementor-atomic.php | Register the atomic element and preview |
+| includes/class-rwgcm-plugin.php | Boot the renderer and block |
+| reactwoo-geo-commerce.php, readme.txt, CHANGELOG.md | Version 0.7.0 |
+| tests/test-product-price.php | Country, rule, tax, sale, From, fallback, cache |
+| tests/test-gateway-fallback.php | Version assertion is now 0.7.0 |
 
 ## What was not changed
 
-- Version (still 0.6.0)
-- Phase 2 and phase 3
-- No merge and no tag
+- Pricing math (`RWGCM_Pricing_Calc`, price-book filters). A fixed book price still replaces a percent rule, same as the product page.
+- No merge and no tag.
 
 ## Commands run
 
 ```bash
-php -l includes/class-rwgcm-price-book-currency.php
-php -l includes/class-rwgcm-shipping-prices.php
-php tests/test-checkout-country.php
-php tests/test-shipping-prices.php
-php tests/test-shipping-cache.php
-php tests/test-store-api-currency.php
+php -l includes/class-rwgcm-product-price.php
+php -l includes/class-rwgcm-product-price-block.php
+php -l includes/integrations/elementor/class-rwgcm-elementor-product-price.php
+php -l includes/integrations/elementor/class-rwgcm-elementor-atomic-product-price.php
+php tests/test-product-price.php
+php tests/test-gateway-fallback.php
+python3 scripts/package_zip.py
 ```
 
-All passed (0 failed).
+`tests/test-product-price.php`: 68 passed, 0 failed.
+`tests/test-gateway-fallback.php`: 17 passed, 0 failed.
+`python3 scripts/package_zip.py` wrote `reactwoo-geo-commerce-0.7.0.zip` (130 entries). The zip contains the renderer, block, both Elementor classes, the Twig shell, and `assets/css/product-price.css`. The zip is gitignored.
 
 ## Remaining errors
 

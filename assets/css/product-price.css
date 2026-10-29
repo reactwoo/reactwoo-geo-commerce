@@ -1,0 +1,55 @@
+.rwgcm-price {
+	color: inherit;
+	font: inherit;
+	line-height: inherit;
+}
+
+.rwgcm-price__amount,
+.rwgcm-price__fallback {
+	font-weight: inherit;
+}
+
+.rwgcm-price__from {
+	margin-inline-end: 0.25em;
+}
+
+.rwgcm-price__regular {
+	margin-inline-end: 0.35em;
+}
+
+.rwgcm-price__regular del {
+	text-decoration: line-through;
+}
+
+.rwgcm-price__period {
+	margin-inline-start: 0.15em;
+}
+
+.rwgcm-price--color-primary {
+	color: var(--e-global-color-primary, var(--wp--preset--color--primary, inherit));
+}
+
+.rwgcm-price--color-secondary {
+	color: var(--e-global-color-secondary, var(--wp--preset--color--secondary, inherit));
+}
+
+.rwgcm-price--color-accent {
+	color: var(--e-global-color-accent, var(--wp--preset--color--accent, var(--wp--preset--color--tertiary, inherit)));
+}
+
+.rwgcm-price--color-text {
+	color: var(--e-global-color-text, var(--wp--preset--color--contrast, var(--wp--preset--color--foreground, inherit)));
+}
+
+.rwgcm-price .screen-reader-text {
+	border: 0;
+	clip: rect(1px, 1px, 1px, 1px);
+	clip-path: inset(50%);
+	height: 1px;
+	margin: -1px;
+	overflow: hidden;
+	padding: 0;
+	position: absolute;
+	width: 1px;
+	word-wrap: normal !important;
+}

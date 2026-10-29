@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-29
+
+### Added
+- **Localised product price.** `[rwgcm_price]` (optional `product_id` and `variation_id`; otherwise the current product), the `rwgcm/product-price` block, and Elementor elements `rwgcm-product-price` and `rwgcm-product-price-atomic` share `RWGCM_Product_Price`. Output uses WooCommerce's filtered `get_price()` / `get_regular_price()` and `wc_get_price_to_display()`, so `_rwgcm_price_book` and `rwgcm_pricing` percent/fixed rules apply as they do on the product page. Tax follows the shop display setting.
+- Format `amount`, `symbol`, or `code`. Optional billing-period suffix (`period`, for example `/year`), or the subscription period when the product has one. `from` shows the lowest variation price. `sale` strikes through the regular price when the product is on sale. `fallback` (default "Unavailable") is used when the product is missing, not purchasable, or out of stock.
+- Colour presets map to Elementor global colours and `theme.json` presets. Typography and colour inherit when no preset is chosen. The shortcode does not read `rwgc_cc`, set `DONOTCACHEPAGE`, or send nocache headers.
+
 ## [0.6.0] - 2026-10-28
 
 ### Added

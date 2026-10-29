@@ -36,6 +36,8 @@ class RWGCM_Elementor {
 		$widgets_manager->register( new RWGCM_Elementor_Weather_Products() );
 		require_once RWGCM_PATH . 'includes/integrations/elementor/class-rwgcm-elementor-weather-strip.php';
 		$widgets_manager->register( new RWGCM_Elementor_Weather_Strip() );
+		require_once RWGCM_PATH . 'includes/integrations/elementor/class-rwgcm-elementor-product-price.php';
+		$widgets_manager->register( new RWGCM_Elementor_Product_Price() );
 	}
 
 	/**
