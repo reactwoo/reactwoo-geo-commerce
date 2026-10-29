@@ -128,9 +128,10 @@ class RWGCM_Price_Book_Currency {
 	}
 
 	/**
-	 * REST (except the Store API storefront), cron, WP-CLI, wp-admin, and product
-	 * sync must not switch currency or apply a price book. Store API cart and
-	 * checkout keep the visitor currency.
+	 * REST (except the Store API storefront and the geo price route), cron,
+	 * WP-CLI, wp-admin, and product sync must not switch currency or apply a
+	 * price book. Store API cart and checkout, and GET /rwgcm/v1/price(s),
+	 * keep the visitor currency.
 	 *
 	 * @param array<string, mixed>|null $flags Optional request flags for tests.
 	 * @return bool
@@ -149,7 +150,7 @@ class RWGCM_Price_Book_Currency {
 			// No simulated country: keep the store currency. A preview country is applied below.
 			return '' === self::editor_preview_country();
 		}
-		if ( ! empty( $flags['rest'] ) && empty( $flags['store_api'] ) ) {
+		if ( ! empty( $flags['rest'] ) && empty( $flags['store_api'] ) && empty( $flags['price_api'] ) ) {
 			return true;
 		}
 		if ( ! empty( $flags['admin'] ) && empty( $flags['front_ajax'] ) ) {
@@ -689,9 +690,25 @@ class RWGCM_Price_Book_Currency {
 			'cli'        => defined( 'WP_CLI' ) && WP_CLI,
 			'rest'       => $rest,
 			'store_api'  => $rest && self::is_store_api_request_uri(),
+			'price_api'  => self::is_geo_price_request_uri(),
 			'admin'      => function_exists( 'is_admin' ) && is_admin(),
 			'front_ajax' => function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() && isset( $_REQUEST['wc-ajax'] ), // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		);
+	}
+
+	/**
+	 * Geo price endpoint. These routes apply visitor-country price books and
+	 * pricing rules. Other /wp-json/ routes stay on the store currency.
+	 *
+	 * @param string|null $uri Request URI. Null reads the current request.
+	 * @return bool
+	 */
+	public static function is_geo_price_request_uri( $uri = null ) {
+		if ( null === $uri ) {
+			$uri = isset( $_SERVER['REQUEST_URI'] ) ? (string) $_SERVER['REQUEST_URI'] : '';
+		}
+		$uri = rawurldecode( (string) $uri );
+		return (bool) preg_match( '#/rwgcm/v1/prices?(?:[/?&]|$)#i', $uri );
 	}
 
 	/**

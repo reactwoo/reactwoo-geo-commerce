@@ -164,6 +164,11 @@ class RWGCM_Plugin {
 		require_once RWGCM_PATH . 'includes/class-rwgcm-product-price-block.php';
 		RWGCM_Product_Price::init();
 		RWGCM_Product_Price_Block::init();
+		require_once RWGCM_PATH . 'includes/class-rwgcm-cache-adapters.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-cache-purge.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-cache-safe-price.php';
+		RWGCM_Cache_Purge::init();
+		RWGCM_Cache_Safe_Price::init();
 		require_once RWGCM_PATH . 'includes/class-rwgcm-rule-tester-rendered-impacts.php';
 		RWGCM_Rule_Tester_Rendered_Impacts::init();
 		require_once RWGCM_PATH . 'includes/class-rwgcm-catalog-weather-boost.php';

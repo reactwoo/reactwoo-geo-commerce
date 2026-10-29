@@ -33,7 +33,7 @@ class RWGCM_Product_Price_Block {
 				'rwgcm-product-price-editor',
 				RWGCM_URL . 'blocks/product-price/index.js',
 				array( 'wp-blocks', 'wp-element', 'wp-components', 'wp-block-editor', 'wp-server-side-render' ),
-				defined( 'RWGCM_VERSION' ) ? RWGCM_VERSION : '0.7.0',
+				defined( 'RWGCM_VERSION' ) ? RWGCM_VERSION : '0.8.0',
 				true
 			);
 		}

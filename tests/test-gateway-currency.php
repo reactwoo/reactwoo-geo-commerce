@@ -93,6 +93,21 @@ assert_currency(
 		)
 	)
 );
+assert_currency(
+	'the geo price route does not replace the visitor currency',
+	null === RWGCM_Gateway_Currency::currency_override_for_request(
+		'USD',
+		array(
+			'page'      => 'wc-settings',
+			'tab'       => 'checkout',
+			'section'   => 'paystack',
+			'lists'     => $lists,
+			'charged'   => $charged,
+			'price_api' => true,
+			'rest'      => true,
+		)
+	)
+);
 foreach ( array( 'cron', 'cli', 'rest', 'syncing' ) as $flag ) {
 	$context         = $settings;
 	$context[ $flag ] = true;

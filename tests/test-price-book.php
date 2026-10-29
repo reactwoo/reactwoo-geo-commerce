@@ -561,6 +561,18 @@ assert_true(
 		)
 	)
 );
+assert_true(
+	'the geo price route keeps the visitor currency',
+	! RWGCM_Price_Book_Currency::forces_store_currency(
+		array(
+			'rest'      => true,
+			'store_api' => false,
+			'price_api' => true,
+		)
+	)
+);
+assert_true( 'prices and price are geo price routes', RWGCM_Price_Book_Currency::is_geo_price_request_uri( '/wp-json/rwgcm/v1/prices' ) && RWGCM_Price_Book_Currency::is_geo_price_request_uri( '/?rest_route=/rwgcm/v1/price' ) );
+assert_true( 'a WooCommerce REST route is not the geo price route', ! RWGCM_Price_Book_Currency::is_geo_price_request_uri( '/wp-json/wc/v3/products' ) );
 assert_true( 'cron stays on the store currency', RWGCM_Price_Book_Currency::forces_store_currency( array( 'cron' => true ) ) );
 assert_true( 'WP-CLI stays on the store currency', RWGCM_Price_Book_Currency::forces_store_currency( array( 'cli' => true ) ) );
 assert_true(
