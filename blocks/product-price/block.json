@@ -1,0 +1,53 @@
+{
+  "apiVersion": 3,
+  "name": "rwgcm/product-price",
+  "title": "Product Price",
+  "category": "woocommerce",
+  "icon": "tag",
+  "description": "Show a product price in the visitor's currency, including price books and pricing rules.",
+  "keywords": ["price", "currency", "woocommerce", "reactwoo", "geo"],
+  "textdomain": "reactwoo-geo-commerce",
+  "supports": {
+    "html": false
+  },
+  "attributes": {
+    "product_id": {
+      "type": "number",
+      "default": 0
+    },
+    "variation_id": {
+      "type": "number",
+      "default": 0
+    },
+    "format": {
+      "type": "string",
+      "default": "symbol"
+    },
+    "period": {
+      "type": "string",
+      "default": ""
+    },
+    "from": {
+      "type": "string",
+      "default": "auto"
+    },
+    "sale": {
+      "type": "string",
+      "default": "yes"
+    },
+    "fallback": {
+      "type": "string",
+      "default": "Unavailable"
+    },
+    "color": {
+      "type": "string",
+      "default": "inherit"
+    },
+    "className": {
+      "type": "string",
+      "default": ""
+    }
+  },
+  "editorScript": "rwgcm-product-price-editor",
+  "style": "rwgcm-product-price"
+}

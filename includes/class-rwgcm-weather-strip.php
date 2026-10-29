@@ -56,9 +56,12 @@ class RWGCM_Weather_Strip {
 	public static function render( array $args = array() ) {
 		$fallback = isset( $args['fallback'] ) ? sanitize_key( (string) $args['fallback'] ) : 'hide';
 		$class    = isset( $args['class'] ) ? sanitize_html_class( (string) $args['class'] ) : '';
-		$facets   = RWGCM_Weather_Affinity::get_visitor_facets();
+		$facets   = class_exists( 'RWGCM_Weather_Affinity', false ) ? RWGCM_Weather_Affinity::get_visitor_facets() : array();
 
 		if ( empty( $facets ) ) {
+			if ( self::is_editor_preview() ) {
+				return self::editor_placeholder( $class );
+			}
 			return 'hide' === $fallback ? '' : '<div class="rwgcm-weather-strip rwgcm-weather-strip--empty' . ( $class ? ' ' . esc_attr( $class ) : '' ) . '"><span class="rwgcm-weather-strip__label">' . esc_html__( 'Weather unavailable', 'reactwoo-geo-commerce' ) . '</span></div>';
 		}
 
@@ -91,11 +94,24 @@ class RWGCM_Weather_Strip {
 	}
 
 	/**
-	 * Resolve strip link target from args or merchandising default.
-	 *
-	 * @param array<string, mixed> $args Display args (`link` = none|shop|custom URL).
-	 * @return string URL or empty.
+	 * @return bool
 	 */
+	private static function is_editor_preview() {
+		return class_exists( 'RWGCM_Price_Book_Currency', false ) && RWGCM_Price_Book_Currency::is_editor_preview_request();
+	}
+
+	/**
+	 * @param string $class Extra class.
+	 * @return string
+	 */
+	private static function editor_placeholder( $class ) {
+		$classes = array( 'rwgcm-weather-strip', 'rwgcm-weather-strip--editor-placeholder' );
+		if ( '' !== $class ) {
+			$classes[] = $class;
+		}
+		return '<div class="' . esc_attr( implode( ' ', $classes ) ) . '"><span class="rwgcm-weather-strip__label">' . esc_html__( 'Weather strip preview. Visitor weather is not available in the editor.', 'reactwoo-geo-commerce' ) . '</span></div>';
+	}
+
 	public static function resolve_link_url( array $args = array() ) {
 		$link = isset( $args['link'] ) ? trim( (string) $args['link'] ) : '';
 		if ( '' === $link ) {

@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.6.0
+Stable tag: 0.7.0
 
 WooCommerce rules and personalization on ReactWoo Geo Core.
 
@@ -18,6 +18,10 @@ Separate plugin for commerce-specific personalization. Requires **ReactWoo Geo C
 2. Activate this plugin.
 
 == Changelog ==
+
+= 0.7.0 =
+* **Product price:** Shortcode `[rwgcm_price]`, Gutenberg block `rwgcm/product-price`, and Elementor widgets `rwgcm-product-price` (classic) and `rwgcm-product-price-atomic` (V4) share one renderer. The amount comes from WooCommerce's filtered price getters, so price books and pricing rules match the product page, including tax display. A country rule such as ZA −15% is included when the cart would charge the store currency. Options cover the format (amount, symbol, or currency code), a billing-period suffix, a From prefix for the lowest variation, the struck-through regular price when on sale, and fallback text when the product is missing, not purchasable, or out of stock. Colour controls use site colour variables. The shortcode follows Geo Core's country cache vary and does not mark the page uncacheable.
+* **Elementor:** Widgets register even when Elementor has already loaded. Atomic widgets register only while the atomic experiment is on.
 
 = 0.6.0 =
 * **Shipping-class costs:** A flat rate with shipping-class costs can be priced in another currency when every class cost and the base cost that will be charged has an amount in that currency (Cost (ZAR), and one field per class). If any of those amounts is blank, the method stays in the store currency and none of the amounts are swapped.
