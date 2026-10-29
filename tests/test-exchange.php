@@ -631,5 +631,103 @@ $GLOBALS['rw_options']['rwgcm_exchange_rates'] = array(
 );
 assert_true( 'a rate change alters the variation price hash token', $token !== RWGCM_Exchange::cache_token() );
 
+// Rule ID 1 as the 0.8.0 admin UI saves it (class-rwgcm-admin-rules.php rule_array_from_post).
+// Geo Core rejects operator "is", and its portable match returns false. The visitor country still applies.
+class RWGCM_DB { // phpcs:ignore
+	public static function rules_table_exists() { return true; }
+}
+class RWGCM_Rule_Store { // phpcs:ignore
+	public static function count_by_status( $status ) { unset( $status ); return 1; }
+	public static function get_all_rules() { return array( $GLOBALS['rw_ui_rule'] ); }
+}
+class RWGC_Context_Snapshot { // phpcs:ignore
+	public static function from_array( array $context ) { return (object) $context; }
+}
+class RWGC_Targeting_Rule_Set_Schema { // phpcs:ignore
+	public static function sanitize( $raw ) { return is_array( $raw ) ? $raw : null; }
+	public static function sanitize_condition_type_string( $type ) { return sanitize_key( (string) $type ); }
+}
+class RWGC_Target_Operators { // phpcs:ignore
+	public static function is_valid( $op ) { return in_array( $op, array( 'in', 'not_in' ), true ); }
+	public static function evaluate( $actual, $op, $expected ) { unset( $actual, $op, $expected ); return false; }
+}
+class RWGC_Rule_Evaluator { // phpcs:ignore
+	public static function matches( $set, $snapshot ) { unset( $set, $snapshot ); return false; }
+}
+function rwgc_get_context_snapshot() { return array(); } // phpcs:ignore
+
+require_once dirname( __DIR__ ) . '/includes/class-rwgcm-condition-library.php';
+require_once dirname( __DIR__ ) . '/includes/class-rwgcm-rule-summary.php';
+require_once dirname( __DIR__ ) . '/includes/class-rwgcm-condition-evaluator.php';
+require_once dirname( __DIR__ ) . '/includes/class-rwgcm-targeting-adapter.php';
+require_once dirname( __DIR__ ) . '/includes/class-rwgcm-rule-evaluator.php';
+require_once dirname( __DIR__ ) . '/includes/class-rwgcm-diagnostics.php';
+
+$GLOBALS['rw_ui_rule'] = array(
+	'id'         => 1,
+	'label'      => 'ZA percent -15',
+	'status'     => 'active',
+	'priority'   => 100,
+	'scope'      => array(
+		'type' => 'global',
+		'ids'  => array(),
+	),
+	'conditions' => array(
+		'match' => 'all',
+		'items' => array(
+			array(
+				'field'    => 'visitor.country',
+				'target'   => 'country',
+				'operator' => 'is',
+				'value'    => 'ZA',
+				'label'    => 'South Africa',
+			),
+		),
+	),
+	'actions'    => array(
+		array(
+			'type'  => 'price_adjustment',
+			'mode'  => 'percent',
+			'value' => -15.0,
+		),
+	),
+	'meta'       => array(
+		'source'                 => 'admin_generic_rules',
+		'use_portable_targeting' => false,
+		'portable_targeting'     => '',
+	),
+);
+$ui_summary = RWGCM_Rule_Summary::summarize_rule( $GLOBALS['rw_ui_rule'] );
+assert_true(
+	'the stored 0.8.0 UI rule reads as the South Africa 15% decrease',
+	'If visitor country is South Africa, decrease the product price by 15%.' === $ui_summary
+);
+
+$GLOBALS['rw_options']['rwgcm_exchange_settings'] = array(
+	'mode'     => 'auto',
+	'source'   => 'manual',
+	'provider' => 'ecb',
+	'api_key'  => '',
+	'rounding' => 'none',
+	'markup'   => '0',
+);
+$GLOBALS['rw_options']['rwgcm_exchange_rates'] = array(
+	'base'  => 'GBP',
+	'rates' => array( 'ZAR' => '22.16' ),
+);
+$ui_price = (string) $GLOBALS['rw_products'][1049]->get_price();
+assert_true( 'the UI rule discounts the converted £49 price', '922.96' === $ui_price );
+$ui_html = RWGCM_Product_Price::render( array( 'product_id' => 1049, 'format' => 'code' ) );
+assert_has( 'the price element includes the 15% country rule', $ui_html, '922.96 ZAR' );
+assert_lacks( 'the price element is not the undiscounted conversion', $ui_html, '1,085.84' );
+$ui_cart_product = $GLOBALS['rw_products'][1049];
+RWGCM_Price_Book_Apply::apply_cart_prices( new RW_Cart( array( array( 'data' => $ui_cart_product ) ) ) );
+assert_true( 'the cart charges the discounted converted price', '922.96' === (string) $ui_cart_product->charged );
+$fixed_ui = (string) $GLOBALS['rw_products'][1299]->get_price();
+assert_true( 'a fixed ZAR book price still ignores the UI percent rule', '1299.00' === $fixed_ui );
+
+$GLOBALS['rw_ui_rule']['conditions']['items'][0]['value'] = 'South Africa';
+assert_true( 'a country stored as its name still discounts the converted price', '922.96' === (string) $GLOBALS['rw_products'][1049]->get_price() );
+
 echo "\n{$passed} passed, {$failed} failed\n";
 exit( $failed > 0 ? 1 : 0 );

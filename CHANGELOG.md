@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.1] - 2026-10-29
 
 ### Fixed
+- A price rule saved by the 0.8.0 rule UI (conditions/actions, scope `global`, priority, country operator `is`, percent value such as `-15`) is applied after a missing visitor-currency price is converted. Geo Core not treating operator `is` as a country match no longer drops the discount. A fixed price in the visitor currency is still left as entered.
 - Saving exchange rates purges the geo cache once per request. Updating the manual table, the settings option, the provider cache, and the `rwgcm_exchange_rates_saved` action in the same request no longer runs a separate purge for each.
 - An automatic or cron refresh (`RWGCM_Exchange::write_cache()`) purges only when a rate changed. Tables are compared at 6 decimal places. `fetched_at` and the provider name do not count. An unchanged refresh still stores the new fetch time.
 

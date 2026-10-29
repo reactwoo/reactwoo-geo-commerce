@@ -54,6 +54,7 @@ Adapters run only when that plugin is active: LiteSpeed (`litespeed_purge_post`,
 == Changelog ==
 
 = 0.9.1 =
+* **Country price rules on converted prices.** A rule saved in the rule UI (visitor country is South Africa, decrease the price by 15%) applies after a missing ZAR price is converted from the store currency. A fixed ZAR price is unchanged.
 * **Exchange-rate cache purge.** Saving rates, settings, and the provider cache in one request clears the geo cache once. A provider or cron refresh clears it only when a stored rate changes. Rates are compared to 6 decimal places, so a new fetch time alone does not purge.
 
 = 0.9.0 =

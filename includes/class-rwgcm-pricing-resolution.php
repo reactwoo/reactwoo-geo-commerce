@@ -33,15 +33,15 @@ class RWGCM_Pricing_Resolution {
 	 * @return array{type: string, value: float}|null
 	 */
 	public static function find_price_adjustment( $product ) {
-		if ( class_exists( 'RWGCM_Diagnostics', false ) && RWGCM_Diagnostics::uses_generic_pricing_rules() ) {
-			if ( ! class_exists( 'RWGCM_Rule_Evaluator', false ) || ! function_exists( 'rwgc_get_context_snapshot' ) ) {
-				return null;
+		if ( class_exists( 'RWGCM_Diagnostics', false ) && RWGCM_Diagnostics::uses_generic_pricing_rules() && class_exists( 'RWGCM_Rule_Evaluator', false ) ) {
+			$ctx = function_exists( 'rwgc_get_context_snapshot' ) ? rwgc_get_context_snapshot() : array();
+			if ( ! is_array( $ctx ) ) {
+				$ctx = array();
 			}
-			$ctx = rwgc_get_context_snapshot();
-			$win = RWGCM_Rule_Evaluator::get_winning_price_rule( $product, is_array( $ctx ) ? $ctx : array() );
+			$win = RWGCM_Rule_Evaluator::get_winning_price_rule( $product, $ctx );
 			return RWGCM_Rule_Evaluator::get_price_adjustment_for_calc( $win );
 		}
 		$country = RWGCM_Pricing_Calc::get_visitor_country();
-		return RWGCM_Pricing_Rules::find_matching_rule( $country, $product );
+		return class_exists( 'RWGCM_Pricing_Rules', false ) ? RWGCM_Pricing_Rules::find_matching_rule( $country, $product ) : null;
 	}
 }
