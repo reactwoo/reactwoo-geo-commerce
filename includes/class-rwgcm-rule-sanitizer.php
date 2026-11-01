@@ -61,10 +61,14 @@ class RWGCM_Rule_Sanitizer {
 			} elseif ( ! class_exists( 'RWGC_Target_Operators', false ) && ! in_array( $op, array( 'is', 'is_not', 'in', 'not_in', 'contains', 'not_contains', 'greater_than', 'less_than', 'between' ), true ) ) {
 				$op = 'is';
 			}
+			$value = isset( $it['value'] ) ? $it['value'] : null;
+			if ( in_array( $t, array( 'country', 'billing_country', 'shipping_country' ), true ) && class_exists( 'RWGCM_Condition_Evaluator', false ) ) {
+				$value = RWGCM_Condition_Evaluator::normalize_country_value( $value );
+			}
 			$clean_items[] = array(
 				'target'   => $t,
 				'operator' => $op,
-				'value'    => isset( $it['value'] ) ? $it['value'] : null,
+				'value'    => $value,
 			);
 			if ( ! empty( $it['field'] ) ) {
 				$clean_items[ count( $clean_items ) - 1 ]['field'] = sanitize_key( (string) $it['field'] );

@@ -16,6 +16,7 @@ class RWGCM_Rule_Migration {
 
 	const OPTION_DONE = 'rwgcm_pricing_rules_migrated_v1';
 	const OPTION_OVERLAYS_DONE = 'rwgcm_overlays_migrated_v2';
+	const OPTION_COUNTRY_ISO = 'rwgcm_rule_country_iso_v1';
 
 	/**
 	 * Run all one-time migrations.
@@ -25,6 +26,75 @@ class RWGCM_Rule_Migration {
 	public static function maybe_migrate_all() {
 		self::maybe_migrate_legacy_pricing();
 		self::maybe_migrate_legacy_overlays();
+		self::maybe_normalize_country_names();
+	}
+
+	/**
+	 * Rewrite stored country names to ISO codes. One pass per site.
+	 *
+	 * @return int Number of rules updated.
+	 */
+	public static function maybe_normalize_country_names() {
+		if ( ! function_exists( 'get_option' ) || get_option( self::OPTION_COUNTRY_ISO, false ) ) {
+			return 0;
+		}
+		if ( ! class_exists( 'RWGCM_DB', false ) || ! RWGCM_DB::rules_table_exists() || ! class_exists( 'RWGCM_Rule_Store', false ) ) {
+			return 0;
+		}
+		if ( ! class_exists( 'RWGCM_Condition_Evaluator', false ) ) {
+			return 0;
+		}
+		$updated = 0;
+		RWGCM_Rule_Store::set_purge_on_write( false );
+		try {
+			foreach ( RWGCM_Rule_Store::get_all_rules() as $rule ) {
+				if ( ! is_array( $rule ) || empty( $rule['id'] ) ) {
+					continue;
+				}
+				$next = self::normalize_rule_countries( $rule );
+				if ( $next === $rule ) {
+					continue;
+				}
+				if ( RWGCM_Rule_Store::update_rule( (int) $rule['id'], $next ) ) {
+					++$updated;
+				}
+			}
+		} finally {
+			RWGCM_Rule_Store::set_purge_on_write( true );
+		}
+		if ( function_exists( 'update_option' ) ) {
+			update_option( self::OPTION_COUNTRY_ISO, 1, false );
+		}
+		if ( $updated > 0 && class_exists( 'RWGCM_Cache_Purge', false ) ) {
+			RWGCM_Cache_Purge::on_pricing_rule_changed(
+				array(
+					'scope'   => array( 'type' => 'global', 'ids' => array() ),
+					'actions' => array( array( 'type' => 'price_adjustment' ) ),
+				)
+			);
+		}
+		return $updated;
+	}
+
+	/**
+	 * @param array<string, mixed> $rule Rule.
+	 * @return array<string, mixed>
+	 */
+	public static function normalize_rule_countries( array $rule ) {
+		if ( empty( $rule['conditions']['items'] ) || ! is_array( $rule['conditions']['items'] ) ) {
+			return $rule;
+		}
+		foreach ( $rule['conditions']['items'] as $index => $item ) {
+			if ( ! is_array( $item ) ) {
+				continue;
+			}
+			$target = isset( $item['target'] ) ? (string) $item['target'] : '';
+			if ( ! in_array( $target, array( 'country', 'billing_country', 'shipping_country' ), true ) ) {
+				continue;
+			}
+			$rule['conditions']['items'][ $index ]['value'] = RWGCM_Condition_Evaluator::normalize_country_value( isset( $item['value'] ) ? $item['value'] : '' );
+		}
+		return $rule;
 	}
 
 	/**

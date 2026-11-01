@@ -15,6 +15,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 class RWGCM_Rule_Store {
 
 	/**
+	 * @var bool
+	 */
+	private static $purge_on_write = true;
+
+	/**
 	 * @return list<array<string, mixed>>
 	 */
 	public static function get_all_rules() {
@@ -126,7 +131,12 @@ class RWGCM_Rule_Store {
 			'updated_at'      => $now,
 		);
 		$wpdb->insert( $table, $data );
-		return (int) $wpdb->insert_id;
+		$id = (int) $wpdb->insert_id;
+		if ( $id > 0 ) {
+			$clean['id'] = $id;
+			self::purge_after_write( $clean, null );
+		}
+		return $id;
 	}
 
 	/**
@@ -179,7 +189,11 @@ class RWGCM_Rule_Store {
 			array( '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s' ),
 			array( '%d' )
 		);
-		return false !== $result && empty( $wpdb->last_error );
+		$ok = false !== $result && empty( $wpdb->last_error );
+		if ( $ok ) {
+			self::purge_after_write( $clean, $existing );
+		}
+		return $ok;
 	}
 
 	/**
@@ -190,11 +204,35 @@ class RWGCM_Rule_Store {
 		if ( ! RWGCM_DB::rules_table_exists() ) {
 			return false;
 		}
+		$existing = self::get_rule( $id );
 		global $wpdb;
 		$table = RWGCM_DB::rules_table();
 		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$n = $wpdb->delete( $table, array( 'id' => absint( $id ) ), array( '%d' ) );
+		if ( $n > 0 ) {
+			self::purge_after_write( null, $existing );
+		}
 		return $n > 0;
+	}
+
+	/**
+	 * @param bool $purge Whether writes should clear cached prices.
+	 * @return void
+	 */
+	public static function set_purge_on_write( $purge ) {
+		self::$purge_on_write = (bool) $purge;
+	}
+
+	/**
+	 * @param array<string, mixed>|null $rule     Saved rule.
+	 * @param array<string, mixed>|null $previous Previous rule.
+	 * @return void
+	 */
+	private static function purge_after_write( $rule, $previous ) {
+		if ( ! self::$purge_on_write || ! class_exists( 'RWGCM_Cache_Purge', false ) ) {
+			return;
+		}
+		RWGCM_Cache_Purge::on_pricing_rule_changed( $rule, $previous );
 	}
 
 	/**

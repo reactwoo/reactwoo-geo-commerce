@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-10-29
+
+### Added
+- Saving, enabling, disabling, or deleting a generic pricing rule (`wp_rwgcm_rules`, including `rwgcm_save_generic_rule`) purges cached prices once per request. A product scope purges that product (and its parent or variations). A global rule purges the catalog. A category scope purges the products in that category when they can be listed, and the whole catalog otherwise. Legacy `rwgcm_pricing` uses the same once-per-request purge.
+
+### Changed
+- When shipping is not priced in the visitor currency, the cart stays in the store currency and the matching geo rule is applied to the store-currency amount. The store-currency amount is the price-book price in the store currency when one is set, otherwise the regular or sale price. A product with a fixed visitor-currency book price and a product without one are treated the same, because that fixed price is not what the cart charges. A fixed book price in the currency being charged is left as entered when that currency was selected for the visitor (a ZAR book while the cart is in ZAR, or a store-currency book while the visitor currency is already the store currency). The rule is not stacked on top of it.
+
+### Fixed
+- Country conditions are stored as ISO codes. "South Africa" becomes ZA on save. Rules already stored with a country name are rewritten once on upgrade.
+
 ## [0.9.1] - 2026-10-29
 
 ### Fixed
