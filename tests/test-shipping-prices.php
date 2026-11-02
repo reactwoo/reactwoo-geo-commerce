@@ -494,12 +494,24 @@ assert_true(
 		&& false !== strpos( $block_js, 'isDismissible: false' )
 		&& false !== strpos( $block_js, 'removeNotice' )
 		&& false !== strpos( $block_js, 'subscribe( syncCart )' )
-		&& false !== strpos( $block_js, 'Every cart snapshot, not only a country change' )
+		&& false !== strpos( $block_js, 'Every settled cart snapshot' )
 		&& false !== strpos( $block_js, 'syncNotices( text )' )
 		&& false !== strpos( $block_js, 'getCartData' )
 		&& false !== strpos( $block_js, 'extensions.rwgcm' )
+		&& false !== strpos( $block_js, 'isCustomerDataUpdating' )
+		&& false !== strpos( $block_js, 'isApplyingCoupon' )
+		&& false !== strpos( $block_js, 'isCalculating' )
+		&& false !== strpos( $block_js, 'getLastCartUpdate' )
+		&& false !== strpos( $block_js, 'wasPending' )
 		&& false !== strpos( $block_js, 'receiveCart' )
 		&& false !== strpos( $block_js, '/wc/store/v1/cart' )
+);
+$checkout_guard = strpos( $block_js, 'if ( onCheckoutBlock() )' );
+$refetch_call   = strpos( $block_js, 'refetchCart();' );
+assert_true(
+	'checkout does not refetch over the block update-customer request',
+	false !== $checkout_guard && false !== $refetch_call && $checkout_guard < $refetch_call
+		&& false !== strpos( $block_js, '.wc-block-checkout' )
 );
 assert_true(
 	'an empty notice is removed and the fallback region is a status live region',

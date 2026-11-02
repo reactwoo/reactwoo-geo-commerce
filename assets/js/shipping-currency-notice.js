@@ -16,6 +16,8 @@
 	var NOTICE_ID = 'rwgcm-shipping-currency-notice';
 	var lastCountry = null;
 	var refetching = false;
+	var wasPending = false;
+	var seenCartUpdate = null;
 
 	function contexts() {
 		var checkout = 'wc/checkout';
@@ -77,8 +79,59 @@
 	}
 
 	/**
-	 * updateCustomerData can leave the block on the previous currency while
-	 * GET /wc/store/v1/cart already switched. Replace the store with that GET.
+	 * Checkout block page. Its update-customer request already replaces the cart.
+	 * A second GET plus receiveCart races that request and can leave the
+	 * totals on loading placeholders.
+	 *
+	 * @return bool
+	 */
+	function onCheckoutBlock() {
+		if ( ! document || ! document.querySelector ) {
+			return false;
+		}
+		return !! document.querySelector( '.wc-block-checkout, .wp-block-woocommerce-checkout' );
+	}
+
+	/**
+	 * True while the block is pushing an address or a coupon. Reconcile after
+	 * this returns to false, not in the middle of update-customer.
+	 *
+	 * @return bool
+	 */
+	function addressUpdatePending() {
+		var cartStore = select( 'wc/store/cart' );
+		var checkoutStore = select( 'wc/store/checkout' );
+		if ( cartStore && typeof cartStore.isCustomerDataUpdating === 'function' && cartStore.isCustomerDataUpdating() ) {
+			return true;
+		}
+		if ( cartStore && typeof cartStore.isApplyingCoupon === 'function' && cartStore.isApplyingCoupon() ) {
+			return true;
+		}
+		if ( checkoutStore && typeof checkoutStore.isCalculating === 'function' && checkoutStore.isCalculating() ) {
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Cart or checkout stamp, when that selector exists.
+	 *
+	 * @return {*}
+	 */
+	function lastCartUpdate() {
+		var cartStore = select( 'wc/store/cart' );
+		var checkoutStore = select( 'wc/store/checkout' );
+		if ( cartStore && typeof cartStore.getLastCartUpdate === 'function' ) {
+			return cartStore.getLastCartUpdate();
+		}
+		if ( checkoutStore && typeof checkoutStore.getLastCartUpdate === 'function' ) {
+			return checkoutStore.getLastCartUpdate();
+		}
+		return null;
+	}
+
+	/**
+	 * Cart block only. The checkout block already refreshes the cart.
 	 *
 	 * @return void
 	 */
@@ -203,23 +256,44 @@
 	 *
 	 * @return void
 	 */
+	function reconcile( text ) {
+		try {
+			syncNotices( text );
+		} catch ( err ) {
+			if ( window.console && console.error ) {
+				console.error( err );
+			}
+		}
+		ensureVisible( text );
+	}
+
 	function syncCart() {
+		// Wait until update-customer (or a coupon) has finished. The cart
+		// snapshot during that request is still the previous address.
+		if ( addressUpdatePending() ) {
+			wasPending = true;
+			return;
+		}
+		var stamp = lastCartUpdate();
+		var justSettled = wasPending || ( null !== stamp && stamp !== seenCartUpdate );
+		if ( null !== stamp ) {
+			seenCartUpdate = stamp;
+		}
+		wasPending = false;
 		var cart = cartPayload();
 		if ( ! cart ) {
 			return;
 		}
-		// Every cart snapshot, not only a country change: clear when the
-		// string is empty, add when it is present, one notice per id.
 		var text = extensionNotice( cart );
-		if ( null !== text ) {
-			try {
-				syncNotices( text );
-			} catch ( err ) {
-				if ( window.console && console.error ) {
-					console.error( err );
-				}
-			}
-			ensureVisible( text );
+		// Every settled cart snapshot, including the one just after
+		// isCustomerDataUpdating / isCalculating flips off, and when
+		// lastCartUpdate changes. Clear when the string is empty, add when
+		// it is present, one notice per id.
+		if ( null !== text || justSettled ) {
+			reconcile( null === text ? '' : text );
+		}
+		if ( onCheckoutBlock() ) {
+			return;
 		}
 		var country = shippingCountry( cart );
 		if ( null === lastCountry ) {
