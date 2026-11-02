@@ -91,6 +91,13 @@ class RWGCM_Price_Book_Currency {
 	private static $refreshing_cart = false;
 
 	/**
+	 * True while shipping_currency_state() is reading the cart.
+	 *
+	 * @var bool
+	 */
+	private static $evaluating = false;
+
+	/**
 	 * @return void
 	 */
 	public static function init() {
@@ -658,9 +665,62 @@ class RWGCM_Price_Book_Currency {
 			return $change_currency;
 		}
 
+		unset( $fallback );
+		// Cart currency and the shipping notice share one decision: cart lines,
+		// the customer destination, and the zone configuration. It does not
+		// read cached session rates or which REST route is in progress.
+		$state = self::shipping_currency_state();
+		return $state['active'];
+	}
+
+	/**
+	 * Whether the cart can be read for a shipping decision.
+	 *
+	 * @return bool
+	 */
+	public static function has_cart() {
+		return self::cart_is_ready();
+	}
+
+	/**
+	 * Currency the cart should charge, and the visitor currency blocked by
+	 * shipping to the current destination ('' when nothing is blocked).
+	 *
+	 * A destination whose mapped currency is the store currency (GB on a GBP
+	 * store) is not a ZAR fallback, even if the previous address was ZA.
+	 *
+	 * @return array{active: string, wanted: string, country: string}
+	 */
+	public static function shipping_currency_state() {
+		if ( self::$evaluating ) {
+			return array(
+				'active'  => self::base_currency(),
+				'wanted'  => self::$shipping_fallback,
+				'country' => '',
+			);
+		}
+		$already            = self::$resolving;
+		self::$resolving    = true;
+		self::$evaluating   = true;
+		try {
+			$state = self::compute_shipping_currency_state();
+		} finally {
+			self::$evaluating = false;
+			if ( ! $already ) {
+				self::$resolving = false;
+			}
+		}
+		self::$shipping_fallback = $state['wanted'];
+		return $state;
+	}
+
+	/**
+	 * @return array{active: string, wanted: string, country: string}
+	 */
+	private static function compute_shipping_currency_state() {
 		$base = self::base_currency();
 		if ( '' === $base ) {
-			$base = RWGCM_Price_Book::normalize_currency( $fallback );
+			$base = 'GBP';
 		}
 		$decision = RWGCM_Price_Book::resolve_context(
 			self::entered_billing_country(),
@@ -678,19 +738,76 @@ class RWGCM_Price_Book_Currency {
 				$preferred = $norm;
 			}
 		}
-
-		// A visitor currency that is already the store currency has nothing to explain.
-		// Clear a fallback left by an earlier address in this request (for example
-		// ZAR, then the shipping calculator moves the customer to GB).
-		if ( RWGCM_Price_Book::normalize_currency( $preferred ) === RWGCM_Price_Book::normalize_currency( $base ) ) {
-			self::$shipping_fallback = '';
-		}
 		if ( ! self::cart_is_ready() ) {
-			return $preferred;
+			return array(
+				'active'  => $preferred,
+				'wanted'  => '',
+				'country' => '',
+			);
 		}
-		self::$shipping_fallback = '';
-		$supports = self::cart_line_support( $preferred );
-		return RWGCM_Price_Book::currency_for_lines( $preferred, $base, $supports );
+		$country = self::customer_shipping_country();
+		$needs   = self::cart_needs_shipping();
+		// The address the shopper is shipping to decides the currency, not the
+		// previous session country and not a warm rate cache.
+		if ( $needs && '' !== $country ) {
+			$dest = RWGCM_Price_Book::resolve_context(
+				$country,
+				'',
+				$base,
+				null,
+				null,
+				RWGCM_Price_Book::configured_fallback_currency( $base )
+			);
+			if ( '' !== $dest['currency'] ) {
+				$preferred = $dest['currency'];
+			}
+		}
+		if ( '' === $preferred ) {
+			$preferred = $base;
+		}
+		if ( $preferred === $base ) {
+			return array(
+				'active'  => $base,
+				'wanted'  => '',
+				'country' => $country,
+			);
+		}
+		$items       = self::cart_item_flags( $preferred );
+		$items_ok    = ! empty( $items ) && ! in_array( false, $items, true );
+		$shipping_ok = RWGCM_Price_Book::shipping_supports_currency(
+			$preferred,
+			$base,
+			$needs,
+			$needs ? self::shipping_priced( $preferred ) : false
+		);
+		$supports    = $items;
+		if ( ! empty( $items ) ) {
+			$supports[] = $shipping_ok;
+		}
+		$active = RWGCM_Price_Book::currency_for_lines( $preferred, $base, $supports );
+		$wanted = ( $items_ok && ! $shipping_ok ) ? $preferred : '';
+		if ( $wanted === $base ) {
+			$wanted = '';
+		}
+		return array(
+			'active'  => $active,
+			'wanted'  => $wanted,
+			'country' => $country,
+		);
+	}
+
+	/**
+	 * @return string
+	 */
+	private static function customer_shipping_country() {
+		if ( ! function_exists( 'WC' ) ) {
+			return '';
+		}
+		$wc = WC();
+		if ( ! $wc || ! $wc->customer || ! method_exists( $wc->customer, 'get_shipping_country' ) ) {
+			return '';
+		}
+		return RWGCM_Price_Book::normalize_country( (string) $wc->customer->get_shipping_country() );
 	}
 
 	/**
@@ -1139,13 +1256,17 @@ class RWGCM_Price_Book_Currency {
 			}
 			$supports[] = $priced;
 		}
-		if ( ! empty( $supports ) ) {
-			$shipping   = RWGCM_Price_Book::shipping_supports_currency( $currency, self::base_currency(), self::cart_needs_shipping(), self::shipping_priced( $currency ) );
-			$items_ok   = ! in_array( false, $supports, true );
-			$supports[] = $shipping;
-			self::$shipping_fallback = ( $items_ok && ! $shipping ) ? RWGCM_Price_Book::normalize_currency( $currency ) : '';
-		}
 		return $supports;
+	}
+
+	/**
+	 * Whether each cart line has a price in $currency. Does not record a fallback.
+	 *
+	 * @param string $currency Preferred currency.
+	 * @return array<int, bool>
+	 */
+	private static function cart_item_flags( $currency ) {
+		return self::cart_line_support( $currency );
 	}
 
 	/**
@@ -1171,7 +1292,10 @@ class RWGCM_Price_Book_Currency {
 	 * @return string
 	 */
 	public static function shipping_fallback_currency() {
-		return self::$shipping_fallback;
+		if ( self::$evaluating || ! self::cart_is_ready() ) {
+			return self::$shipping_fallback;
+		}
+		return self::shipping_currency_state()['wanted'];
 	}
 
 	/**

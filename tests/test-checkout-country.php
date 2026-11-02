@@ -326,5 +326,35 @@ assert_true(
 RWGCM_Price_Book_Currency::clear_store_api_route();
 assert_true( 'clearing the hydration route forces the store currency again', RWGCM_Price_Book_Currency::forces_store_currency() );
 
+// Repeated hydration with warm session rates, and no route flag. The notice
+// still comes from the destination and the zone, then a GB destination clears it.
+$_SERVER['REQUEST_URI'] = '/checkout/';
+RWGCM_Price_Book_Currency::clear_store_api_route();
+WC()->session->set( 'shipping_for_package_0', array( 'rates' => array( 'flat_rate:1' => 'cached-gbp' ) ) );
+$GLOBALS['rw']['ship_country'] = 'ZA';
+RWGCM_Shipping_Prices::reset_memo();
+$warm_a = RWGCM_Shipping_Prices::store_api_data();
+$warm_b = RWGCM_Shipping_Prices::store_api_data();
+$warm_state = RWGCM_Price_Book_Currency::shipping_currency_state();
+assert_true(
+	'a second hydration with warm session rates still returns the ZAR notice',
+	is_array( $warm_a ) && $warm_a === $warm_b
+		&& 'ZAR' === $warm_a['shipping_fallback_currency']
+		&& 'ZAR' === $warm_state['wanted']
+		&& false !== strpos( $warm_a['shipping_currency_notice'], 'GBP' )
+		&& false !== strpos( $warm_a['shipping_currency_notice'], 'ZAR' )
+);
+$GLOBALS['rw']['ship_country'] = 'GB';
+RWGCM_Shipping_Prices::reset_memo();
+$to_gb = RWGCM_Shipping_Prices::store_api_data();
+assert_true(
+	'a GB destination after ZA has an empty fallback',
+	is_array( $to_gb )
+		&& '' === $to_gb['shipping_fallback_currency']
+		&& '' === $to_gb['shipping_currency_notice']
+		&& '' === RWGCM_Price_Book_Currency::shipping_fallback_currency()
+		&& 'GBP' === rw_currency()
+);
+
 echo "\n{$passed} passed, {$failed} failed\n";
 exit( $failed > 0 ? 1 : 0 );

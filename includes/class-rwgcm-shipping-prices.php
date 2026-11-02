@@ -288,6 +288,9 @@ class RWGCM_Shipping_Prices {
 		if ( ! function_exists( 'get_woocommerce_currency' ) || RWGCM_Price_Book_Currency::forces_store_currency() ) {
 			return $out;
 		}
+		if ( RWGCM_Price_Book_Currency::has_cart() ) {
+			return self::fallback_from_state( RWGCM_Price_Book_Currency::shipping_currency_state() );
+		}
 		$active = RWGCM_Price_Book::normalize_currency( (string) get_woocommerce_currency() );
 		$base   = RWGCM_Price_Book_Currency::base_currency();
 		$wanted = RWGCM_Price_Book_Currency::shipping_fallback_currency();
@@ -298,6 +301,21 @@ class RWGCM_Shipping_Prices {
 		$country = '';
 		if ( function_exists( 'WC' ) && WC()->customer && method_exists( WC()->customer, 'get_shipping_country' ) ) {
 			$country = (string) WC()->customer->get_shipping_country();
+		}
+		return array( 'state' => $wanted . '|' . $country, 'wanted' => $wanted, 'country' => $country );
+	}
+
+	/**
+	 * @param array{active: string, wanted: string, country: string} $state Decision.
+	 * @return array{state: string, wanted: string, country: string}
+	 */
+	private static function fallback_from_state( array $state ) {
+		$base    = RWGCM_Price_Book_Currency::base_currency();
+		$wanted  = isset( $state['wanted'] ) ? RWGCM_Price_Book::normalize_currency( $state['wanted'] ) : '';
+		$active  = isset( $state['active'] ) ? RWGCM_Price_Book::normalize_currency( $state['active'] ) : '';
+		$country = isset( $state['country'] ) ? (string) $state['country'] : '';
+		if ( '' === $wanted || $wanted === $base || $active === $wanted ) {
+			return array( 'state' => '', 'wanted' => '', 'country' => $country );
 		}
 		return array( 'state' => $wanted . '|' . $country, 'wanted' => $wanted, 'country' => $country );
 	}
@@ -689,41 +707,19 @@ JS;
 	 * @return array<string, string>
 	 */
 	public static function store_api_data() {
-		// Same request as the cart totals. Resolve after the cart exists so a
-		// hydration callback does not snapshot an empty fallback that a later
-		// GET would fill in.
-		self::ensure_cart_ready_for_extension();
-		$now = self::current_fallback();
+		// Same decision as the classic notice and the currency filter.
+		// Hydration does not run that filter (the page URL is not /wc/store/),
+		// and cached session rates are not an input.
+		$state  = RWGCM_Price_Book_Currency::shipping_currency_state();
+		$now    = self::fallback_from_state( $state );
+		$notice = '';
+		if ( '' !== $now['state'] ) {
+			$notice = self::fallback_notice( $now['wanted'], RWGCM_Price_Book_Currency::base_currency(), self::country_name( $now['country'] ) );
+		}
 		return array(
 			'shipping_fallback_currency' => $now['wanted'],
-			'shipping_currency_notice'   => '' === $now['state'] ? '' : self::fallback_notice( $now['wanted'], RWGCM_Price_Book_Currency::base_currency(), self::country_name( $now['country'] ) ),
+			'shipping_currency_notice'   => $notice,
 		);
-	}
-
-	/**
-	 * Calculate totals once before reading the fallback, unless totals are
-	 * already being calculated (the currency filter calls back into the cart).
-	 *
-	 * @return void
-	 */
-	private static function ensure_cart_ready_for_extension() {
-		if ( ! function_exists( 'WC' ) || ! function_exists( 'did_action' ) ) {
-			return;
-		}
-		$wc = WC();
-		if ( ! $wc || ! $wc->cart || ! method_exists( $wc->cart, 'calculate_totals' ) || ! method_exists( $wc->cart, 'is_empty' ) ) {
-			return;
-		}
-		if ( $wc->cart->is_empty() ) {
-			return;
-		}
-		if ( did_action( 'woocommerce_before_calculate_totals' ) && ! did_action( 'woocommerce_after_calculate_totals' ) ) {
-			return;
-		}
-		if ( did_action( 'woocommerce_after_calculate_totals' ) ) {
-			return;
-		}
-		$wc->cart->calculate_totals();
 	}
 
 	/**

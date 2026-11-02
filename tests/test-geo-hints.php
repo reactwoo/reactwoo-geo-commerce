@@ -30,7 +30,7 @@ assert_true( 'cart_is_ready true after wp_loaded', true === RWGCM_Geo::cart_is_r
 assert_true( 'non-array payload passes through', 'x' === RWGCM_Geo::merge_commerce_hints( 'x' ) );
 
 $cur = file_get_contents( __DIR__ . '/../includes/class-rwgcm-price-book-currency.php' );
-assert_true( 'currency resolver returns the geo/billing decision before wp_loaded without reading the cart', false !== strpos( $cur, "if ( ! self::cart_is_ready() ) {\n\t\t\treturn \$preferred;\n\t\t}" ) && false !== strpos( $cur, "! did_action( 'wp_loaded' )" ) );
+assert_true( 'currency resolver returns the geo/billing decision before wp_loaded without reading the cart', false !== strpos( $cur, 'if ( ! self::cart_is_ready() )' ) && false !== strpos( $cur, "'active'  => \$preferred" ) && false !== strpos( $cur, "! did_action( 'wp_loaded' )" ) );
 assert_true( 'cart lines are only read through the guarded helper', 1 === substr_count( $cur, 'WC()->cart->get_cart()' ) && false !== strpos( $cur, "if ( self::\$reading_cart || ! self::cart_is_ready() ) {" ) );
 assert_true( 'geo hints guard sits before the cart read', strpos( file_get_contents( __DIR__ . '/../includes/class-rwgcm-geo.php' ), 'cart_is_ready()' ) < strpos( file_get_contents( __DIR__ . '/../includes/class-rwgcm-geo.php' ), 'get_cart_contents_count()' ) );
 

@@ -14,7 +14,6 @@
 	var dispatch = wp.data.dispatch;
 	var subscribe = wp.data.subscribe;
 	var NOTICE_ID = 'rwgcm-shipping-currency-notice';
-	var lastNotice = null;
 	var lastCountry = null;
 	var refetching = false;
 
@@ -209,10 +208,10 @@
 		if ( ! cart ) {
 			return;
 		}
+		// Every cart snapshot, not only a country change: clear when the
+		// string is empty, add when it is present, one notice per id.
 		var text = extensionNotice( cart );
-		var country = shippingCountry( cart );
-		if ( null !== text && text !== lastNotice ) {
-			lastNotice = text;
+		if ( null !== text ) {
 			try {
 				syncNotices( text );
 			} catch ( err ) {
@@ -222,6 +221,7 @@
 			}
 			ensureVisible( text );
 		}
+		var country = shippingCountry( cart );
 		if ( null === lastCountry ) {
 			lastCountry = country;
 			return;

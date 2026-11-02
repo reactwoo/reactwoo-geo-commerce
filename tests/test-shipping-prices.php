@@ -494,6 +494,8 @@ assert_true(
 		&& false !== strpos( $block_js, 'isDismissible: false' )
 		&& false !== strpos( $block_js, 'removeNotice' )
 		&& false !== strpos( $block_js, 'subscribe( syncCart )' )
+		&& false !== strpos( $block_js, 'Every cart snapshot, not only a country change' )
+		&& false !== strpos( $block_js, 'syncNotices( text )' )
 		&& false !== strpos( $block_js, 'getCartData' )
 		&& false !== strpos( $block_js, 'extensions.rwgcm' )
 		&& false !== strpos( $block_js, 'receiveCart' )
@@ -544,7 +546,7 @@ assert_true( 'calculator persists the customer session before the response is fl
 assert_true( 'cart hydration is recognised from the REST route, not only REQUEST_URI', false !== strpos( $cur, "'rest_pre_dispatch'" ) && false !== strpos( $cur, 'function flag_store_api_route' ) && false !== strpos( $cur, 'function recalculate_cart_after_address_change' ) );
 $admin_screens = file_get_contents( dirname( __DIR__ ) . '/includes/class-rwgcm-admin.php' );
 assert_true( 'shipping tab adds a body class so the content column can be contained', is_string( $admin_screens ) && false !== strpos( $admin_screens, 'rwgcm-price-books-shipping' ) );
-assert_true( 'Store API extension data unchanged', false !== strpos( $src, "'shipping_currency_notice'   => '' === \$now['state'] ? ''" ) );
+assert_true( 'Store API extension uses the same shipping decision as the currency switch', false !== strpos( $src, 'RWGCM_Price_Book_Currency::shipping_currency_state()' ) && false !== strpos( $cur, 'function shipping_currency_state' ) );
 assert_true( 'plugin loads and inits RWGCM_Shipping_Prices', false !== strpos( $plug, 'class-rwgcm-shipping-prices.php' ) && false !== strpos( $plug, 'RWGCM_Shipping_Prices::init();' ) );
 assert_true( 'guard uses shipping line meta', false !== strpos( $guard, 'RWGCM_Shipping_Prices::shipping_lines_ok( $lines' ) && false === strpos( $guard, 'shipping_priced(' ) );
 assert_true( 'currency resolver does not call WC_Cart::get_shipping_packages during totals', false === strpos( $cur, '->get_shipping_packages()' ) );
