@@ -485,13 +485,35 @@ $S::reset_memo();
 
 $block_js = file_get_contents( dirname( __DIR__ ) . '/assets/js/shipping-currency-notice.js' );
 assert_true(
-	'checkout block notice is a live region bound to the store API string',
+	'checkout block notice reads the store API string into the cart and checkout notice lists',
 	is_string( $block_js )
 		&& false !== strpos( $block_js, 'shipping_currency_notice' )
-		&& false !== strpos( $block_js, "role: 'status'" )
-		&& false !== strpos( $block_js, 'rwgcm-shipping-currency-notice--block' )
+		&& false !== strpos( $block_js, "createNotice( 'info', text" )
+		&& false !== strpos( $block_js, 'wc/checkout' )
+		&& false !== strpos( $block_js, 'wc/cart' )
+		&& false !== strpos( $block_js, 'isDismissible: false' )
+		&& false !== strpos( $block_js, 'removeNotice' )
+		&& false !== strpos( $block_js, 'subscribe( schedule )' )
 );
-assert_true( 'checkout block notice renders nothing when the string is empty', false !== strpos( $block_js, 'if ( ! notice )' ) && false !== strpos( $block_js, 'return null' ) );
+assert_true(
+	'an empty notice is removed and the fallback region is a status live region',
+	false !== strpos( $block_js, 'if ( ! text )' )
+		&& false !== strpos( $block_js, 'clearFallback()' )
+		&& false !== strpos( $block_js, "setAttribute( 'role', 'status' )" )
+		&& false !== strpos( $block_js, 'rwgcm-shipping-currency-notice--block' )
+		&& false === strpos( $block_js, 'ExperimentalOrderMeta' )
+);
+$block_css = file_get_contents( dirname( __DIR__ ) . '/assets/css/shipping-currency-notice.css' );
+assert_true( 'block notice wraps on a narrow screen', is_string( $block_css ) && false !== strpos( $block_css, 'overflow-wrap: anywhere' ) && false !== strpos( $block_css, 'max-width: 782px' ) );
+$admin_css_early = file_get_contents( dirname( __DIR__ ) . '/admin/css/rwgcm-admin.css' );
+assert_true(
+	'shipping matrix stays inside the price books page',
+	is_string( $admin_css_early )
+		&& false !== strpos( $admin_css_early, '.rwgcm-wrap--price-books' )
+		&& false !== strpos( $admin_css_early, 'overflow-x: clip' )
+		&& false !== strpos( $admin_css_early, 'contain: inline-size' )
+		&& false !== strpos( $admin_css_early, 'table-layout: fixed' )
+);
 $picker_js = file_get_contents( dirname( __DIR__ ) . '/admin/js/rwgcm-shipping-currency.js' );
 assert_true( 'currency select changes the column and does not save', is_string( $picker_js ) && false !== strpos( $picker_js, 'rwgcm-shipping-currency' ) && false !== strpos( $picker_js, 'addEventListener' ) && false === strpos( $picker_js, 'fetch(' ) && false === strpos( $picker_js, '.submit(' ) );
 
@@ -519,7 +541,7 @@ assert_true( 'plugin loads and inits RWGCM_Shipping_Prices', false !== strpos( $
 assert_true( 'guard uses shipping line meta', false !== strpos( $guard, 'RWGCM_Shipping_Prices::shipping_lines_ok( $lines' ) && false === strpos( $guard, 'shipping_priced(' ) );
 assert_true( 'currency resolver does not call WC_Cart::get_shipping_packages during totals', false === strpos( $cur, '->get_shipping_packages()' ) );
 assert_true( 'admin: Shipping tab and overview', false !== strpos( $admin, 'function render_shipping_overview' ) && false !== strpos( $admin, "'shipping' => array( __( 'Shipping'" ) );
-assert_true( 'admin: overview reuses the sticky matrix layout', false !== strpos( $admin, 'rwgcm-gateway-matrix rwgcm-shipping-matrix' ) );
+assert_true( 'admin: overview reuses the sticky matrix layout', false !== strpos( $admin, 'rwgcm-gateway-matrix rwgcm-shipping-matrix' ) && false === strpos( $admin, 'rwgcm-shipping-matrix" style="overflow-x: auto;"' ) );
 assert_true( 'admin: hide setting saved only with its own present field', false !== strpos( $admin, "if ( isset( \$_POST['rwgcm_shipping_settings_present'] ) ) {\n\t\t\tupdate_option( RWGCM_Shipping_Prices::OPTION_HIDE_UNPRICED" ) );
 assert_true( 'admin: pickup costs save from their own present field', false !== strpos( $admin, "if ( isset( \$_POST['rwgcm_pickup_costs_present'] ) )" ) && false !== strpos( $admin, 'RWGCM_Shipping_Prices::OPTION_PICKUP_COSTS' ) );
 assert_true( 'admin: currency select and pickup cards', false !== strpos( $admin, 'rwgcm-shipping-currency' ) && false !== strpos( $admin, 'function render_pickup_cards' ) && false !== strpos( $admin, 'price-books-shipping' ) );

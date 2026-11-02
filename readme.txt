@@ -55,6 +55,8 @@ Adapters run only when that plugin is active: LiteSpeed (`litespeed_purge_post`,
 
 = 0.10.0 =
 * **Shipping stays in the store currency until a manual amount exists.** An exchange rate can still convert a product price. It does not fill a blank shipping cost, shipping-class cost, or block local pickup amount, and it does not scale an amount the merchant typed. A cart that needs shipping stays in the store currency until every applicable rate has an amount in the visitor currency, as in 0.6.0. Zone locations and the store-currency costs are not rewritten.
+* **Checkout block notice.** The Cart and Checkout blocks show "Prices are shown in …" from the cart extension. The notice updates when the cart changes and disappears when shipping is priced in the visitor currency. It wraps on a phone.
+* **Shipping tab.** The currency table stays inside the page at a desktop width.
 
 = 0.9.3 =
 * **Updates on the WordPress.org Core.** Geo Commerce checks for its own updates when Geo Core's updater is a stub, when Core is the WordPress.org build, or when Core is missing or inactive. The check is a POST to `https://api.reactwoo.com/api/v5/updates/check` with the Commerce licence token, and WordPress is given the signed package URL. A site that already has Geo Core's real updater still uses that updater, once.

@@ -1,6 +1,18 @@
 .rwgcm-shipping-currency-notice--block {
   box-sizing: border-box;
   max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.wc-block-checkout .wc-block-components-notice-banner,
+.wc-block-cart .wc-block-components-notice-banner,
+.wp-block-woocommerce-checkout .wc-block-components-notice-banner,
+.wp-block-woocommerce-cart .wc-block-components-notice-banner {
+  box-sizing: border-box;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .rwgcm-shipping-currency-notice--cart td {
@@ -9,7 +21,11 @@
 }
 
 @media (max-width: 782px) {
-  .rwgcm-shipping-currency-notice--block.woocommerce-info {
+  .rwgcm-shipping-currency-notice--block.woocommerce-info,
+  .wc-block-checkout .wc-block-components-notice-banner,
+  .wc-block-cart .wc-block-components-notice-banner,
+  .wp-block-woocommerce-checkout .wc-block-components-notice-banner,
+  .wp-block-woocommerce-cart .wc-block-components-notice-banner {
     margin-left: 0;
     margin-right: 0;
   }

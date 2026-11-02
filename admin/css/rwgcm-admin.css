@@ -376,6 +376,45 @@
   display: none;
 }
 
+/* The shipping matrix must not widen the admin page. At 1280px a sticky
+   first column was leaving about 20px of horizontal overflow. */
+.rwgcm-wrap--price-books {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+.rwgcm-shipping-overview {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.rwgcm-shipping-matrix {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  contain: inline-size;
+}
+
+.rwgcm-shipping-matrix table.widefat {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  table-layout: fixed;
+}
+
+.rwgcm-shipping-matrix th,
+.rwgcm-shipping-matrix td {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.rwgcm-shipping-matrix th:first-child,
+.rwgcm-shipping-matrix td:first-child {
+  width: 46%;
+}
+
 .rwgcm-pickup-cards {
   display: flex;
   flex-direction: column;

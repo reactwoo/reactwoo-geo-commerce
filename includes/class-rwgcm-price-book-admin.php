@@ -337,7 +337,7 @@ class RWGCM_Price_Book_Admin {
 		echo '</select>';
 		echo '<p class="description">' . esc_html__( 'On a narrow screen this shows one currency column. It does not save anything.', 'reactwoo-geo-commerce' ) . '</p>';
 		echo '</div>';
-		echo '<div class="rwgcm-gateway-matrix rwgcm-shipping-matrix" style="overflow-x: auto;">';
+		echo '<div class="rwgcm-gateway-matrix rwgcm-shipping-matrix">';
 		echo '<table class="widefat striped"><thead><tr><th scope="col">' . esc_html__( 'Zone / method', 'reactwoo-geo-commerce' ) . '</th>';
 		$first = true;
 		foreach ( $currencies as $cur ) {

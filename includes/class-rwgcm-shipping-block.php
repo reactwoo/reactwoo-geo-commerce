@@ -36,7 +36,7 @@ class RWGCM_Shipping_Block_Integration implements \Automattic\WooCommerce\Blocks
 		wp_register_script(
 			'rwgcm-shipping-currency-notice',
 			RWGCM_URL . 'assets/js/shipping-currency-notice.js',
-			array( 'wp-plugins', 'wp-element', 'wp-data', 'wc-blocks-checkout' ),
+			RWGCM_Shipping_Prices::block_notice_script_deps(),
 			$ver,
 			true
 		);

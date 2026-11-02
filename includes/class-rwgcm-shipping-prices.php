@@ -135,16 +135,48 @@ class RWGCM_Shipping_Prices {
 	}
 
 	/**
+	 * Script dependencies for the Cart and Checkout block notice.
+	 *
+	 * @return array<int, string>
+	 */
+	public static function block_notice_script_deps() {
+		return array( 'wp-plugins', 'wp-element', 'wp-data', 'wp-notices', 'wc-blocks-checkout' );
+	}
+
+	/**
+	 * Cart or checkout page that renders the blocks, including a block theme
+	 * template that has_block() does not see on the page post.
+	 *
+	 * @return bool
+	 */
+	public static function is_block_cart_or_checkout_page() {
+		if ( function_exists( 'is_order_received_page' ) && is_order_received_page() ) {
+			return false;
+		}
+		if ( function_exists( 'has_block' ) && ( has_block( 'woocommerce/checkout' ) || has_block( 'woocommerce/cart' ) ) ) {
+			return true;
+		}
+		$utils = '\\Automattic\\WooCommerce\\Blocks\\Utils\\CartCheckoutUtils';
+		if ( ! class_exists( $utils ) ) {
+			return false;
+		}
+		if ( function_exists( 'is_checkout' ) && is_checkout() && method_exists( $utils, 'is_checkout_block_default' ) && $utils::is_checkout_block_default() ) {
+			return true;
+		}
+		if ( function_exists( 'is_cart' ) && is_cart() && method_exists( $utils, 'is_cart_block_default' ) && $utils::is_cart_block_default() ) {
+			return true;
+		}
+		return false;
+	}
+
+	/**
 	 * Cart and Checkout blocks: show extensions.rwgcm.shipping_currency_notice.
 	 * Skipped when the blocks integration already enqueued the same handle.
 	 *
 	 * @return void
 	 */
 	public static function enqueue_block_notice_script() {
-		if ( ! function_exists( 'has_block' ) ) {
-			return;
-		}
-		if ( ! has_block( 'woocommerce/checkout' ) && ! has_block( 'woocommerce/cart' ) ) {
+		if ( ! self::is_block_cart_or_checkout_page() ) {
 			return;
 		}
 		if ( ! defined( 'RWGCM_URL' ) || ! function_exists( 'wp_enqueue_script' ) ) {
@@ -157,7 +189,7 @@ class RWGCM_Shipping_Prices {
 		wp_enqueue_script(
 			'rwgcm-shipping-currency-notice',
 			RWGCM_URL . 'assets/js/shipping-currency-notice.js',
-			array( 'wp-plugins', 'wp-element', 'wp-data', 'wc-blocks-checkout' ),
+			self::block_notice_script_deps(),
 			$ver,
 			true
 		);
