@@ -376,6 +376,72 @@
   display: none;
 }
 
+/* Price books → Shipping was 1300px wide in a 1280px viewport: the content
+   column (viewport minus the 160px menu) plus about 20px. Contain that
+   column, and do not let a sticky cell extend the document. */
+body.rwgcm-price-books-shipping #wpcontent,
+body.rwgcm-price-books-shipping #wpbody,
+body.rwgcm-price-books-shipping #wpbody-content {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+.rwgcm-wrap.rwgcm-wrap--price-books {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+.rwgcm-wrap--price-books .rwgc-card,
+.rwgcm-wrap--price-books .rwgcm-shipping-overview,
+.rwgcm-wrap--price-books .nav-tab-wrapper,
+.rwgcm-wrap--price-books .rwgc-inner-nav,
+.rwgcm-wrap--price-books input,
+.rwgcm-wrap--price-books select,
+.rwgcm-wrap--price-books textarea,
+.rwgcm-wrap--price-books table {
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.rwgcm-shipping-overview {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.rwgcm-shipping-matrix {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  contain: inline-size;
+}
+
+.rwgcm-shipping-matrix table.widefat {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  table-layout: fixed;
+}
+
+.rwgcm-shipping-matrix th,
+.rwgcm-shipping-matrix td {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.rwgcm-shipping-matrix table th:first-child,
+.rwgcm-shipping-matrix table td:first-child {
+  position: static;
+  left: auto;
+  width: 46%;
+}
+
 .rwgcm-pickup-cards {
   display: flex;
   flex-direction: column;

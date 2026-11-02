@@ -53,7 +53,7 @@ function rwgcm_updater_child( $mode ) {
 		define( 'ABSPATH', __DIR__ . '/' );
 	}
 	if ( ! defined( 'RWGCM_VERSION' ) ) {
-		define( 'RWGCM_VERSION', '0.9.3' );
+		define( 'RWGCM_VERSION', '0.10.0' );
 	}
 	if ( ! defined( 'RWGCM_FILE' ) ) {
 		define( 'RWGCM_FILE', dirname( __DIR__ ) . '/reactwoo-geo-commerce.php' );
@@ -586,7 +586,7 @@ function rwgcm_updater_assert_own( $mode ) {
 		'body'     => wp_json_encode(
 			array(
 				'download_url' => $signed,
-				'version'      => '0.9.4',
+				'version'      => '0.10.1',
 			)
 		),
 	);
@@ -596,7 +596,7 @@ function rwgcm_updater_assert_own( $mode ) {
 
 	$basename  = 'reactwoo-geo-commerce/reactwoo-geo-commerce.php';
 	$transient = new stdClass();
-	$transient->checked = array( $basename => '0.9.3' );
+	$transient->checked = array( $basename => '0.10.0' );
 	$updated   = RWGCM_Updater::filter_update_transient( $transient );
 	rwgcm_updater_assert( 'one check is posted', 1 === count( $GLOBALS['rw_posts'] ) );
 	$post = $GLOBALS['rw_posts'][0];
@@ -610,7 +610,7 @@ function rwgcm_updater_assert_own( $mode ) {
 		is_array( $body )
 			&& array( 'slug', 'current_version', 'channel', 'site_host' ) === array_keys( $body )
 			&& 'reactwoo-geo-commerce' === $body['slug']
-			&& '0.9.3' === $body['current_version']
+			&& '0.10.0' === $body['current_version']
 			&& 'stable' === $body['channel']
 			&& 'shop.reactwoo.com' === $body['site_host']
 	);
@@ -623,7 +623,7 @@ function rwgcm_updater_assert_own( $mode ) {
 		is_object( $updated )
 			&& isset( $updated->response[ $basename ] )
 			&& $signed === $updated->response[ $basename ]->package
-			&& '0.9.4' === $updated->response[ $basename ]->new_version
+			&& '0.10.1' === $updated->response[ $basename ]->new_version
 			&& 'reactwoo-geo-commerce' === $updated->response[ $basename ]->slug
 	);
 
@@ -636,18 +636,18 @@ function rwgcm_updater_assert_own( $mode ) {
 	$info         = RWGCM_Updater::filter_plugins_api( false, 'plugin_information', $args );
 	rwgcm_updater_assert(
 		'plugins_api returns the signed download link',
-		is_object( $info ) && $signed === $info->download_link && '0.9.4' === $info->version
+		is_object( $info ) && $signed === $info->download_link && '0.10.1' === $info->version
 	);
 	rwgcm_updater_assert( 'plugins_api reuses the check from this request', 1 === count( $GLOBALS['rw_posts'] ) );
 	$other = RWGCM_Updater::filter_plugins_api( false, 'plugin_information', (object) array( 'slug' => 'akismet' ) );
 	rwgcm_updater_assert( 'another plugin slug is left alone', false === $other );
 
 	$same                  = new stdClass();
-	$same->checked         = array( $basename => '0.9.4' );
+	$same->checked         = array( $basename => '0.10.1' );
 	$GLOBALS['rw_post_response']['body'] = wp_json_encode(
 		array(
 			'download_url' => $signed,
-			'version'      => '0.9.4',
+			'version'      => '0.10.1',
 		)
 	);
 	$not_newer = RWGCM_Updater::filter_update_transient( $same );
@@ -790,7 +790,7 @@ function rwgcm_updater_assert_real() {
 		'Core receives the Commerce catalogue slug, version, and licence callbacks',
 		is_array( $args )
 			&& 'reactwoo-geo-commerce/reactwoo-geo-commerce.php' === $args['basename']
-			&& '0.9.3' === $args['version']
+			&& '0.10.0' === $args['version']
 			&& 'reactwoo-geo-commerce' === $args['catalog_slug']
 			&& array( 'RWGCM_Platform_Client', 'get_bearer_for_updates' ) === $args['get_bearer_callback']
 			&& array( 'RWGCM_Platform_Client', 'get_api_base' ) === $args['get_api_base_callback']

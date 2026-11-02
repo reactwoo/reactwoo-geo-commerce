@@ -370,6 +370,35 @@ $saved['rwgcm_class_cost_12_ZAR'] = '80';
 assert_true( 'admin save of ZAR fields adds only rwgcm keys', '10' === $saved['cost'] && '5' === $saved['class_cost_12'] && 'Flat' === $saved['title'] && '230' === $saved['rwgcm_cost_ZAR'] && '80' === $saved['rwgcm_class_cost_12_ZAR'] );
 assert_true( 'zone id, locations and instance id are unchanged', 4 === $zone['id'] && $zone_before['locations'] === $zone['locations'] && 9 === $zone['instance_id'] && $zone_before['settings'] === $zone['settings'] );
 
+// An exchange rate must not fill or scale shipping. Phase 2 is not on.
+$GLOBALS['rw_opts']['rwgcm_exchange_rates'] = array(
+	'base'  => 'GBP',
+	'rates' => array( 'ZAR' => '23' ),
+);
+$gbp_zone = array( 'cost' => '10', 'class_cost_12' => '5', 'no_class_cost' => '2', 'title' => 'Flat' );
+$gbp_snapshot = $gbp_zone;
+assert_true( 'an exchange rate does not mark a class-cost flat rate priced', ! $st( 'flat_rate', $gbp_zone )['priced'] && 'class_costs' === $st( 'flat_rate', $gbp_zone )['reason'] );
+assert_true(
+	'an exchange rate does not replace any GBP component',
+	'10' === $S::swapped_value( 'flat_rate', $gbp_zone, '10', 'ZAR', 'GBP', 'cost' )
+		&& '5' === $S::swapped_value( 'flat_rate', $gbp_zone, '5', 'ZAR', 'GBP', 'class_cost_12' )
+		&& '2' === $S::swapped_value( 'flat_rate', $gbp_zone, '2', 'ZAR', 'GBP', 'no_class_cost' )
+);
+assert_true( 'reading the rate does not add keys to the zone settings', $gbp_snapshot === $gbp_zone );
+$manual_zone = $gbp_zone;
+$manual_zone['rwgcm_cost_ZAR'] = '200';
+$manual_zone['rwgcm_class_cost_12_ZAR'] = '40';
+$manual_zone['rwgcm_no_class_cost_ZAR'] = '15';
+assert_true( 'manual class amounts are priced while a rate exists', $st( 'flat_rate', $manual_zone )['priced'] );
+assert_true(
+	'manual amounts are not scaled by the 23 ZAR rate',
+	'200' === $S::swapped_value( 'flat_rate', $manual_zone, '10', 'ZAR', 'GBP', 'cost' )
+		&& '40' === $S::swapped_value( 'flat_rate', $manual_zone, '5', 'ZAR', 'GBP', 'class_cost_12' )
+		&& '15' === $S::swapped_value( 'flat_rate', $manual_zone, '2', 'ZAR', 'GBP', 'no_class_cost' )
+);
+assert_true( 'the GBP cost keys are still the originals after the manual swap', '10' === $manual_zone['cost'] && '5' === $manual_zone['class_cost_12'] && '2' === $manual_zone['no_class_cost'] && 'Flat' === $manual_zone['title'] );
+unset( $GLOBALS['rw_opts']['rwgcm_exchange_rates'] );
+
 $locations = array(
 	array( 'name' => 'Cape Town', 'enabled' => true, 'cost' => '15' ),
 	array( 'id' => 'loc-jhb', 'name' => 'Johannesburg', 'enabled' => true ),
@@ -456,13 +485,57 @@ $S::reset_memo();
 
 $block_js = file_get_contents( dirname( __DIR__ ) . '/assets/js/shipping-currency-notice.js' );
 assert_true(
-	'checkout block notice is a live region bound to the store API string',
+	'checkout block notice reads the store API string into the cart and checkout notice lists',
 	is_string( $block_js )
 		&& false !== strpos( $block_js, 'shipping_currency_notice' )
-		&& false !== strpos( $block_js, "role: 'status'" )
-		&& false !== strpos( $block_js, 'rwgcm-shipping-currency-notice--block' )
+		&& false !== strpos( $block_js, "createNotice( 'info', text" )
+		&& false !== strpos( $block_js, 'wc/checkout' )
+		&& false !== strpos( $block_js, 'wc/cart' )
+		&& false !== strpos( $block_js, 'isDismissible: false' )
+		&& false !== strpos( $block_js, 'removeNotice' )
+		&& false !== strpos( $block_js, 'subscribe( syncCart )' )
+		&& false !== strpos( $block_js, 'Every settled cart snapshot' )
+		&& false !== strpos( $block_js, 'syncNotices( text )' )
+		&& false !== strpos( $block_js, 'getCartData' )
+		&& false !== strpos( $block_js, 'extensions.rwgcm' )
+		&& false !== strpos( $block_js, 'isCustomerDataUpdating' )
+		&& false !== strpos( $block_js, 'isApplyingCoupon' )
+		&& false !== strpos( $block_js, 'isCalculating' )
+		&& false !== strpos( $block_js, 'getLastCartUpdate' )
+		&& false !== strpos( $block_js, 'wasPending' )
+		&& false !== strpos( $block_js, 'function noticeContexts' )
+		&& false !== strpos( $block_js, 'scheduleFallbackRemoval' )
+		&& false !== strpos( $block_js, 'for ( var i = 1; i < nodes.length; i++ )' )
+		&& false !== strpos( $block_js, 'receiveCart' )
+		&& false !== strpos( $block_js, '/wc/store/v1/cart' )
 );
-assert_true( 'checkout block notice renders nothing when the string is empty', false !== strpos( $block_js, 'if ( ! notice )' ) && false !== strpos( $block_js, 'return null' ) );
+$checkout_guard = strpos( $block_js, 'if ( onCheckoutBlock() )' );
+$refetch_call   = strpos( $block_js, 'refetchCart();' );
+assert_true(
+	'checkout does not refetch over the block update-customer request',
+	false !== $checkout_guard && false !== $refetch_call && $checkout_guard < $refetch_call
+		&& false !== strpos( $block_js, '.wc-block-checkout' )
+);
+assert_true(
+	'an empty notice is removed and the fallback region is a status live region',
+	false !== strpos( $block_js, 'if ( ! text || ! active[ context ] )' )
+		&& false !== strpos( $block_js, 'clearFallback()' )
+		&& false !== strpos( $block_js, "setAttribute( 'role', 'status' )" )
+		&& false !== strpos( $block_js, 'rwgcm-shipping-currency-notice--block' )
+		&& false === strpos( $block_js, 'ExperimentalOrderMeta' )
+);
+$block_css = file_get_contents( dirname( __DIR__ ) . '/assets/css/shipping-currency-notice.css' );
+assert_true( 'block notice wraps on a narrow screen', is_string( $block_css ) && false !== strpos( $block_css, 'overflow-wrap: anywhere' ) && false !== strpos( $block_css, 'max-width: 782px' ) );
+$admin_css_early = file_get_contents( dirname( __DIR__ ) . '/admin/css/rwgcm-admin.css' );
+assert_true(
+	'shipping matrix stays inside the price books page',
+	is_string( $admin_css_early )
+		&& false !== strpos( $admin_css_early, 'body.rwgcm-price-books-shipping #wpbody-content' )
+		&& false !== strpos( $admin_css_early, 'overflow-x: hidden' )
+		&& false !== strpos( $admin_css_early, 'position: static' )
+		&& false !== strpos( $admin_css_early, 'contain: inline-size' )
+		&& false !== strpos( $admin_css_early, 'table-layout: fixed' )
+);
 $picker_js = file_get_contents( dirname( __DIR__ ) . '/admin/js/rwgcm-shipping-currency.js' );
 assert_true( 'currency select changes the column and does not save', is_string( $picker_js ) && false !== strpos( $picker_js, 'rwgcm-shipping-currency' ) && false !== strpos( $picker_js, 'addEventListener' ) && false === strpos( $picker_js, 'fetch(' ) && false === strpos( $picker_js, '.submit(' ) );
 
@@ -485,12 +558,15 @@ assert_true( 'mini-cart cache key includes the active currency', false !== strpo
 assert_true( 'cart refresh script is printed in the footer on every cart view', false !== strpos( $src, "'wp_footer', array( __CLASS__, 'print_cart_fragment_refresh_script' )" ) && false !== strpos( $src, "array( 'jquery' )" ) && false !== strpos( $src, 'rwgcm-cart-fragments' ) );
 assert_true( 'header fragments use the filterable selector list', false !== strpos( $src, 'rwgcm_header_cart_fragment_selectors' ) && false !== strpos( $src, 'append_header_cart_fragments' ) );
 assert_true( 'calculator persists the customer session before the response is flushed', false !== strpos( $cur, "'woocommerce_calculated_shipping', array( __CLASS__, 'persist_customer_session' )" ) );
-assert_true( 'Store API extension data unchanged', false !== strpos( $src, "'shipping_currency_notice'   => '' === \$now['state'] ? ''" ) );
+assert_true( 'cart hydration is recognised from the REST route, not only REQUEST_URI', false !== strpos( $cur, "'rest_pre_dispatch'" ) && false !== strpos( $cur, 'function flag_store_api_route' ) && false !== strpos( $cur, 'function recalculate_cart_after_address_change' ) );
+$admin_screens = file_get_contents( dirname( __DIR__ ) . '/includes/class-rwgcm-admin.php' );
+assert_true( 'shipping tab adds a body class so the content column can be contained', is_string( $admin_screens ) && false !== strpos( $admin_screens, 'rwgcm-price-books-shipping' ) );
+assert_true( 'Store API extension uses the same shipping decision as the currency switch', false !== strpos( $src, 'RWGCM_Price_Book_Currency::shipping_currency_state()' ) && false !== strpos( $cur, 'function shipping_currency_state' ) );
 assert_true( 'plugin loads and inits RWGCM_Shipping_Prices', false !== strpos( $plug, 'class-rwgcm-shipping-prices.php' ) && false !== strpos( $plug, 'RWGCM_Shipping_Prices::init();' ) );
 assert_true( 'guard uses shipping line meta', false !== strpos( $guard, 'RWGCM_Shipping_Prices::shipping_lines_ok( $lines' ) && false === strpos( $guard, 'shipping_priced(' ) );
 assert_true( 'currency resolver does not call WC_Cart::get_shipping_packages during totals', false === strpos( $cur, '->get_shipping_packages()' ) );
 assert_true( 'admin: Shipping tab and overview', false !== strpos( $admin, 'function render_shipping_overview' ) && false !== strpos( $admin, "'shipping' => array( __( 'Shipping'" ) );
-assert_true( 'admin: overview reuses the sticky matrix layout', false !== strpos( $admin, 'rwgcm-gateway-matrix rwgcm-shipping-matrix' ) );
+assert_true( 'admin: overview reuses the sticky matrix layout', false !== strpos( $admin, 'rwgcm-gateway-matrix rwgcm-shipping-matrix' ) && false === strpos( $admin, 'rwgcm-shipping-matrix" style="overflow-x: auto;"' ) );
 assert_true( 'admin: hide setting saved only with its own present field', false !== strpos( $admin, "if ( isset( \$_POST['rwgcm_shipping_settings_present'] ) ) {\n\t\t\tupdate_option( RWGCM_Shipping_Prices::OPTION_HIDE_UNPRICED" ) );
 assert_true( 'admin: pickup costs save from their own present field', false !== strpos( $admin, "if ( isset( \$_POST['rwgcm_pickup_costs_present'] ) )" ) && false !== strpos( $admin, 'RWGCM_Shipping_Prices::OPTION_PICKUP_COSTS' ) );
 assert_true( 'admin: currency select and pickup cards', false !== strpos( $admin, 'rwgcm-shipping-currency' ) && false !== strpos( $admin, 'function render_pickup_cards' ) && false !== strpos( $admin, 'price-books-shipping' ) );
@@ -500,6 +576,14 @@ $modal_css = file_get_contents( dirname( __DIR__ ) . '/admin/css/rwgcm-shipping-
 $admin_css = file_get_contents( dirname( __DIR__ ) . '/admin/css/rwgcm-admin.css' );
 assert_true( 'method modal fields are full width from 782px down', is_string( $modal_css ) && false !== strpos( $modal_css, 'max-width: 782px' ) && false !== strpos( $modal_css, 'width: 100%' ) );
 assert_true( 'shipping tab shows one currency column below 782px and stacks pickup cards', is_string( $admin_css ) && false !== strpos( $admin_css, '.rwgcm-currency-col.is-selected' ) && false !== strpos( $admin_css, 'flex-direction: column' ) );
+$exchange  = file_get_contents( dirname( __DIR__ ) . '/includes/class-rwgcm-exchange.php' );
+$purge     = file_get_contents( dirname( __DIR__ ) . '/includes/class-rwgcm-cache-purge.php' );
+$migration = file_get_contents( dirname( __DIR__ ) . '/includes/class-rwgcm-rule-migration.php' );
+$updater   = file_get_contents( dirname( __DIR__ ) . '/includes/class-rwgcm-updater.php' );
+assert_true( 'exchange does not read or write shipping costs', is_string( $exchange ) && false === strpos( $exchange, 'rwgcm_cost_' ) && false === strpos( $exchange, 'class_cost_' ) && false === strpos( $exchange, 'pickup_location' ) );
+assert_true( 'cache purge does not delete shipping zone or pickup options', is_string( $purge ) && false === strpos( $purge, 'woocommerce_shipping' ) && false === strpos( $purge, 'pickup_location_pickup_locations' ) && false === strpos( $purge, 'rwgcm_pickup_location_costs' ) );
+assert_true( 'country migration does not rewrite shipping zones', is_string( $migration ) && false === strpos( $migration, 'woocommerce_shipping' ) && false === strpos( $migration, 'pickup_location' ) );
+assert_true( 'the satellite updater does not write shipping options', is_string( $updater ) && false === strpos( $updater, 'woocommerce_shipping' ) && false === strpos( $updater, 'rwgcm_pickup_location_costs' ) && false === strpos( $updater, 'rwgcm_cost_' ) );
 
 echo "\n{$passed} passed, {$failed} failed\n";
 exit( $failed > 0 ? 1 : 0 );

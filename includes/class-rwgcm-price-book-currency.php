@@ -74,10 +74,49 @@ class RWGCM_Price_Book_Currency {
 	private static $shipping_fallback = '';
 
 	/**
+	 * Store API routes seen during rest_do_request, including block hydration.
+	 * Hydration keeps the browser URL (for example /checkout/) so REQUEST_URI
+	 * does not contain /wc/store/. A stack so a batch sub-request can pop
+	 * without forgetting the outer route.
+	 *
+	 * @var array<int, string>
+	 */
+	private static $store_api_routes = array();
+
+	/**
+	 * True while shipping_currency_state() is reading the cart.
+	 *
+	 * @var bool
+	 */
+	private static $evaluating = false;
+
+	/**
+	 * Memo for this request. The currency filter and the cart extension both
+	 * need the same decision; the second call must not walk zones again.
+	 *
+	 * @var array{active: string, wanted: string, country: string}|null
+	 */
+	private static $state_cache = null;
+
+	/**
+	 * @var string
+	 */
+	private static $state_cache_key = '';
+
+	/**
+	 * How many times the decision was calculated in this request.
+	 *
+	 * @var int
+	 */
+	private static $state_computes = 0;
+
+	/**
 	 * @return void
 	 */
 	public static function init() {
 		add_filter( 'woocommerce_currency', array( __CLASS__, 'filter_currency' ), 20 );
+		add_filter( 'rest_pre_dispatch', array( __CLASS__, 'note_rest_dispatch' ), 1, 3 );
+		add_filter( 'rest_post_dispatch', array( __CLASS__, 'clear_rest_dispatch' ), 999, 3 );
 		add_filter( 'default_checkout_billing_country', array( __CLASS__, 'filter_default_checkout_country' ), 20, 2 );
 		add_filter( 'default_checkout_shipping_country', array( __CLASS__, 'filter_default_checkout_country' ), 20, 2 );
 		add_filter( 'woocommerce_customer_default_location_array', array( __CLASS__, 'filter_default_location' ), 20 );
@@ -85,6 +124,8 @@ class RWGCM_Price_Book_Currency {
 		add_action( 'woocommerce_checkout_update_customer', array( __CLASS__, 'remember_checkout_billing' ), 10, 2 );
 		add_action( 'woocommerce_store_api_checkout_update_customer_from_request', array( __CLASS__, 'remember_store_api_billing' ), 10, 2 );
 		add_action( 'woocommerce_store_api_cart_update_customer_from_request', array( __CLASS__, 'remember_store_api_billing' ), 10, 2 );
+		add_action( 'woocommerce_store_api_checkout_update_customer_from_request', array( __CLASS__, 'recalculate_cart_after_address_change' ), 20, 2 );
+		add_action( 'woocommerce_store_api_cart_update_customer_from_request', array( __CLASS__, 'recalculate_cart_after_address_change' ), 20, 2 );
 		// The shipping calculator updates the customer, then the cart page renders.
 		// WooCommerce writes that session at shutdown, after the response is flushed,
 		// so a fragment request started from the response still sees the previous
@@ -637,9 +678,113 @@ class RWGCM_Price_Book_Currency {
 			return $change_currency;
 		}
 
+		unset( $fallback );
+		// Cart currency and the shipping notice share one decision: cart lines,
+		// the customer destination, and the zone configuration. It does not
+		// read cached session rates or which REST route is in progress.
+		$state = self::shipping_currency_state();
+		return $state['active'];
+	}
+
+	/**
+	 * Whether the cart can be read for a shipping decision.
+	 *
+	 * @return bool
+	 */
+	public static function has_cart() {
+		return self::cart_is_ready();
+	}
+
+	/**
+	 * Currency the cart should charge, and the visitor currency blocked by
+	 * shipping to the current destination ('' when nothing is blocked).
+	 *
+	 * A destination whose mapped currency is the store currency (GB on a GBP
+	 * store) is not a ZAR fallback, even if the previous address was ZA.
+	 *
+	 * @return array{active: string, wanted: string, country: string}
+	 */
+	public static function shipping_currency_state() {
+		if ( self::$evaluating ) {
+			return array(
+				'active'  => self::base_currency(),
+				'wanted'  => self::$shipping_fallback,
+				'country' => '',
+			);
+		}
+		$already          = self::$resolving;
+		self::$resolving  = true;
+		self::$evaluating = true;
+		try {
+			$key = self::shipping_state_cache_key();
+			if ( is_array( self::$state_cache ) && self::$state_cache_key === $key ) {
+				$state = self::$state_cache;
+			} else {
+				$state                    = self::compute_shipping_currency_state();
+				self::$state_computes++;
+				self::$state_cache     = $state;
+				self::$state_cache_key = $key;
+			}
+		} finally {
+			self::$evaluating = false;
+			if ( ! $already ) {
+				self::$resolving = false;
+			}
+		}
+		self::$shipping_fallback = $state['wanted'];
+		return $state;
+	}
+
+	/**
+	 * Times the shipping decision was calculated in this request.
+	 *
+	 * @return int
+	 */
+	public static function shipping_state_compute_count() {
+		return self::$state_computes;
+	}
+
+	/**
+	 * Drop the per-request memo. The next read calculates once.
+	 *
+	 * @return void
+	 */
+	public static function reset_shipping_state_cache() {
+		self::$state_cache     = null;
+		self::$state_cache_key = '';
+	}
+
+	/**
+	 * Country plus cart line ids. Does not look up shipping rates.
+	 *
+	 * @return string
+	 */
+	private static function shipping_state_cache_key() {
+		$billing = self::entered_billing_country();
+		$geo     = self::geo_country();
+		if ( ! self::cart_is_ready() ) {
+			return 'nocart|' . $billing . '|' . $geo;
+		}
+		$ids   = array();
+		$items = WC()->cart->get_cart();
+		if ( is_array( $items ) ) {
+			foreach ( $items as $item ) {
+				if ( ! is_array( $item ) || empty( $item['data'] ) || ! is_object( $item['data'] ) || ! method_exists( $item['data'], 'get_id' ) ) {
+					continue;
+				}
+				$ids[] = (string) $item['data']->get_id();
+			}
+		}
+		return $billing . '|' . self::customer_shipping_country() . '|' . $geo . '|' . ( self::cart_needs_shipping() ? 'ship' : 'virtual' ) . '|' . implode( ',', $ids );
+	}
+
+	/**
+	 * @return array{active: string, wanted: string, country: string}
+	 */
+	private static function compute_shipping_currency_state() {
 		$base = self::base_currency();
 		if ( '' === $base ) {
-			$base = RWGCM_Price_Book::normalize_currency( $fallback );
+			$base = 'GBP';
 		}
 		$decision = RWGCM_Price_Book::resolve_context(
 			self::entered_billing_country(),
@@ -657,19 +802,76 @@ class RWGCM_Price_Book_Currency {
 				$preferred = $norm;
 			}
 		}
-
-		// A visitor currency that is already the store currency has nothing to explain.
-		// Clear a fallback left by an earlier address in this request (for example
-		// ZAR, then the shipping calculator moves the customer to GB).
-		if ( RWGCM_Price_Book::normalize_currency( $preferred ) === RWGCM_Price_Book::normalize_currency( $base ) ) {
-			self::$shipping_fallback = '';
-		}
 		if ( ! self::cart_is_ready() ) {
-			return $preferred;
+			return array(
+				'active'  => $preferred,
+				'wanted'  => '',
+				'country' => '',
+			);
 		}
-		self::$shipping_fallback = '';
-		$supports = self::cart_line_support( $preferred );
-		return RWGCM_Price_Book::currency_for_lines( $preferred, $base, $supports );
+		$country = self::customer_shipping_country();
+		$needs   = self::cart_needs_shipping();
+		// The address the shopper is shipping to decides the currency, not the
+		// previous session country and not a warm rate cache.
+		if ( $needs && '' !== $country ) {
+			$dest = RWGCM_Price_Book::resolve_context(
+				$country,
+				'',
+				$base,
+				null,
+				null,
+				RWGCM_Price_Book::configured_fallback_currency( $base )
+			);
+			if ( '' !== $dest['currency'] ) {
+				$preferred = $dest['currency'];
+			}
+		}
+		if ( '' === $preferred ) {
+			$preferred = $base;
+		}
+		if ( $preferred === $base ) {
+			return array(
+				'active'  => $base,
+				'wanted'  => '',
+				'country' => $country,
+			);
+		}
+		$items       = self::cart_item_flags( $preferred );
+		$items_ok    = ! empty( $items ) && ! in_array( false, $items, true );
+		$shipping_ok = RWGCM_Price_Book::shipping_supports_currency(
+			$preferred,
+			$base,
+			$needs,
+			$needs ? self::shipping_priced( $preferred ) : false
+		);
+		$supports    = $items;
+		if ( ! empty( $items ) ) {
+			$supports[] = $shipping_ok;
+		}
+		$active = RWGCM_Price_Book::currency_for_lines( $preferred, $base, $supports );
+		$wanted = ( $items_ok && ! $shipping_ok ) ? $preferred : '';
+		if ( $wanted === $base ) {
+			$wanted = '';
+		}
+		return array(
+			'active'  => $active,
+			'wanted'  => $wanted,
+			'country' => $country,
+		);
+	}
+
+	/**
+	 * @return string
+	 */
+	private static function customer_shipping_country() {
+		if ( ! function_exists( 'WC' ) ) {
+			return '';
+		}
+		$wc = WC();
+		if ( ! $wc || ! $wc->customer || ! method_exists( $wc->customer, 'get_shipping_country' ) ) {
+			return '';
+		}
+		return RWGCM_Price_Book::normalize_country( (string) $wc->customer->get_shipping_country() );
 	}
 
 	/**
@@ -689,7 +891,7 @@ class RWGCM_Price_Book_Currency {
 			'cron'       => ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) || ( defined( 'DOING_CRON' ) && DOING_CRON ),
 			'cli'        => defined( 'WP_CLI' ) && WP_CLI,
 			'rest'       => $rest,
-			'store_api'  => $rest && self::is_store_api_request_uri(),
+			'store_api'  => ( $rest && self::is_store_api_request_uri() ) || '' !== self::current_store_api_route(),
 			'price_api'  => self::is_geo_price_request_uri(),
 			'admin'      => function_exists( 'is_admin' ) && is_admin(),
 			'front_ajax' => function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() && isset( $_REQUEST['wc-ajax'] ), // phpcs:ignore WordPress.Security.NonceVerification.Recommended
@@ -824,20 +1026,114 @@ class RWGCM_Price_Book_Currency {
 	 * @return bool
 	 */
 	private static function is_store_api_cart_or_checkout( $checkout_only ) {
-		if ( ! defined( 'REST_REQUEST' ) || ! REST_REQUEST ) {
+		$flagged = self::current_store_api_route();
+		$rest    = ( defined( 'REST_REQUEST' ) && REST_REQUEST ) || '' !== $flagged;
+		if ( ! $rest ) {
 			return false;
 		}
 		$uri = isset( $_SERVER['REQUEST_URI'] ) ? (string) $_SERVER['REQUEST_URI'] : '';
-		if ( false === strpos( $uri, '/wc/store/' ) ) {
+		$hay = $flagged . ' ' . $uri;
+		if ( false === strpos( $hay, '/wc/store/' ) ) {
 			return false;
 		}
-		if ( false !== strpos( $uri, '/checkout' ) ) {
+		if ( false !== strpos( $hay, '/checkout' ) ) {
 			return true;
 		}
 		if ( $checkout_only ) {
 			return false;
 		}
-		return false !== strpos( $uri, '/cart' );
+		return false !== strpos( $hay, '/cart' );
+	}
+
+	/**
+	 * Remember a Store API route while it is dispatching.
+	 * Block hydration calls rest_do_request( '/wc/store/v1/cart' ) with the
+	 * browser still on /checkout/, so REQUEST_URI alone would force GBP and
+	 * the preloaded extensions would miss the fallback notice.
+	 *
+	 * @param mixed $result  Short-circuit result.
+	 * @param mixed $server  REST server.
+	 * @param mixed $request REST request.
+	 * @return mixed
+	 */
+	public static function note_rest_dispatch( $result, $server, $request ) {
+		unset( $server );
+		$route = ( is_object( $request ) && method_exists( $request, 'get_route' ) ) ? (string) $request->get_route() : '';
+		self::flag_store_api_route( $route );
+		return $result;
+	}
+
+	/**
+	 * @param mixed $result  Response.
+	 * @param mixed $server  REST server.
+	 * @param mixed $request REST request.
+	 * @return mixed
+	 */
+	public static function clear_rest_dispatch( $result, $server, $request ) {
+		unset( $server, $request );
+		self::clear_store_api_route();
+		return $result;
+	}
+
+	/**
+	 * @param string $route REST route, for example /wc/store/v1/cart.
+	 * @return void
+	 */
+	public static function flag_store_api_route( $route ) {
+		$route = (string) $route;
+		self::$store_api_routes[] = ( false !== strpos( $route, '/wc/store/' ) ) ? $route : '';
+	}
+
+	/**
+	 * @return void
+	 */
+	public static function clear_store_api_route() {
+		if ( ! empty( self::$store_api_routes ) ) {
+			array_pop( self::$store_api_routes );
+		}
+	}
+
+	/**
+	 * @return string
+	 */
+	public static function current_store_api_route() {
+		if ( empty( self::$store_api_routes ) ) {
+			return '';
+		}
+		return (string) end( self::$store_api_routes );
+	}
+
+	/**
+	 * Address changes can leave session shipping rates and a previous currency
+	 * resolution in place. Recalculate so the cart response matches a fresh
+	 * GET /wc/store/v1/cart.
+	 *
+	 * @param mixed $customer Customer.
+	 * @param mixed $request  Request.
+	 * @return void
+	 */
+	public static function recalculate_cart_after_address_change( $customer, $request ) {
+		unset( $customer, $request );
+		// WooCommerce calculates totals once after this hook. Doing it here
+		// as well runs shipping a second time on the same update-customer request.
+		self::$shipping_fallback = '';
+		self::reset_shipping_state_cache();
+		if ( ! function_exists( 'WC' ) ) {
+			return;
+		}
+		$wc = WC();
+		if ( ! $wc || ! $wc->session || ! method_exists( $wc->session, 'get_session_data' ) || ! method_exists( $wc->session, 'set' ) ) {
+			return;
+		}
+		$data = $wc->session->get_session_data();
+		if ( ! is_array( $data ) ) {
+			return;
+		}
+		foreach ( array_keys( $data ) as $key ) {
+			if ( is_string( $key ) && 0 === strpos( $key, 'shipping_for_package_' ) ) {
+				$wc->session->set( $key, null );
+			}
+		}
 	}
 
 	/**
@@ -1015,13 +1311,17 @@ class RWGCM_Price_Book_Currency {
 			}
 			$supports[] = $priced;
 		}
-		if ( ! empty( $supports ) ) {
-			$shipping   = RWGCM_Price_Book::shipping_supports_currency( $currency, self::base_currency(), self::cart_needs_shipping(), self::shipping_priced( $currency ) );
-			$items_ok   = ! in_array( false, $supports, true );
-			$supports[] = $shipping;
-			self::$shipping_fallback = ( $items_ok && ! $shipping ) ? RWGCM_Price_Book::normalize_currency( $currency ) : '';
-		}
 		return $supports;
+	}
+
+	/**
+	 * Whether each cart line has a price in $currency. Does not record a fallback.
+	 *
+	 * @param string $currency Preferred currency.
+	 * @return array<int, bool>
+	 */
+	private static function cart_item_flags( $currency ) {
+		return self::cart_line_support( $currency );
 	}
 
 	/**
@@ -1047,7 +1347,10 @@ class RWGCM_Price_Book_Currency {
 	 * @return string
 	 */
 	public static function shipping_fallback_currency() {
-		return self::$shipping_fallback;
+		if ( self::$evaluating || ! self::cart_is_ready() ) {
+			return self::$shipping_fallback;
+		}
+		return self::shipping_currency_state()['wanted'];
 	}
 
 	/**

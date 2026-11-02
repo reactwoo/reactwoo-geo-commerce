@@ -6,36 +6,30 @@ done
 
 ## Summary
 
-Geo Commerce 0.9.3 carries its own plugin updater and uses it when Geo Core's `RWGC_Satellite_Updater` is a stub, when `RWGC_DISTRIBUTION` is `wporg`, or when Geo Core is missing or inactive. A real Core updater is still registered once. With no licence key, or when login returns no token, Plugins and Geo Commerce screens show "Add your licence key to receive updates." Draft only: not tagged and not merged.
-
-## Root cause
-
-`RWGCM_Plugin::register_satellite_updater()` called `RWGC_Satellite_Updater::register()` whenever the class existed. The WordPress.org build of Geo Core defines that class with an empty `register()`, so the call did nothing and Commerce updates were never offered.
+QA17: the Checkout notice was created for both the cart and checkout notice lists, and the status-region fallback was inserted into every matching block node, so the sentence showed up four times after ZA → GB → ZA. The country change also ran shipping twice because update-customer calculated totals in our hook and WooCommerce calculated them again. One notice context is used, the fallback is removed once that list shows the text, and the shipping decision is cached for the request. Draft only. Not tagged and not merged.
 
 ## Files changed
 
-| File | Reason |
-|------|--------|
-| includes/class-rwgcm-updater.php | Own update check, stub detection, licence notice |
-| includes/class-rwgcm-plugin.php | Register updates even when Core is missing, and delegate to `RWGCM_Updater` |
-| reactwoo-geo-commerce.php, readme.txt, CHANGELOG.md, README.md | 0.9.3 |
-| tests/test-updater.php | Stub, wporg, inactive, missing, and no double registration |
-| tests/test-product-price.php, tests/test-cache-safe-price.php, tests/test-gateway-fallback.php | Version assertions moved to 0.9.3 |
+| File | Why |
+|------|-----|
+| assets/js/shipping-currency-notice.js | Checkout uses only `wc/checkout` (cart block only `wc/cart`). One fallback node, removed when a notice banner shows the text. |
+| includes/class-rwgcm-price-book-currency.php | Per-request cache for `shipping_currency_state()`. Address changes drop cached rates and the memo, and do not call `calculate_totals()`. |
+| tests/test-checkout-country.php | Three reads of one destination calculate once. |
+| tests/test-shipping-prices.php, tests/test-geo-hints.php | Source checks. |
+| CHANGELOG.md | 0.10.0 note. |
 
 ## What was not changed
 
-The ReactWoo check URL, the licence login in `RWGCM_Platform_Client`, and the arguments passed to a real `RWGC_Satellite_Updater::register()`. No tag and no merge.
+- The fallback rules, zone data, and the Shipping admin layout
+- No merge and no `v*` tag
 
 ## Commands run
 
 ```bash
-php -l includes/class-rwgcm-updater.php
-php -l tests/test-updater.php
-php tests/test-updater.php
 for f in tests/test-*.php; do php "$f" || exit 1; done
 ```
 
-Updater child processes: stub 45 passed, real 8 passed, wporg 6 passed, inactive 6 passed, missing 5 passed. The rest of `tests/test-*.php` passed with 0 failed.
+All passed. No WordPress site is running here.
 
 ## Remaining errors
 

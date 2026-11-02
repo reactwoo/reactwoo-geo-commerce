@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-02
+
+### Added
+- Tests that a missing per-currency shipping amount stays on the store-currency cost when an exchange rate exists. A manual amount is used as entered and is not multiplied by that rate.
+
+### Fixed
+- The Checkout block shows one shipping-currency notice. A second copy is not added for the cart notice list or as a leftover status region after the notice list has rendered the text. The decision is cached for the request, and update-customer does not calculate shipping twice.
+- The Cart and Checkout blocks show the shipping-currency notice. The text is the Store API `extensions.rwgcm.shipping_currency_notice` string, dispatched into the `wc/cart` and `wc/checkout` notice lists (an info notice, not dismissible, `role="status"`). It updates when `wc/store/cart` changes and is removed when the string is empty, including when the cart is priced in the visitor currency again. A status region is added at the top of the block only when that notice list is not showing the text. The notice wraps on a narrow screen.
+- The shipping fallback is computed from the cart lines, the customer destination, and the zone configuration. Block hydration returns the same `extensions.rwgcm` notice as a live cart GET, including when session shipping rates are already cached. A destination whose currency is the store currency (GB on a GBP store) clears a ZAR fallback left by the previous address. The Cart and Checkout blocks reconcile that notice when the cart store settles (`isCustomerDataUpdating`, `isApplyingCoupon`, checkout `isCalculating`, or `lastCartUpdate`). The Checkout block does not send a second cart request over WooCommerce's own update-customer call.
+- Price books → Shipping stays inside the admin content column. At a 1280px viewport the page was 1300px wide. The content column is clipped, the shipping table is not sticky, and it scrolls inside itself.
+
+### Changed
+- No change to how a shipped cart chooses its currency. The 0.6.0 manual amounts still apply on top of exchange rates (0.9.0), the geo cache purge (0.8.0 and 0.9.1), country-code normalisation (0.9.2), and the satellite updater (0.9.3). A blank `rwgcm_cost_{CUR}`, `rwgcm_class_cost_{id}_{CUR}`, `rwgcm_no_class_cost_{CUR}`, or block-pickup amount means that component is not priced. The cart stays in the store currency and WooCommerce keeps charging the stored cost. Filling every non-zero component uses those manual amounts. Nothing writes shipping zones, zone locations, method order, the store-currency `cost` / `class_cost_*` / `no_class_cost`, or `pickup_location_pickup_locations`.
+
+### Not in this release
+- Opt-in conversion of numeric shipping costs (phase 2) and carrier or table-rate quotes (phase 3). Product prices can still be converted. Shipping cannot.
+
 ## [0.9.3] - 2026-11-02
 
 ### Fixed

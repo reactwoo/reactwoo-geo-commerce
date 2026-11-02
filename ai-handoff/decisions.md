@@ -7,6 +7,7 @@
 | — | Requires WooCommerce + Geo Core | `rwgcm_loaded` after Core |
 | — | File handoff for cross-tool debug | `ai-handoff/` + `reactwoo-geocore/docs/ai-handoff-workflow.md` |
 | 2026-10-29 | Convert only when a rate exists | Mode defaults to Auto and the source to Manual with an empty table, so 0.8.0 behaviour stays until a rate is saved or a provider fetch succeeds. Off forces the store-currency fallback. |
+| 2026-11-02 | Shipping is not converted | Phase 1 manual amounts only. A blank per-currency shipping field keeps the store-currency cost. Product exchange rates do not fill or scale shipping. |
 
 ## AI handoff defaults
 

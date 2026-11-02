@@ -224,6 +224,15 @@ $GLOBALS['rw']['ship_country'] = 'ZA';
 RWGCM_Shipping_Prices::reset_memo();
 $held = RWGCM_Shipping_Prices::current_notice();
 assert_true( 'unpriced ZA shipping holds the cart in GBP and says so', 'GBP' === rw_currency() && false !== strpos( $held, 'GBP' ) && false !== strpos( $held, 'ZAR' ) );
+$ext = RWGCM_Shipping_Prices::store_api_data();
+assert_true(
+	'extension data equals the fallback state in the same request',
+	is_array( $ext )
+		&& $ext['shipping_fallback_currency'] === RWGCM_Price_Book_Currency::shipping_fallback_currency()
+		&& $ext['shipping_currency_notice'] === RWGCM_Shipping_Prices::current_notice()
+		&& 'ZAR' === $ext['shipping_fallback_currency']
+		&& $held === $ext['shipping_currency_notice']
+);
 $GLOBALS['rw']['ship_country'] = 'GB';
 RWGCM_Shipping_Prices::reset_memo();
 RWGCM_Price_Book_Currency::persist_customer_session();
@@ -236,6 +245,125 @@ RWGCM_Shipping_Prices::reset_memo();
 RWGCM_Price_Book_Currency::persist_customer_session();
 $back = RWGCM_Shipping_Prices::current_notice();
 assert_true( 'calculator to ZA still explains the ZAR fallback', 'ZA' === WC()->session->get( 'rwgcm_billing_country' ) && 'GBP' === rw_currency() && false !== strpos( $back, 'ZAR' ) );
+
+// 10. A product exchange rate can price the line. It must not price shipping.
+// The class is declared here, not at compile time, so earlier cases still
+// treat a missing book price as unpriced.
+if ( ! class_exists( 'RWGCM_Exchange', false ) ) {
+	class RWGCM_Exchange { // phpcs:ignore
+		public static function supplies_product( $product, $currency ) {
+			unset( $product );
+			return 'ZAR' === RWGCM_Price_Book::normalize_currency( $currency );
+		}
+	}
+}
+rw_reset();
+rw_cart( array( 4001 ) );
+$GLOBALS['rw']['ship'] = true;
+$GLOBALS['rw']['opts']['rwgcm_exchange_rates'] = array(
+	'base'  => 'GBP',
+	'rates' => array( 'ZAR' => '23' ),
+);
+$GLOBALS['rw']['opts']['woocommerce_flat_rate_1_settings'] = array( 'cost' => '10', 'class_cost_12' => '5' );
+$GLOBALS['rw']['ship_country'] = 'ZA';
+RWGCM_Shipping_Prices::reset_memo();
+$zone_before = $GLOBALS['rw']['opts']['woocommerce_flat_rate_1_settings'];
+assert_true( 'exchange rate does not switch a shipped cart while class costs have no ZAR amount', 'GBP' === rw_currency() );
+assert_true(
+	'exchange rate does not replace the GBP class cost',
+	'10' === RWGCM_Shipping_Prices::swapped_value( 'flat_rate', $zone_before, '10', 'ZAR', 'GBP', 'cost' )
+		&& '5' === RWGCM_Shipping_Prices::swapped_value( 'flat_rate', $zone_before, '5', 'ZAR', 'GBP', 'class_cost_12' )
+);
+$held_by_rate = RWGCM_Shipping_Prices::current_notice();
+assert_true( 'the GBP fallback notice still names ZAR when only a rate exists', false !== strpos( $held_by_rate, 'GBP' ) && false !== strpos( $held_by_rate, 'ZAR' ) );
+assert_true( 'the zone option is still only the GBP costs', $zone_before === $GLOBALS['rw']['opts']['woocommerce_flat_rate_1_settings'] && ! isset( $GLOBALS['rw']['opts']['woocommerce_flat_rate_1_settings']['rwgcm_cost_ZAR'] ) );
+$GLOBALS['rw']['ship'] = false;
+RWGCM_Shipping_Prices::reset_memo();
+assert_true( 'a virtual cart can still use ZAR from the exchange rate', 'ZAR' === rw_currency() );
+$GLOBALS['rw']['ship'] = true;
+$GLOBALS['rw']['opts']['woocommerce_flat_rate_1_settings']['rwgcm_cost_ZAR'] = '200';
+$GLOBALS['rw']['opts']['woocommerce_flat_rate_1_settings']['rwgcm_class_cost_12_ZAR'] = '40';
+RWGCM_Shipping_Prices::reset_memo();
+assert_true( 'manual class amounts let the exchanged cart use ZAR', 'ZAR' === rw_currency() );
+$priced_zone = $GLOBALS['rw']['opts']['woocommerce_flat_rate_1_settings'];
+assert_true(
+	'manual amounts are not multiplied by the 23 ZAR rate',
+	'200' === RWGCM_Shipping_Prices::swapped_value( 'flat_rate', $priced_zone, '10', 'ZAR', 'GBP', 'cost' )
+		&& '40' === RWGCM_Shipping_Prices::swapped_value( 'flat_rate', $priced_zone, '5', 'ZAR', 'GBP', 'class_cost_12' )
+);
+assert_true( 'saving the manual amounts did not change the GBP costs', '10' === $priced_zone['cost'] && '5' === $priced_zone['class_cost_12'] );
+assert_true( 'the notice is gone once shipping is priced in ZAR', '' === RWGCM_Shipping_Prices::current_notice() );
+
+// 11. Block hydration: REST_REQUEST with the browser still on /checkout/.
+// Without the cart route flag the preloaded extensions stay empty. With it,
+// they match the GBP fallback in the same request.
+if ( ! defined( 'REST_REQUEST' ) ) {
+	define( 'REST_REQUEST', true );
+}
+$_SERVER['REQUEST_URI'] = '/checkout/';
+RWGCM_Price_Book_Currency::clear_store_api_route();
+assert_true( 'a checkout page request during REST forces the store currency', RWGCM_Price_Book_Currency::forces_store_currency() );
+RWGCM_Price_Book_Currency::flag_store_api_route( '/wc/store/v1/cart' );
+assert_true( 'flagged cart hydration does not force the store currency', ! RWGCM_Price_Book_Currency::forces_store_currency() );
+rw_reset();
+rw_books();
+rw_cart( array( 3655 ) );
+$GLOBALS['rw']['ship'] = true;
+$GLOBALS['rw']['opts']['woocommerce_flat_rate_1_settings'] = array( 'cost' => '40' );
+$GLOBALS['rw']['ship_country'] = 'ZA';
+RWGCM_Shipping_Prices::reset_memo();
+$hydrated = RWGCM_Shipping_Prices::store_api_data();
+assert_true(
+	'hydrated cart extension matches the GBP fallback in the same request',
+	is_array( $hydrated )
+		&& 'ZAR' === $hydrated['shipping_fallback_currency']
+		&& $hydrated['shipping_fallback_currency'] === RWGCM_Price_Book_Currency::shipping_fallback_currency()
+		&& $hydrated['shipping_currency_notice'] === RWGCM_Shipping_Prices::current_notice()
+		&& false !== strpos( $hydrated['shipping_currency_notice'], 'GBP' )
+		&& false !== strpos( $hydrated['shipping_currency_notice'], 'ZAR' )
+		&& 'GBP' === rw_currency()
+);
+RWGCM_Price_Book_Currency::clear_store_api_route();
+assert_true( 'clearing the hydration route forces the store currency again', RWGCM_Price_Book_Currency::forces_store_currency() );
+
+// Repeated hydration with warm session rates, and no route flag. The notice
+// still comes from the destination and the zone, then a GB destination clears it.
+$_SERVER['REQUEST_URI'] = '/checkout/';
+RWGCM_Price_Book_Currency::clear_store_api_route();
+WC()->session->set( 'shipping_for_package_0', array( 'rates' => array( 'flat_rate:1' => 'cached-gbp' ) ) );
+$GLOBALS['rw']['ship_country'] = 'ZA';
+RWGCM_Shipping_Prices::reset_memo();
+$warm_a = RWGCM_Shipping_Prices::store_api_data();
+$warm_b = RWGCM_Shipping_Prices::store_api_data();
+RWGCM_Price_Book_Currency::reset_shipping_state_cache();
+$computes_before = RWGCM_Price_Book_Currency::shipping_state_compute_count();
+RWGCM_Shipping_Prices::store_api_data();
+RWGCM_Price_Book_Currency::shipping_currency_state();
+RWGCM_Shipping_Prices::store_api_data();
+assert_true(
+	'the shipping decision is calculated once per destination in a request',
+	RWGCM_Price_Book_Currency::shipping_state_compute_count() === $computes_before + 1
+);
+$warm_state = RWGCM_Price_Book_Currency::shipping_currency_state();
+assert_true(
+	'a second hydration with warm session rates still returns the ZAR notice',
+	is_array( $warm_a ) && $warm_a === $warm_b
+		&& 'ZAR' === $warm_a['shipping_fallback_currency']
+		&& 'ZAR' === $warm_state['wanted']
+		&& false !== strpos( $warm_a['shipping_currency_notice'], 'GBP' )
+		&& false !== strpos( $warm_a['shipping_currency_notice'], 'ZAR' )
+);
+$GLOBALS['rw']['ship_country'] = 'GB';
+RWGCM_Shipping_Prices::reset_memo();
+$to_gb = RWGCM_Shipping_Prices::store_api_data();
+assert_true(
+	'a GB destination after ZA has an empty fallback',
+	is_array( $to_gb )
+		&& '' === $to_gb['shipping_fallback_currency']
+		&& '' === $to_gb['shipping_currency_notice']
+		&& '' === RWGCM_Price_Book_Currency::shipping_fallback_currency()
+		&& 'GBP' === rw_currency()
+);
 
 echo "\n{$passed} passed, {$failed} failed\n";
 exit( $failed > 0 ? 1 : 0 );

@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.9.3
+Stable tag: 0.10.0
 
 WooCommerce rules and personalization on ReactWoo Geo Core.
 
@@ -52,6 +52,11 @@ The product (with its parent and variations), the shop page, product category ar
 Adapters run only when that plugin is active: LiteSpeed (`litespeed_purge_post`, `litespeed_purge_url`), WP Rocket (`rocket_clean_post`, and `rocket_clean_files` for archive URLs), W3 Total Cache (`w3tc_flush_post`, and `w3tc_flush_url` for archive URLs), WP Super Cache (`wpsc_delete_post_cache`; archive URLs have no purge call), and Cloudflare APO (`cloudflare_purge_by_url`, `cloudflare_purge_url`, `cloudflare_purge_everything`) when those hooks are registered. Elementor CSS is regenerated for each affected Elementor post. The last purge time and counts are stored in `rwgcm_last_cache_purge`. Extensions can use the `rwgcm_cache_purged` action. The button requires the `manage_woocommerce` capability and a nonce.
 
 == Changelog ==
+
+= 0.10.0 =
+* **Shipping stays in the store currency until a manual amount exists.** An exchange rate can still convert a product price. It does not fill a blank shipping cost, shipping-class cost, or block local pickup amount, and it does not scale an amount the merchant typed. A cart that needs shipping stays in the store currency until every applicable rate has an amount in the visitor currency, as in 0.6.0. Zone locations and the store-currency costs are not rewritten.
+* **Checkout block notice.** The Cart and Checkout blocks show "Prices are shown in …" from the cart extension. The notice updates when the cart changes and disappears when shipping is priced in the visitor currency. It wraps on a phone.
+* **Shipping tab.** The currency table stays inside the page at a desktop width.
 
 = 0.9.3 =
 * **Updates on the WordPress.org Core.** Geo Commerce checks for its own updates when Geo Core's updater is a stub, when Core is the WordPress.org build, or when Core is missing or inactive. The check is a POST to `https://api.reactwoo.com/api/v5/updates/check` with the Commerce licence token, and WordPress is given the signed package URL. A site that already has Geo Core's real updater still uses that updater, once.
