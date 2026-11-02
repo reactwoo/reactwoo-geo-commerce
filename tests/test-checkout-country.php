@@ -237,5 +237,53 @@ RWGCM_Price_Book_Currency::persist_customer_session();
 $back = RWGCM_Shipping_Prices::current_notice();
 assert_true( 'calculator to ZA still explains the ZAR fallback', 'ZA' === WC()->session->get( 'rwgcm_billing_country' ) && 'GBP' === rw_currency() && false !== strpos( $back, 'ZAR' ) );
 
+// 10. A product exchange rate can price the line. It must not price shipping.
+// The class is declared here, not at compile time, so earlier cases still
+// treat a missing book price as unpriced.
+if ( ! class_exists( 'RWGCM_Exchange', false ) ) {
+	class RWGCM_Exchange { // phpcs:ignore
+		public static function supplies_product( $product, $currency ) {
+			unset( $product );
+			return 'ZAR' === RWGCM_Price_Book::normalize_currency( $currency );
+		}
+	}
+}
+rw_reset();
+rw_cart( array( 4001 ) );
+$GLOBALS['rw']['ship'] = true;
+$GLOBALS['rw']['opts']['rwgcm_exchange_rates'] = array(
+	'base'  => 'GBP',
+	'rates' => array( 'ZAR' => '23' ),
+);
+$GLOBALS['rw']['opts']['woocommerce_flat_rate_1_settings'] = array( 'cost' => '10', 'class_cost_12' => '5' );
+$GLOBALS['rw']['ship_country'] = 'ZA';
+RWGCM_Shipping_Prices::reset_memo();
+$zone_before = $GLOBALS['rw']['opts']['woocommerce_flat_rate_1_settings'];
+assert_true( 'exchange rate does not switch a shipped cart while class costs have no ZAR amount', 'GBP' === rw_currency() );
+assert_true(
+	'exchange rate does not replace the GBP class cost',
+	'10' === RWGCM_Shipping_Prices::swapped_value( 'flat_rate', $zone_before, '10', 'ZAR', 'GBP', 'cost' )
+		&& '5' === RWGCM_Shipping_Prices::swapped_value( 'flat_rate', $zone_before, '5', 'ZAR', 'GBP', 'class_cost_12' )
+);
+$held_by_rate = RWGCM_Shipping_Prices::current_notice();
+assert_true( 'the GBP fallback notice still names ZAR when only a rate exists', false !== strpos( $held_by_rate, 'GBP' ) && false !== strpos( $held_by_rate, 'ZAR' ) );
+assert_true( 'the zone option is still only the GBP costs', $zone_before === $GLOBALS['rw']['opts']['woocommerce_flat_rate_1_settings'] && ! isset( $GLOBALS['rw']['opts']['woocommerce_flat_rate_1_settings']['rwgcm_cost_ZAR'] ) );
+$GLOBALS['rw']['ship'] = false;
+RWGCM_Shipping_Prices::reset_memo();
+assert_true( 'a virtual cart can still use ZAR from the exchange rate', 'ZAR' === rw_currency() );
+$GLOBALS['rw']['ship'] = true;
+$GLOBALS['rw']['opts']['woocommerce_flat_rate_1_settings']['rwgcm_cost_ZAR'] = '200';
+$GLOBALS['rw']['opts']['woocommerce_flat_rate_1_settings']['rwgcm_class_cost_12_ZAR'] = '40';
+RWGCM_Shipping_Prices::reset_memo();
+assert_true( 'manual class amounts let the exchanged cart use ZAR', 'ZAR' === rw_currency() );
+$priced_zone = $GLOBALS['rw']['opts']['woocommerce_flat_rate_1_settings'];
+assert_true(
+	'manual amounts are not multiplied by the 23 ZAR rate',
+	'200' === RWGCM_Shipping_Prices::swapped_value( 'flat_rate', $priced_zone, '10', 'ZAR', 'GBP', 'cost' )
+		&& '40' === RWGCM_Shipping_Prices::swapped_value( 'flat_rate', $priced_zone, '5', 'ZAR', 'GBP', 'class_cost_12' )
+);
+assert_true( 'saving the manual amounts did not change the GBP costs', '10' === $priced_zone['cost'] && '5' === $priced_zone['class_cost_12'] );
+assert_true( 'the notice is gone once shipping is priced in ZAR', '' === RWGCM_Shipping_Prices::current_notice() );
+
 echo "\n{$passed} passed, {$failed} failed\n";
 exit( $failed > 0 ? 1 : 0 );

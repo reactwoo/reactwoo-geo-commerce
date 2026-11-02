@@ -370,6 +370,35 @@ $saved['rwgcm_class_cost_12_ZAR'] = '80';
 assert_true( 'admin save of ZAR fields adds only rwgcm keys', '10' === $saved['cost'] && '5' === $saved['class_cost_12'] && 'Flat' === $saved['title'] && '230' === $saved['rwgcm_cost_ZAR'] && '80' === $saved['rwgcm_class_cost_12_ZAR'] );
 assert_true( 'zone id, locations and instance id are unchanged', 4 === $zone['id'] && $zone_before['locations'] === $zone['locations'] && 9 === $zone['instance_id'] && $zone_before['settings'] === $zone['settings'] );
 
+// An exchange rate must not fill or scale shipping. Phase 2 is not on.
+$GLOBALS['rw_opts']['rwgcm_exchange_rates'] = array(
+	'base'  => 'GBP',
+	'rates' => array( 'ZAR' => '23' ),
+);
+$gbp_zone = array( 'cost' => '10', 'class_cost_12' => '5', 'no_class_cost' => '2', 'title' => 'Flat' );
+$gbp_snapshot = $gbp_zone;
+assert_true( 'an exchange rate does not mark a class-cost flat rate priced', ! $st( 'flat_rate', $gbp_zone )['priced'] && 'class_costs' === $st( 'flat_rate', $gbp_zone )['reason'] );
+assert_true(
+	'an exchange rate does not replace any GBP component',
+	'10' === $S::swapped_value( 'flat_rate', $gbp_zone, '10', 'ZAR', 'GBP', 'cost' )
+		&& '5' === $S::swapped_value( 'flat_rate', $gbp_zone, '5', 'ZAR', 'GBP', 'class_cost_12' )
+		&& '2' === $S::swapped_value( 'flat_rate', $gbp_zone, '2', 'ZAR', 'GBP', 'no_class_cost' )
+);
+assert_true( 'reading the rate does not add keys to the zone settings', $gbp_snapshot === $gbp_zone );
+$manual_zone = $gbp_zone;
+$manual_zone['rwgcm_cost_ZAR'] = '200';
+$manual_zone['rwgcm_class_cost_12_ZAR'] = '40';
+$manual_zone['rwgcm_no_class_cost_ZAR'] = '15';
+assert_true( 'manual class amounts are priced while a rate exists', $st( 'flat_rate', $manual_zone )['priced'] );
+assert_true(
+	'manual amounts are not scaled by the 23 ZAR rate',
+	'200' === $S::swapped_value( 'flat_rate', $manual_zone, '10', 'ZAR', 'GBP', 'cost' )
+		&& '40' === $S::swapped_value( 'flat_rate', $manual_zone, '5', 'ZAR', 'GBP', 'class_cost_12' )
+		&& '15' === $S::swapped_value( 'flat_rate', $manual_zone, '2', 'ZAR', 'GBP', 'no_class_cost' )
+);
+assert_true( 'the GBP cost keys are still the originals after the manual swap', '10' === $manual_zone['cost'] && '5' === $manual_zone['class_cost_12'] && '2' === $manual_zone['no_class_cost'] && 'Flat' === $manual_zone['title'] );
+unset( $GLOBALS['rw_opts']['rwgcm_exchange_rates'] );
+
 $locations = array(
 	array( 'name' => 'Cape Town', 'enabled' => true, 'cost' => '15' ),
 	array( 'id' => 'loc-jhb', 'name' => 'Johannesburg', 'enabled' => true ),
@@ -500,6 +529,14 @@ $modal_css = file_get_contents( dirname( __DIR__ ) . '/admin/css/rwgcm-shipping-
 $admin_css = file_get_contents( dirname( __DIR__ ) . '/admin/css/rwgcm-admin.css' );
 assert_true( 'method modal fields are full width from 782px down', is_string( $modal_css ) && false !== strpos( $modal_css, 'max-width: 782px' ) && false !== strpos( $modal_css, 'width: 100%' ) );
 assert_true( 'shipping tab shows one currency column below 782px and stacks pickup cards', is_string( $admin_css ) && false !== strpos( $admin_css, '.rwgcm-currency-col.is-selected' ) && false !== strpos( $admin_css, 'flex-direction: column' ) );
+$exchange  = file_get_contents( dirname( __DIR__ ) . '/includes/class-rwgcm-exchange.php' );
+$purge     = file_get_contents( dirname( __DIR__ ) . '/includes/class-rwgcm-cache-purge.php' );
+$migration = file_get_contents( dirname( __DIR__ ) . '/includes/class-rwgcm-rule-migration.php' );
+$updater   = file_get_contents( dirname( __DIR__ ) . '/includes/class-rwgcm-updater.php' );
+assert_true( 'exchange does not read or write shipping costs', is_string( $exchange ) && false === strpos( $exchange, 'rwgcm_cost_' ) && false === strpos( $exchange, 'class_cost_' ) && false === strpos( $exchange, 'pickup_location' ) );
+assert_true( 'cache purge does not delete shipping zone or pickup options', is_string( $purge ) && false === strpos( $purge, 'woocommerce_shipping' ) && false === strpos( $purge, 'pickup_location_pickup_locations' ) && false === strpos( $purge, 'rwgcm_pickup_location_costs' ) );
+assert_true( 'country migration does not rewrite shipping zones', is_string( $migration ) && false === strpos( $migration, 'woocommerce_shipping' ) && false === strpos( $migration, 'pickup_location' ) );
+assert_true( 'the satellite updater does not write shipping options', is_string( $updater ) && false === strpos( $updater, 'woocommerce_shipping' ) && false === strpos( $updater, 'rwgcm_pickup_location_costs' ) && false === strpos( $updater, 'rwgcm_cost_' ) );
 
 echo "\n{$passed} passed, {$failed} failed\n";
 exit( $failed > 0 ? 1 : 0 );

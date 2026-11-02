@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-02
+
+### Added
+- Tests that a missing per-currency shipping amount stays on the store-currency cost when an exchange rate exists. A manual amount is used as entered and is not multiplied by that rate.
+
+### Changed
+- No change to how a shipped cart chooses its currency. The 0.6.0 manual amounts still apply on top of exchange rates (0.9.0), the geo cache purge (0.8.0 and 0.9.1), country-code normalisation (0.9.2), and the satellite updater (0.9.3). A blank `rwgcm_cost_{CUR}`, `rwgcm_class_cost_{id}_{CUR}`, `rwgcm_no_class_cost_{CUR}`, or block-pickup amount means that component is not priced. The cart stays in the store currency and WooCommerce keeps charging the stored cost. Filling every non-zero component uses those manual amounts. Nothing writes shipping zones, zone locations, method order, the store-currency `cost` / `class_cost_*` / `no_class_cost`, or `pickup_location_pickup_locations`.
+
+### Not in this release
+- Opt-in conversion of numeric shipping costs (phase 2) and carrier or table-rate quotes (phase 3). Product prices can still be converted. Shipping cannot.
+
 ## [0.9.3] - 2026-11-02
 
 ### Fixed
