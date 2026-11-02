@@ -6,42 +6,36 @@ done
 
 ## Summary
 
-Geo Commerce 0.9.2 purges cached prices when a pricing rule changes, applies the geo rule when the cart falls back to the store currency, and stores country conditions as ISO codes. Not tagged and not merged.
+Geo Commerce 0.9.3 carries its own plugin updater and uses it when Geo Core's `RWGC_Satellite_Updater` is a stub, when `RWGC_DISTRIBUTION` is `wporg`, or when Geo Core is missing or inactive. A real Core updater is still registered once. With no licence key, or when login returns no token, Plugins and Geo Commerce screens show "Add your licence key to receive updates." Draft only: not tagged and not merged.
 
 ## Root cause
 
-Generic rules live in `wp_rwgcm_rules`, so saving one did not hit the option purge. A shipping fallback to the store currency skipped the geo rule whenever a store-currency book price existed, including for a product that also had a visitor-currency book. Country names were stored as entered.
+`RWGCM_Plugin::register_satellite_updater()` called `RWGC_Satellite_Updater::register()` whenever the class existed. The WordPress.org build of Geo Core defines that class with an empty `register()`, so the call did nothing and Commerce updates were never offered.
 
 ## Files changed
 
 | File | Reason |
 |------|--------|
-| includes/class-rwgcm-cache-purge.php | One pricing-rule purge per request, scoped when the rule names products |
-| includes/class-rwgcm-rule-store.php | Purge on insert, update, and delete |
-| includes/class-rwgcm-price-book-apply.php | During a shipping fallback, rule the store-currency amount |
-| includes/class-rwgcm-exchange.php | Apply the geo rule to store prices without converting |
-| includes/class-rwgcm-rule-sanitizer.php | Save country names as ISO codes |
-| includes/class-rwgcm-condition-evaluator.php | Normalize country names |
-| includes/class-rwgcm-rule-migration.php | Rewrite stored names once on upgrade |
-| reactwoo-geo-commerce.php, readme.txt, CHANGELOG.md | 0.9.2 |
-| tests/test-cache-purge.php, tests/test-exchange.php | Purge scope, fallback pricing, country codes |
-| tests/test-product-price.php, tests/test-cache-safe-price.php, tests/test-gateway-fallback.php | Version assertions moved to 0.9.2 |
+| includes/class-rwgcm-updater.php | Own update check, stub detection, licence notice |
+| includes/class-rwgcm-plugin.php | Register updates even when Core is missing, and delegate to `RWGCM_Updater` |
+| reactwoo-geo-commerce.php, readme.txt, CHANGELOG.md, README.md | 0.9.3 |
+| tests/test-updater.php | Stub, wporg, inactive, missing, and no double registration |
+| tests/test-product-price.php, tests/test-cache-safe-price.php, tests/test-gateway-fallback.php | Version assertions moved to 0.9.3 |
 
 ## What was not changed
 
-A fixed price in the currency the cart is charging, when that currency was selected for the visitor. No tag and no merge.
+The ReactWoo check URL, the licence login in `RWGCM_Platform_Client`, and the arguments passed to a real `RWGC_Satellite_Updater::register()`. No tag and no merge.
 
 ## Commands run
 
 ```bash
-php tests/test-exchange.php
-php tests/test-cache-purge.php
-for f in tests/test-*.php; do php "$f"; done
+php -l includes/class-rwgcm-updater.php
+php -l tests/test-updater.php
+php tests/test-updater.php
+for f in tests/test-*.php; do php "$f" || exit 1; done
 ```
 
-`tests/test-exchange.php`: 100 passed, 0 failed.
-`tests/test-cache-purge.php`: 52 passed, 0 failed.
-Every `tests/test-*.php` script passed.
+Updater child processes: stub 45 passed, real 8 passed, wporg 6 passed, inactive 6 passed, missing 5 passed. The rest of `tests/test-*.php` passed with 0 failed.
 
 ## Remaining errors
 
