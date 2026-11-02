@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-11-02
+
+### Fixed
+- WordPress.org builds of Geo Core ship `RWGC_Satellite_Updater::register()` as a stub, so Commerce never offered updates on those sites (including reactwoo.com). Commerce now runs its own check against `POST https://api.reactwoo.com/api/v5/updates/check` when that updater is a stub, when `RWGC_DISTRIBUTION` is `wporg`, or when Geo Core is missing or inactive. The body sends `slug`, `current_version`, `channel` (`stable`), and `site_host`, with the bearer token from the Commerce licence login. The signed package URL is what WordPress downloads.
+- When Geo Core's real updater is present, Commerce still registers with it and does not add a second `pre_set_site_transient_update_plugins` callback. A second call in the same request does not register again.
+
+### Added
+- With no saved licence key, or when licence login does not return a token, the Plugins screen and Geo Commerce screens show "Add your licence key to receive updates." An empty key does not call the login endpoint.
+
 ## [0.9.2] - 2026-10-29
 
 ### Added

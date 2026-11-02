@@ -41,12 +41,15 @@ class RWGCM_Plugin {
 			add_action( 'admin_notices', array( $this, 'maybe_admin_notice_missing_deps' ) );
 		}
 
+		// Updates must register even when Geo Core is the WordPress.org build or is inactive.
+		require_once RWGCM_PATH . 'includes/class-rwgcm-platform-client.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-settings.php';
+		require_once RWGCM_PATH . 'includes/class-rwgcm-updater.php';
+		add_action( 'init', array( __CLASS__, 'register_satellite_updater' ), 1 );
+
 		if ( ! $this->dependencies_ok() ) {
 			return;
 		}
-
-		require_once RWGCM_PATH . 'includes/class-rwgcm-platform-client.php';
-		require_once RWGCM_PATH . 'includes/class-rwgcm-settings.php';
 		RWGCM_Settings::init();
 
 		require_once RWGCM_PATH . 'includes/class-rwgcm-db.php';
@@ -195,8 +198,6 @@ class RWGCM_Plugin {
 			self::boot_elementor();
 		}
 
-		add_action( 'init', array( __CLASS__, 'register_satellite_updater' ), 1 );
-
 		/**
 		 * Fires when Geo Commerce is ready (Geo Core + WooCommerce active).
 		 */
@@ -223,20 +224,10 @@ class RWGCM_Plugin {
 	 * @return void
 	 */
 	public static function register_satellite_updater() {
-		if ( ! class_exists( 'RWGC_Satellite_Updater', false ) ) {
-			return;
+		if ( ! class_exists( 'RWGCM_Updater', false ) ) {
+			require_once RWGCM_PATH . 'includes/class-rwgcm-updater.php';
 		}
-		RWGC_Satellite_Updater::register(
-			array(
-				'basename'              => plugin_basename( RWGCM_FILE ),
-				'version'               => RWGCM_VERSION,
-				'catalog_slug'          => 'reactwoo-geo-commerce',
-				'name'                  => __( 'ReactWoo Geo Commerce', 'reactwoo-geo-commerce' ),
-				'description'           => __( 'WooCommerce geo pricing, fees, and attribution on ReactWoo Geo Core.', 'reactwoo-geo-commerce' ),
-				'get_bearer_callback'   => array( 'RWGCM_Platform_Client', 'get_bearer_for_updates' ),
-				'get_api_base_callback' => array( 'RWGCM_Platform_Client', 'get_api_base' ),
-			)
-		);
+		RWGCM_Updater::register();
 	}
 
 	/**

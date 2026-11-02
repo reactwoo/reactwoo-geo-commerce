@@ -90,7 +90,7 @@ Filters: `rwgcm_apply_catalog_price`, `rwgcm_cart_fees`, `rwgcm_package_rates`, 
 | Geo pricing & fees | Geo Commerce license |
 | Portable campaign/audience on commerce rules | GeoCore Pro + Commerce license |
 | Core visitor country | Geo Core (free MaxMind) |
-| Plugin updates | Commerce license JWT via reactwoo-api |
+| Plugin updates | Commerce licence JWT via reactwoo-api. Commerce checks itself when Geo Core's updater is missing, inactive, or the WordPress.org stub |
 
 ## Integrations
 
