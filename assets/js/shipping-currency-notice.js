@@ -14,7 +14,9 @@
 	var dispatch = wp.data.dispatch;
 	var subscribe = wp.data.subscribe;
 	var NOTICE_ID = 'rwgcm-shipping-currency-notice';
-	var queued = false;
+	var lastNotice = null;
+	var lastCountry = null;
+	var refetching = false;
 
 	function contexts() {
 		var checkout = 'wc/checkout';
@@ -30,17 +32,75 @@
 	}
 
 	/**
-	 * @return {string|null} Notice text, or null when the cart store is not ready.
+	 * Cart resource from wc/store/cart. Null when the store is not ready.
+	 *
+	 * @return {Object|null}
 	 */
-	function readNotice() {
+	function cartPayload() {
 		var store = select( 'wc/store/cart' );
-		if ( ! store || ! store.getCartData ) {
+		if ( ! store ) {
 			return null;
 		}
-		var cart = store.getCartData();
+		var cart = null;
+		if ( store.getCartData ) {
+			cart = store.getCartData();
+		} else if ( store.getCart ) {
+			cart = store.getCart();
+		}
+		return cart && typeof cart === 'object' ? cart : null;
+	}
+
+	/**
+	 * extensions.rwgcm.shipping_currency_notice, or null when that object
+	 * is not in this cart snapshot (do not clear a notice we cannot see).
+	 *
+	 * @param {Object} cart Cart resource.
+	 * @return {string|null}
+	 */
+	function extensionNotice( cart ) {
 		var ext = cart && cart.extensions && cart.extensions.rwgcm;
-		var text = ext && ext.shipping_currency_notice;
-		return typeof text === 'string' ? text : '';
+		if ( ! ext || typeof ext.shipping_currency_notice !== 'string' ) {
+			return null;
+		}
+		return ext.shipping_currency_notice;
+	}
+
+	/**
+	 * @param {Object} cart Cart resource.
+	 * @return {string}
+	 */
+	function shippingCountry( cart ) {
+		var address = cart.shipping_address || cart.shippingAddress || null;
+		if ( ! address || typeof address !== 'object' || typeof address.country !== 'string' ) {
+			return '';
+		}
+		return address.country;
+	}
+
+	/**
+	 * updateCustomerData can leave the block on the previous currency while
+	 * GET /wc/store/v1/cart already switched. Replace the store with that GET.
+	 *
+	 * @return void
+	 */
+	function refetchCart() {
+		if ( refetching || ! wp.apiFetch ) {
+			return;
+		}
+		var actions = dispatch( 'wc/store/cart' );
+		if ( ! actions || ! actions.receiveCart ) {
+			return;
+		}
+		refetching = true;
+		wp.apiFetch( { path: '/wc/store/v1/cart' } ).then( function ( fresh ) {
+			if ( fresh && typeof fresh === 'object' ) {
+				actions.receiveCart( fresh );
+			}
+		} ).catch( function () {
+			return null;
+		} ).then( function () {
+			refetching = false;
+		} );
 	}
 
 	function noticeContent( notice ) {
@@ -138,40 +198,44 @@
 		}
 	}
 
-	function sync() {
-		var text = readNotice();
-		if ( null === text ) {
+	/**
+	 * Runs on every wc/store/cart update, including after the shipping address
+	 * changes. The notice text is extensions.rwgcm.shipping_currency_notice.
+	 *
+	 * @return void
+	 */
+	function syncCart() {
+		var cart = cartPayload();
+		if ( ! cart ) {
 			return;
 		}
-		try {
-			syncNotices( text );
-		} catch ( err ) {
-			if ( window.console && console.error ) {
-				console.error( err );
+		var text = extensionNotice( cart );
+		var country = shippingCountry( cart );
+		if ( null !== text && text !== lastNotice ) {
+			lastNotice = text;
+			try {
+				syncNotices( text );
+			} catch ( err ) {
+				if ( window.console && console.error ) {
+					console.error( err );
+				}
 			}
-		}
-		var paint = window.requestAnimationFrame || function ( cb ) { return window.setTimeout( cb, 16 ); };
-		paint( function () {
 			ensureVisible( text );
-		} );
-	}
-
-	function schedule() {
-		if ( queued ) {
+		}
+		if ( null === lastCountry ) {
+			lastCountry = country;
 			return;
 		}
-		queued = true;
-		var paint = window.requestAnimationFrame || function ( cb ) { return window.setTimeout( cb, 16 ); };
-		paint( function () {
-			queued = false;
-			sync();
-		} );
+		if ( country && country !== lastCountry ) {
+			lastCountry = country;
+			refetchCart();
+		}
 	}
 
-	subscribe( schedule );
+	subscribe( syncCart );
 	if ( wp.domReady ) {
-		wp.domReady( sync );
+		wp.domReady( syncCart );
 	} else {
-		sync();
+		syncCart();
 	}
 }( window.wp, window.wc ) );

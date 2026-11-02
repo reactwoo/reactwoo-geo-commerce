@@ -140,7 +140,7 @@ class RWGCM_Shipping_Prices {
 	 * @return array<int, string>
 	 */
 	public static function block_notice_script_deps() {
-		return array( 'wp-plugins', 'wp-element', 'wp-data', 'wp-notices', 'wc-blocks-checkout' );
+		return array( 'wp-plugins', 'wp-element', 'wp-data', 'wp-notices', 'wp-api-fetch', 'wc-blocks-checkout' );
 	}
 
 	/**
@@ -689,11 +689,41 @@ JS;
 	 * @return array<string, string>
 	 */
 	public static function store_api_data() {
+		// Same request as the cart totals. Resolve after the cart exists so a
+		// hydration callback does not snapshot an empty fallback that a later
+		// GET would fill in.
+		self::ensure_cart_ready_for_extension();
 		$now = self::current_fallback();
 		return array(
 			'shipping_fallback_currency' => $now['wanted'],
 			'shipping_currency_notice'   => '' === $now['state'] ? '' : self::fallback_notice( $now['wanted'], RWGCM_Price_Book_Currency::base_currency(), self::country_name( $now['country'] ) ),
 		);
+	}
+
+	/**
+	 * Calculate totals once before reading the fallback, unless totals are
+	 * already being calculated (the currency filter calls back into the cart).
+	 *
+	 * @return void
+	 */
+	private static function ensure_cart_ready_for_extension() {
+		if ( ! function_exists( 'WC' ) || ! function_exists( 'did_action' ) ) {
+			return;
+		}
+		$wc = WC();
+		if ( ! $wc || ! $wc->cart || ! method_exists( $wc->cart, 'calculate_totals' ) || ! method_exists( $wc->cart, 'is_empty' ) ) {
+			return;
+		}
+		if ( $wc->cart->is_empty() ) {
+			return;
+		}
+		if ( did_action( 'woocommerce_before_calculate_totals' ) && ! did_action( 'woocommerce_after_calculate_totals' ) ) {
+			return;
+		}
+		if ( did_action( 'woocommerce_after_calculate_totals' ) ) {
+			return;
+		}
+		$wc->cart->calculate_totals();
 	}
 
 	/**

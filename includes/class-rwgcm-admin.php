@@ -57,6 +57,7 @@ class RWGCM_Admin {
 	public static function init() {
 		add_action( 'admin_menu', array( __CLASS__, 'register_menu' ), 26 );
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_assets' ) );
+		add_filter( 'admin_body_class', array( __CLASS__, 'filter_admin_body_class' ) );
 		add_action( 'admin_footer', array( __CLASS__, 'render_wc_payments_banner' ) );
 		add_filter( 'woocommerce_get_settings_checkout', array( __CLASS__, 'filter_checkout_settings' ), 20, 2 );
 		add_action( 'admin_init', array( __CLASS__, 'register_gateway_settings_fields' ), 5 );
@@ -344,6 +345,21 @@ class RWGCM_Admin {
 		}
 		$rwgc_nav_current = 'rwgcm-license';
 		include RWGCM_PATH . 'admin/views/license-settings.php';
+	}
+
+	/**
+	 * Marks the Shipping tab so the content column can be contained.
+	 *
+	 * @param string $classes Body classes.
+	 * @return string
+	 */
+	public static function filter_admin_body_class( $classes ) {
+		$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$tab  = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( 'rwgcm-price-books' === $page && 'shipping' === $tab ) {
+			$classes .= ' rwgcm-price-books-shipping';
+		}
+		return $classes;
 	}
 
 	/**

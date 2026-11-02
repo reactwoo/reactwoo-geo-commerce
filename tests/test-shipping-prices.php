@@ -493,7 +493,11 @@ assert_true(
 		&& false !== strpos( $block_js, 'wc/cart' )
 		&& false !== strpos( $block_js, 'isDismissible: false' )
 		&& false !== strpos( $block_js, 'removeNotice' )
-		&& false !== strpos( $block_js, 'subscribe( schedule )' )
+		&& false !== strpos( $block_js, 'subscribe( syncCart )' )
+		&& false !== strpos( $block_js, 'getCartData' )
+		&& false !== strpos( $block_js, 'extensions.rwgcm' )
+		&& false !== strpos( $block_js, 'receiveCart' )
+		&& false !== strpos( $block_js, '/wc/store/v1/cart' )
 );
 assert_true(
 	'an empty notice is removed and the fallback region is a status live region',
@@ -509,8 +513,9 @@ $admin_css_early = file_get_contents( dirname( __DIR__ ) . '/admin/css/rwgcm-adm
 assert_true(
 	'shipping matrix stays inside the price books page',
 	is_string( $admin_css_early )
-		&& false !== strpos( $admin_css_early, '.rwgcm-wrap--price-books' )
-		&& false !== strpos( $admin_css_early, 'overflow-x: clip' )
+		&& false !== strpos( $admin_css_early, 'body.rwgcm-price-books-shipping #wpbody-content' )
+		&& false !== strpos( $admin_css_early, 'overflow-x: hidden' )
+		&& false !== strpos( $admin_css_early, 'position: static' )
 		&& false !== strpos( $admin_css_early, 'contain: inline-size' )
 		&& false !== strpos( $admin_css_early, 'table-layout: fixed' )
 );
@@ -536,6 +541,9 @@ assert_true( 'mini-cart cache key includes the active currency', false !== strpo
 assert_true( 'cart refresh script is printed in the footer on every cart view', false !== strpos( $src, "'wp_footer', array( __CLASS__, 'print_cart_fragment_refresh_script' )" ) && false !== strpos( $src, "array( 'jquery' )" ) && false !== strpos( $src, 'rwgcm-cart-fragments' ) );
 assert_true( 'header fragments use the filterable selector list', false !== strpos( $src, 'rwgcm_header_cart_fragment_selectors' ) && false !== strpos( $src, 'append_header_cart_fragments' ) );
 assert_true( 'calculator persists the customer session before the response is flushed', false !== strpos( $cur, "'woocommerce_calculated_shipping', array( __CLASS__, 'persist_customer_session' )" ) );
+assert_true( 'cart hydration is recognised from the REST route, not only REQUEST_URI', false !== strpos( $cur, "'rest_pre_dispatch'" ) && false !== strpos( $cur, 'function flag_store_api_route' ) && false !== strpos( $cur, 'function recalculate_cart_after_address_change' ) );
+$admin_screens = file_get_contents( dirname( __DIR__ ) . '/includes/class-rwgcm-admin.php' );
+assert_true( 'shipping tab adds a body class so the content column can be contained', is_string( $admin_screens ) && false !== strpos( $admin_screens, 'rwgcm-price-books-shipping' ) );
 assert_true( 'Store API extension data unchanged', false !== strpos( $src, "'shipping_currency_notice'   => '' === \$now['state'] ? ''" ) );
 assert_true( 'plugin loads and inits RWGCM_Shipping_Prices', false !== strpos( $plug, 'class-rwgcm-shipping-prices.php' ) && false !== strpos( $plug, 'RWGCM_Shipping_Prices::init();' ) );
 assert_true( 'guard uses shipping line meta', false !== strpos( $guard, 'RWGCM_Shipping_Prices::shipping_lines_ok( $lines' ) && false === strpos( $guard, 'shipping_priced(' ) );

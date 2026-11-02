@@ -6,36 +6,35 @@ done
 
 ## Summary
 
-0.10.0 still keeps phase 1 shipping on the GBP fallback. QA on `7b526f3` found the Checkout block was not rendering the shipping-currency notice, and the Price books → Shipping table overflowed the admin page by about 20px at 1280px. The notice now goes into the Cart and Checkout block notice lists from `extensions.rwgcm.shipping_currency_notice`, and the shipping matrix is contained in the page. Draft only. Not tagged and not merged.
+QA14: the preloaded cart extensions were empty because block hydration dispatches `/wc/store/v1/cart` while the browser URL is still `/checkout/`, so currency resolution treated the request as ordinary REST and skipped the shipping fallback. The Cart and Checkout blocks also kept the previous totals after an address change. The Shipping screen was 1300px wide at a 1280px viewport. Draft only. Not tagged and not merged.
 
 ## Files changed
 
 | File | Why |
 |------|-----|
-| assets/js/shipping-currency-notice.js | Dispatch an info notice into `wc/cart` and `wc/checkout`. Remove it when the string is empty. A `role="status"` region is inserted only when the block notice list is not showing the text. The order-meta slot is not used, because that fill is not mounted. |
-| assets/css/shipping-currency-notice.css | The notice wraps and stays within the screen, including below 782px. |
-| includes/class-rwgcm-shipping-prices.php | Load the script on block cart and checkout, including when `has_block()` misses a template. Dependencies include `wp-notices`. |
-| includes/class-rwgcm-shipping-block.php | Same script dependencies. |
-| admin/css/rwgcm-admin.css, includes/class-rwgcm-price-book-admin.php | The shipping matrix cannot widen the price books page. |
-| CHANGELOG.md, readme.txt | 0.10.0 notes for the notice and the table. |
-| tests/test-shipping-prices.php | Source checks for the notice dispatch and the contained matrix. |
+| includes/class-rwgcm-price-book-currency.php | `rest_pre_dispatch` records the Store API route so hydration does not force GBP. After `update-customer`, cached shipping rates are dropped and the cart is recalculated. |
+| includes/class-rwgcm-shipping-prices.php | Extension data is read from the same fallback state as the notice, after the cart is ready. |
+| assets/js/shipping-currency-notice.js | Subscribe to `wc/store/cart` `getCartData().extensions.rwgcm`. On a shipping-country change, `GET /wc/store/v1/cart` and `receiveCart`. |
+| includes/class-rwgcm-admin.php, admin/css/rwgcm-admin.css | Shipping tab body class. `#wpbody-content` is clipped. The matrix is not sticky and cannot widen the page. |
+| tests/test-checkout-country.php | Extension data equals the fallback in the same request, including a hydration-shaped request. |
+| tests/test-shipping-prices.php | Source checks for the cart subscription, refetch, and the contained column. |
+| CHANGELOG.md | 0.10.0 notes. |
 
 ## What was not changed
 
-- Shipping amounts, zone data, exchange rates, the cache purge, country-code normalisation, and the satellite updater
-- The classic cart and classic checkout notice
+- Zone rows, GBP costs, exchange rates, cache purge, country codes, and the satellite updater
 - No merge and no `v*` tag
 
 ## Commands run
 
 ```bash
+php -l includes/class-rwgcm-price-book-currency.php
 php -l includes/class-rwgcm-shipping-prices.php
-php -l includes/class-rwgcm-shipping-block.php
-php -l includes/class-rwgcm-price-book-admin.php
-php tests/test-shipping-prices.php
+php -l includes/class-rwgcm-admin.php
+for f in tests/test-*.php; do php "$f" || exit 1; done
 ```
 
-`tests/test-shipping-prices.php`: 211 passed, 0 failed. `php -l` reported no syntax errors. No WordPress site is running here, so the block notice and the 1280px table need a browser pass.
+All `tests/test-*.php` passed. No WordPress site is running here.
 
 ## Remaining errors
 

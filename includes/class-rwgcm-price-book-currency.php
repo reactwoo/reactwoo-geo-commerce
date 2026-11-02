@@ -74,10 +74,29 @@ class RWGCM_Price_Book_Currency {
 	private static $shipping_fallback = '';
 
 	/**
+	 * Store API routes seen during rest_do_request, including block hydration.
+	 * Hydration keeps the browser URL (for example /checkout/) so REQUEST_URI
+	 * does not contain /wc/store/. A stack so a batch sub-request can pop
+	 * without forgetting the outer route.
+	 *
+	 * @var array<int, string>
+	 */
+	private static $store_api_routes = array();
+
+	/**
+	 * True while an address change is recalculating the cart.
+	 *
+	 * @var bool
+	 */
+	private static $refreshing_cart = false;
+
+	/**
 	 * @return void
 	 */
 	public static function init() {
 		add_filter( 'woocommerce_currency', array( __CLASS__, 'filter_currency' ), 20 );
+		add_filter( 'rest_pre_dispatch', array( __CLASS__, 'note_rest_dispatch' ), 1, 3 );
+		add_filter( 'rest_post_dispatch', array( __CLASS__, 'clear_rest_dispatch' ), 999, 3 );
 		add_filter( 'default_checkout_billing_country', array( __CLASS__, 'filter_default_checkout_country' ), 20, 2 );
 		add_filter( 'default_checkout_shipping_country', array( __CLASS__, 'filter_default_checkout_country' ), 20, 2 );
 		add_filter( 'woocommerce_customer_default_location_array', array( __CLASS__, 'filter_default_location' ), 20 );
@@ -85,6 +104,8 @@ class RWGCM_Price_Book_Currency {
 		add_action( 'woocommerce_checkout_update_customer', array( __CLASS__, 'remember_checkout_billing' ), 10, 2 );
 		add_action( 'woocommerce_store_api_checkout_update_customer_from_request', array( __CLASS__, 'remember_store_api_billing' ), 10, 2 );
 		add_action( 'woocommerce_store_api_cart_update_customer_from_request', array( __CLASS__, 'remember_store_api_billing' ), 10, 2 );
+		add_action( 'woocommerce_store_api_checkout_update_customer_from_request', array( __CLASS__, 'recalculate_cart_after_address_change' ), 20, 2 );
+		add_action( 'woocommerce_store_api_cart_update_customer_from_request', array( __CLASS__, 'recalculate_cart_after_address_change' ), 20, 2 );
 		// The shipping calculator updates the customer, then the cart page renders.
 		// WooCommerce writes that session at shutdown, after the response is flushed,
 		// so a fragment request started from the response still sees the previous
@@ -689,7 +710,7 @@ class RWGCM_Price_Book_Currency {
 			'cron'       => ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) || ( defined( 'DOING_CRON' ) && DOING_CRON ),
 			'cli'        => defined( 'WP_CLI' ) && WP_CLI,
 			'rest'       => $rest,
-			'store_api'  => $rest && self::is_store_api_request_uri(),
+			'store_api'  => ( $rest && self::is_store_api_request_uri() ) || '' !== self::current_store_api_route(),
 			'price_api'  => self::is_geo_price_request_uri(),
 			'admin'      => function_exists( 'is_admin' ) && is_admin(),
 			'front_ajax' => function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() && isset( $_REQUEST['wc-ajax'] ), // phpcs:ignore WordPress.Security.NonceVerification.Recommended
@@ -824,20 +845,123 @@ class RWGCM_Price_Book_Currency {
 	 * @return bool
 	 */
 	private static function is_store_api_cart_or_checkout( $checkout_only ) {
-		if ( ! defined( 'REST_REQUEST' ) || ! REST_REQUEST ) {
+		$flagged = self::current_store_api_route();
+		$rest    = ( defined( 'REST_REQUEST' ) && REST_REQUEST ) || '' !== $flagged;
+		if ( ! $rest ) {
 			return false;
 		}
 		$uri = isset( $_SERVER['REQUEST_URI'] ) ? (string) $_SERVER['REQUEST_URI'] : '';
-		if ( false === strpos( $uri, '/wc/store/' ) ) {
+		$hay = $flagged . ' ' . $uri;
+		if ( false === strpos( $hay, '/wc/store/' ) ) {
 			return false;
 		}
-		if ( false !== strpos( $uri, '/checkout' ) ) {
+		if ( false !== strpos( $hay, '/checkout' ) ) {
 			return true;
 		}
 		if ( $checkout_only ) {
 			return false;
 		}
-		return false !== strpos( $uri, '/cart' );
+		return false !== strpos( $hay, '/cart' );
+	}
+
+	/**
+	 * Remember a Store API route while it is dispatching.
+	 * Block hydration calls rest_do_request( '/wc/store/v1/cart' ) with the
+	 * browser still on /checkout/, so REQUEST_URI alone would force GBP and
+	 * the preloaded extensions would miss the fallback notice.
+	 *
+	 * @param mixed $result  Short-circuit result.
+	 * @param mixed $server  REST server.
+	 * @param mixed $request REST request.
+	 * @return mixed
+	 */
+	public static function note_rest_dispatch( $result, $server, $request ) {
+		unset( $server );
+		$route = ( is_object( $request ) && method_exists( $request, 'get_route' ) ) ? (string) $request->get_route() : '';
+		self::flag_store_api_route( $route );
+		return $result;
+	}
+
+	/**
+	 * @param mixed $result  Response.
+	 * @param mixed $server  REST server.
+	 * @param mixed $request REST request.
+	 * @return mixed
+	 */
+	public static function clear_rest_dispatch( $result, $server, $request ) {
+		unset( $server, $request );
+		self::clear_store_api_route();
+		return $result;
+	}
+
+	/**
+	 * @param string $route REST route, for example /wc/store/v1/cart.
+	 * @return void
+	 */
+	public static function flag_store_api_route( $route ) {
+		$route = (string) $route;
+		self::$store_api_routes[] = ( false !== strpos( $route, '/wc/store/' ) ) ? $route : '';
+	}
+
+	/**
+	 * @return void
+	 */
+	public static function clear_store_api_route() {
+		if ( ! empty( self::$store_api_routes ) ) {
+			array_pop( self::$store_api_routes );
+		}
+	}
+
+	/**
+	 * @return string
+	 */
+	public static function current_store_api_route() {
+		if ( empty( self::$store_api_routes ) ) {
+			return '';
+		}
+		return (string) end( self::$store_api_routes );
+	}
+
+	/**
+	 * Address changes can leave session shipping rates and a previous currency
+	 * resolution in place. Recalculate so the cart response matches a fresh
+	 * GET /wc/store/v1/cart.
+	 *
+	 * @param mixed $customer Customer.
+	 * @param mixed $request  Request.
+	 * @return void
+	 */
+	public static function recalculate_cart_after_address_change( $customer, $request ) {
+		unset( $customer, $request );
+		if ( self::$refreshing_cart || self::$resolving ) {
+			return;
+		}
+		if ( ! function_exists( 'WC' ) ) {
+			return;
+		}
+		$wc = WC();
+		if ( ! $wc || ! $wc->cart || ! method_exists( $wc->cart, 'calculate_totals' ) ) {
+			return;
+		}
+		if ( $wc->session && method_exists( $wc->session, 'get_session_data' ) && method_exists( $wc->session, 'set' ) ) {
+			$data = $wc->session->get_session_data();
+			if ( is_array( $data ) ) {
+				foreach ( array_keys( $data ) as $key ) {
+					if ( is_string( $key ) && 0 === strpos( $key, 'shipping_for_package_' ) ) {
+						$wc->session->set( $key, null );
+					}
+				}
+			}
+		}
+		self::$shipping_fallback = '';
+		self::$refreshing_cart   = true;
+		try {
+			// Currency resolution must run inside calculate_totals. $resolving
+			// stays false here so get_woocommerce_currency() records the fallback.
+			$wc->cart->calculate_totals();
+		} finally {
+			self::$refreshing_cart = false;
+		}
 	}
 
 	/**

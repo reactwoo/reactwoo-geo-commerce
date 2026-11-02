@@ -224,6 +224,15 @@ $GLOBALS['rw']['ship_country'] = 'ZA';
 RWGCM_Shipping_Prices::reset_memo();
 $held = RWGCM_Shipping_Prices::current_notice();
 assert_true( 'unpriced ZA shipping holds the cart in GBP and says so', 'GBP' === rw_currency() && false !== strpos( $held, 'GBP' ) && false !== strpos( $held, 'ZAR' ) );
+$ext = RWGCM_Shipping_Prices::store_api_data();
+assert_true(
+	'extension data equals the fallback state in the same request',
+	is_array( $ext )
+		&& $ext['shipping_fallback_currency'] === RWGCM_Price_Book_Currency::shipping_fallback_currency()
+		&& $ext['shipping_currency_notice'] === RWGCM_Shipping_Prices::current_notice()
+		&& 'ZAR' === $ext['shipping_fallback_currency']
+		&& $held === $ext['shipping_currency_notice']
+);
 $GLOBALS['rw']['ship_country'] = 'GB';
 RWGCM_Shipping_Prices::reset_memo();
 RWGCM_Price_Book_Currency::persist_customer_session();
@@ -284,6 +293,38 @@ assert_true(
 );
 assert_true( 'saving the manual amounts did not change the GBP costs', '10' === $priced_zone['cost'] && '5' === $priced_zone['class_cost_12'] );
 assert_true( 'the notice is gone once shipping is priced in ZAR', '' === RWGCM_Shipping_Prices::current_notice() );
+
+// 11. Block hydration: REST_REQUEST with the browser still on /checkout/.
+// Without the cart route flag the preloaded extensions stay empty. With it,
+// they match the GBP fallback in the same request.
+if ( ! defined( 'REST_REQUEST' ) ) {
+	define( 'REST_REQUEST', true );
+}
+$_SERVER['REQUEST_URI'] = '/checkout/';
+RWGCM_Price_Book_Currency::clear_store_api_route();
+assert_true( 'a checkout page request during REST forces the store currency', RWGCM_Price_Book_Currency::forces_store_currency() );
+RWGCM_Price_Book_Currency::flag_store_api_route( '/wc/store/v1/cart' );
+assert_true( 'flagged cart hydration does not force the store currency', ! RWGCM_Price_Book_Currency::forces_store_currency() );
+rw_reset();
+rw_books();
+rw_cart( array( 3655 ) );
+$GLOBALS['rw']['ship'] = true;
+$GLOBALS['rw']['opts']['woocommerce_flat_rate_1_settings'] = array( 'cost' => '40' );
+$GLOBALS['rw']['ship_country'] = 'ZA';
+RWGCM_Shipping_Prices::reset_memo();
+$hydrated = RWGCM_Shipping_Prices::store_api_data();
+assert_true(
+	'hydrated cart extension matches the GBP fallback in the same request',
+	is_array( $hydrated )
+		&& 'ZAR' === $hydrated['shipping_fallback_currency']
+		&& $hydrated['shipping_fallback_currency'] === RWGCM_Price_Book_Currency::shipping_fallback_currency()
+		&& $hydrated['shipping_currency_notice'] === RWGCM_Shipping_Prices::current_notice()
+		&& false !== strpos( $hydrated['shipping_currency_notice'], 'GBP' )
+		&& false !== strpos( $hydrated['shipping_currency_notice'], 'ZAR' )
+		&& 'GBP' === rw_currency()
+);
+RWGCM_Price_Book_Currency::clear_store_api_route();
+assert_true( 'clearing the hydration route forces the store currency again', RWGCM_Price_Book_Currency::forces_store_currency() );
 
 echo "\n{$passed} passed, {$failed} failed\n";
 exit( $failed > 0 ? 1 : 0 );
