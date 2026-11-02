@@ -503,6 +503,9 @@ assert_true(
 		&& false !== strpos( $block_js, 'isCalculating' )
 		&& false !== strpos( $block_js, 'getLastCartUpdate' )
 		&& false !== strpos( $block_js, 'wasPending' )
+		&& false !== strpos( $block_js, 'function noticeContexts' )
+		&& false !== strpos( $block_js, 'scheduleFallbackRemoval' )
+		&& false !== strpos( $block_js, 'for ( var i = 1; i < nodes.length; i++ )' )
 		&& false !== strpos( $block_js, 'receiveCart' )
 		&& false !== strpos( $block_js, '/wc/store/v1/cart' )
 );
@@ -515,7 +518,7 @@ assert_true(
 );
 assert_true(
 	'an empty notice is removed and the fallback region is a status live region',
-	false !== strpos( $block_js, 'if ( ! text )' )
+	false !== strpos( $block_js, 'if ( ! text || ! active[ context ] )' )
 		&& false !== strpos( $block_js, 'clearFallback()' )
 		&& false !== strpos( $block_js, "setAttribute( 'role', 'status' )" )
 		&& false !== strpos( $block_js, 'rwgcm-shipping-currency-notice--block' )

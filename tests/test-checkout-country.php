@@ -335,6 +335,15 @@ $GLOBALS['rw']['ship_country'] = 'ZA';
 RWGCM_Shipping_Prices::reset_memo();
 $warm_a = RWGCM_Shipping_Prices::store_api_data();
 $warm_b = RWGCM_Shipping_Prices::store_api_data();
+RWGCM_Price_Book_Currency::reset_shipping_state_cache();
+$computes_before = RWGCM_Price_Book_Currency::shipping_state_compute_count();
+RWGCM_Shipping_Prices::store_api_data();
+RWGCM_Price_Book_Currency::shipping_currency_state();
+RWGCM_Shipping_Prices::store_api_data();
+assert_true(
+	'the shipping decision is calculated once per destination in a request',
+	RWGCM_Price_Book_Currency::shipping_state_compute_count() === $computes_before + 1
+);
 $warm_state = RWGCM_Price_Book_Currency::shipping_currency_state();
 assert_true(
 	'a second hydration with warm session rates still returns the ZAR notice',

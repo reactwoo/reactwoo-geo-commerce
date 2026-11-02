@@ -165,22 +165,48 @@
 		return typeof notice.message === 'string' ? notice.message : '';
 	}
 
+	/**
+	 * One list for the block on this page. Checkout must not also fill wc/cart,
+	 * or the same sentence is rendered twice.
+	 *
+	 * @return {Array<string>}
+	 */
+	function noticeContexts() {
+		var pair = contexts();
+		if ( onCheckoutBlock() ) {
+			return [ pair[ 0 ] ];
+		}
+		if ( document && document.querySelector && document.querySelector( '.wc-block-cart, .wp-block-woocommerce-cart' ) ) {
+			return [ pair[ 1 ] ];
+		}
+		return pair;
+	}
+
+	function findNotice( list ) {
+		var current = null;
+		for ( var i = 0; i < list.length; i++ ) {
+			if ( list[ i ] && list[ i ].id === NOTICE_ID ) {
+				current = list[ i ];
+				break;
+			}
+		}
+		return current;
+	}
+
 	function syncNotices( text ) {
 		var notices = select( 'core/notices' );
 		var actions = dispatch( 'core/notices' );
 		if ( ! notices || ! actions || ! actions.createNotice || ! actions.removeNotice || ! notices.getNotices ) {
 			return;
 		}
+		var active = {};
+		noticeContexts().forEach( function ( context ) {
+			active[ context ] = true;
+		} );
 		contexts().forEach( function ( context ) {
 			var list = notices.getNotices( context ) || [];
-			var current = null;
-			for ( var i = 0; i < list.length; i++ ) {
-				if ( list[ i ] && list[ i ].id === NOTICE_ID ) {
-					current = list[ i ];
-					break;
-				}
-			}
-			if ( ! text ) {
+			var current = findNotice( list );
+			if ( ! text || ! active[ context ] ) {
 				if ( current ) {
 					actions.removeNotice( NOTICE_ID, context );
 				}
@@ -222,32 +248,55 @@
 	 *
 	 * @param {string} text Notice text.
 	 */
+	function scheduleFallbackRemoval( text ) {
+		var tries = 0;
+		function tick() {
+			if ( ! text || bannerShows( text ) ) {
+				clearFallback();
+				return;
+			}
+			tries++;
+			if ( tries < 8 ) {
+				var paint = window.requestAnimationFrame || function ( cb ) { return window.setTimeout( cb, 16 ); };
+				paint( tick );
+			}
+		}
+		var paint = window.requestAnimationFrame || function ( cb ) { return window.setTimeout( cb, 16 ); };
+		paint( tick );
+	}
+
 	function ensureVisible( text ) {
-		if ( ! document || ! document.querySelectorAll ) {
+		if ( ! document || ! document.querySelector ) {
 			return;
 		}
+		// The notice list is the one visible copy. Its banner may also hold
+		// one screen-reader span. Drop every fallback node once that list shows.
 		if ( ! text || bannerShows( text ) ) {
 			clearFallback();
 			return;
 		}
-		var hosts = document.querySelectorAll( '.wc-block-checkout, .wc-block-cart, .wp-block-woocommerce-checkout, .wp-block-woocommerce-cart' );
-		if ( ! hosts.length ) {
-			return;
-		}
-		for ( var i = 0; i < hosts.length; i++ ) {
-			var host = hosts[ i ];
-			var node = host.querySelector( '[data-rwgcm-shipping-notice]' );
-			if ( ! node ) {
-				node = document.createElement( 'div' );
-				node.setAttribute( 'data-rwgcm-shipping-notice', '1' );
-				node.className = 'woocommerce-info rwgcm-shipping-currency-notice rwgcm-shipping-currency-notice--block';
-				node.setAttribute( 'role', 'status' );
-				host.insertBefore( node, host.firstChild );
-			}
-			if ( node.textContent !== text ) {
-				node.textContent = text;
+		var nodes = document.querySelectorAll( '[data-rwgcm-shipping-notice]' );
+		var node = nodes.length ? nodes[ 0 ] : null;
+		for ( var i = 1; i < nodes.length; i++ ) {
+			if ( nodes[ i ].parentNode ) {
+				nodes[ i ].parentNode.removeChild( nodes[ i ] );
 			}
 		}
+		if ( ! node ) {
+			var host = document.querySelector( '.wc-block-checkout, .wp-block-woocommerce-checkout, .wc-block-cart, .wp-block-woocommerce-cart' );
+			if ( ! host ) {
+				return;
+			}
+			node = document.createElement( 'div' );
+			node.setAttribute( 'data-rwgcm-shipping-notice', '1' );
+			node.className = 'woocommerce-info rwgcm-shipping-currency-notice rwgcm-shipping-currency-notice--block';
+			node.setAttribute( 'role', 'status' );
+			host.insertBefore( node, host.firstChild );
+		}
+		if ( node.textContent !== text ) {
+			node.textContent = text;
+		}
+		scheduleFallbackRemoval( text );
 	}
 
 	/**

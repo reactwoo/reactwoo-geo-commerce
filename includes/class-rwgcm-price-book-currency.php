@@ -84,18 +84,31 @@ class RWGCM_Price_Book_Currency {
 	private static $store_api_routes = array();
 
 	/**
-	 * True while an address change is recalculating the cart.
-	 *
-	 * @var bool
-	 */
-	private static $refreshing_cart = false;
-
-	/**
 	 * True while shipping_currency_state() is reading the cart.
 	 *
 	 * @var bool
 	 */
 	private static $evaluating = false;
+
+	/**
+	 * Memo for this request. The currency filter and the cart extension both
+	 * need the same decision; the second call must not walk zones again.
+	 *
+	 * @var array{active: string, wanted: string, country: string}|null
+	 */
+	private static $state_cache = null;
+
+	/**
+	 * @var string
+	 */
+	private static $state_cache_key = '';
+
+	/**
+	 * How many times the decision was calculated in this request.
+	 *
+	 * @var int
+	 */
+	private static $state_computes = 0;
 
 	/**
 	 * @return void
@@ -699,11 +712,19 @@ class RWGCM_Price_Book_Currency {
 				'country' => '',
 			);
 		}
-		$already            = self::$resolving;
-		self::$resolving    = true;
-		self::$evaluating   = true;
+		$already          = self::$resolving;
+		self::$resolving  = true;
+		self::$evaluating = true;
 		try {
-			$state = self::compute_shipping_currency_state();
+			$key = self::shipping_state_cache_key();
+			if ( is_array( self::$state_cache ) && self::$state_cache_key === $key ) {
+				$state = self::$state_cache;
+			} else {
+				$state                    = self::compute_shipping_currency_state();
+				self::$state_computes++;
+				self::$state_cache     = $state;
+				self::$state_cache_key = $key;
+			}
 		} finally {
 			self::$evaluating = false;
 			if ( ! $already ) {
@@ -712,6 +733,49 @@ class RWGCM_Price_Book_Currency {
 		}
 		self::$shipping_fallback = $state['wanted'];
 		return $state;
+	}
+
+	/**
+	 * Times the shipping decision was calculated in this request.
+	 *
+	 * @return int
+	 */
+	public static function shipping_state_compute_count() {
+		return self::$state_computes;
+	}
+
+	/**
+	 * Drop the per-request memo. The next read calculates once.
+	 *
+	 * @return void
+	 */
+	public static function reset_shipping_state_cache() {
+		self::$state_cache     = null;
+		self::$state_cache_key = '';
+	}
+
+	/**
+	 * Country plus cart line ids. Does not look up shipping rates.
+	 *
+	 * @return string
+	 */
+	private static function shipping_state_cache_key() {
+		$billing = self::entered_billing_country();
+		$geo     = self::geo_country();
+		if ( ! self::cart_is_ready() ) {
+			return 'nocart|' . $billing . '|' . $geo;
+		}
+		$ids   = array();
+		$items = WC()->cart->get_cart();
+		if ( is_array( $items ) ) {
+			foreach ( $items as $item ) {
+				if ( ! is_array( $item ) || empty( $item['data'] ) || ! is_object( $item['data'] ) || ! method_exists( $item['data'], 'get_id' ) ) {
+					continue;
+				}
+				$ids[] = (string) $item['data']->get_id();
+			}
+		}
+		return $billing . '|' . self::customer_shipping_country() . '|' . $geo . '|' . ( self::cart_needs_shipping() ? 'ship' : 'virtual' ) . '|' . implode( ',', $ids );
 	}
 
 	/**
@@ -1050,34 +1114,25 @@ class RWGCM_Price_Book_Currency {
 	 */
 	public static function recalculate_cart_after_address_change( $customer, $request ) {
 		unset( $customer, $request );
-		if ( self::$refreshing_cart || self::$resolving ) {
-			return;
-		}
+		// WooCommerce calculates totals once after this hook. Doing it here
+		// as well runs shipping a second time on the same update-customer request.
+		self::$shipping_fallback = '';
+		self::reset_shipping_state_cache();
 		if ( ! function_exists( 'WC' ) ) {
 			return;
 		}
 		$wc = WC();
-		if ( ! $wc || ! $wc->cart || ! method_exists( $wc->cart, 'calculate_totals' ) ) {
+		if ( ! $wc || ! $wc->session || ! method_exists( $wc->session, 'get_session_data' ) || ! method_exists( $wc->session, 'set' ) ) {
 			return;
 		}
-		if ( $wc->session && method_exists( $wc->session, 'get_session_data' ) && method_exists( $wc->session, 'set' ) ) {
-			$data = $wc->session->get_session_data();
-			if ( is_array( $data ) ) {
-				foreach ( array_keys( $data ) as $key ) {
-					if ( is_string( $key ) && 0 === strpos( $key, 'shipping_for_package_' ) ) {
-						$wc->session->set( $key, null );
-					}
-				}
-			}
+		$data = $wc->session->get_session_data();
+		if ( ! is_array( $data ) ) {
+			return;
 		}
-		self::$shipping_fallback = '';
-		self::$refreshing_cart   = true;
-		try {
-			// Currency resolution must run inside calculate_totals. $resolving
-			// stays false here so get_woocommerce_currency() records the fallback.
-			$wc->cart->calculate_totals();
-		} finally {
-			self::$refreshing_cart = false;
+		foreach ( array_keys( $data ) as $key ) {
+			if ( is_string( $key ) && 0 === strpos( $key, 'shipping_for_package_' ) ) {
+				$wc->session->set( $key, null );
+			}
 		}
 	}
 
