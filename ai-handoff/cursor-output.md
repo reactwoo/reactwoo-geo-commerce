@@ -4,7 +4,7 @@
 
 done
 
-Release zips no longer put a `.js` file on the ClamAV Foxhole entries, and Commerce's own updater no longer stores a ten-minute R2 URL in `update_plugins`. Versions were not bumped. Not tagged and not merged.
+Release zips no longer put a `.js` file on the ClamAV Foxhole entries, and Commerce's own updater no longer stores a ten-minute R2 URL in `update_plugins`. Version is 0.10.1 for QA. Not tagged and not merged.
 
 ## Files changed
 
@@ -16,7 +16,6 @@ Release zips no longer put a `.js` file on the ClamAV Foxhole entries, and Comme
 
 ## Not changed
 
-- Plugin version, readme stable tag, and changelog.
 - Geo Core's updater path. When Core's updater is real, Commerce still registers with it and does not install its own download hook.
 - Other platform calls still use the 30s login timeout.
 
@@ -24,6 +23,7 @@ Release zips no longer put a `.js` file on the ClamAV Foxhole entries, and Comme
 
 - `php tests/test-updater.php` — updater children passed (stub 65, real 9, wporg 7, inactive 7, missing 6, client 6).
 - `python3 tests/test-zip-js-order.py` — zip JS entry order checks passed, including the built zip.
+- `for f in tests/test-*.php; do php "$f"; done` and the zip test again after the 0.10.1 bump — all passed.
 
 ## Remaining errors
 

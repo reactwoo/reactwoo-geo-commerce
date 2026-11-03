@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-11-03
+
+### Fixed
+- Release zips no longer place a `.js` file at entries 1, 2, 4, or 11–24. Those positions are what Sanesecurity Foxhole `JS_Zip_1`, `JS_Zip_2`, `JS_Zip_4`, and `JS_Zip_11`–`JS_Zip_24` flag. The plugin file and `readme.txt` are written first, then the other non-JS files, then `.js`, in an order that stays the same between builds.
+- Commerce's own updater no longer stores the 10-minute signed R2 `download_url` in the `update_plugins` transient. The package is a `reactwoo-update://` placeholder. `upgrader_pre_download` runs one fresh `/api/v5/updates/check` (10 second timeout) and downloads that new link.
+
+### Changed
+- A successful update check is reused for one hour. The cache does not include the download URL. A failed licence login is remembered for 15 minutes. Saving `update_plugins` when only `last_checked` changed does not log in or call the updates API.
+- The update path uses a 10 second licence login timeout and an 8 second check timeout. Other API calls still use the 30 second login timeout.
+
 ## [0.10.0] - 2026-11-02
 
 ### Added
