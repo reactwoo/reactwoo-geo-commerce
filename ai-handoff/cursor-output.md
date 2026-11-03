@@ -11,19 +11,19 @@ Release zips no longer put a `.js` file on the ClamAV Foxhole entries, and Comme
 - `scripts/package_zip.py` — write `reactwoo-geo-commerce.php` and `readme.txt`, then other non-JS files, then `.js`, in a stable order. The zip is refused when a `.js` file would match `Sanesecurity.Foxhole.JS_Zip_1`, `_2`, `_4`, or `_11`–`_24`.
 - `tests/test-zip-js-order.py` — applies those rules to synthetic zips and to the built Commerce zip.
 - `includes/class-rwgcm-updater.php` — placeholder package, fresh signed URL in `upgrader_pre_download`, one-hour offer cache, 15-minute failed-login cache, skip when a save only changes `last_checked`. Check timeout 8s, install check 10s, login 10s.
-- `includes/class-rwgcm-platform-client.php` — `get_access_token()` and `get_bearer_for_updates()` accept a timeout. The default remains 30s.
-- `tests/test-updater.php` — covers the placeholder, caches, timeouts, and install-time URL, including the real platform client.
+- `includes/class-rwgcm-platform-client.php` — every login caller shares the success token cache and a 900-second failed-login cache. Ordinary front-end requests do not log in. Non-admin callers use a 10s timeout.
+- `tests/test-updater.php` — covers the placeholder, caches, timeouts, install-time URL, a front-end skip, and two bad-key runs making one login.
 
 ## Not changed
 
 - Geo Core's updater path. When Core's updater is real, Commerce still registers with it and does not install its own download hook.
-- Other platform calls still use the 30s login timeout.
+- An admin screen that does not pass its own timeout still uses 30 seconds. Cron, WP-CLI, and other non-admin callers use 10 seconds. Ordinary front-end requests do not log in.
 
 ## Commands
 
-- `php tests/test-updater.php` — updater children passed (stub 65, real 9, wporg 7, inactive 7, missing 6, client 6).
+- `php tests/test-updater.php` — updater children passed (stub 65, real 9, wporg 7, inactive 7, missing 6, client 9).
 - `python3 tests/test-zip-js-order.py` — zip JS entry order checks passed, including the built zip.
-- `for f in tests/test-*.php; do php "$f"; done` and the zip test again after the 0.10.1 bump — all passed.
+- `for f in tests/test-*.php; do php "$f"; done` and the zip test — all passed. Version remains 0.10.1.
 
 ## Remaining errors
 

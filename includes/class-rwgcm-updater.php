@@ -46,6 +46,7 @@ class RWGCM_Updater {
 
 	/**
 	 * How long a failed license login is remembered so the plugins screen does not retry it.
+	 * Seconds, not minutes: 900 is 15 minutes.
 	 */
 	const LOGIN_FAIL_TTL = 900;
 

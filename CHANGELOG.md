@@ -15,7 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - A successful update check is reused for one hour. The cache does not include the download URL. A failed licence login is remembered for 15 minutes. Saving `update_plugins` when only `last_checked` changed does not log in or call the updates API.
-- The update path uses a 10 second licence login timeout and an 8 second check timeout. Other API calls still use the 30 second login timeout.
+- The update path uses a 10 second licence login timeout and an 8 second check timeout. An admin screen that does not pass its own timeout still uses 30 seconds. Cron, WP-CLI, and any other non-admin caller use 10 seconds.
+- A failed licence login is remembered for 15 minutes (900 seconds) inside `RWGCM_Platform_Client::get_access_token()`, so the updater, the licence notice, and any other caller share that cache and the success token cache. Ordinary front-end requests do not call `/api/v5/auth/login`. The same failure is also stored with an absolute expiry, so a transient layer that drops the flag after a few seconds does not cause another login.
 
 ## [0.10.0] - 2026-11-02
 

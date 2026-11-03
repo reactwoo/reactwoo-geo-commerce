@@ -1020,6 +1020,56 @@ function rwgcm_updater_assert_own( $mode ) {
  * @return void
  */
 function rwgcm_updater_assert_platform_client() {
+	$GLOBALS['rw_is_admin'] = true;
+	$GLOBALS['rw_cron']     = false;
+	$GLOBALS['rw_options']  = array();
+	if ( ! function_exists( 'is_admin' ) ) {
+		/**
+		 * @return bool
+		 */
+		function is_admin() { // phpcs:ignore
+			return ! empty( $GLOBALS['rw_is_admin'] );
+		}
+	}
+	if ( ! function_exists( 'wp_doing_cron' ) ) {
+		/**
+		 * @return bool
+		 */
+		function wp_doing_cron() { // phpcs:ignore
+			return ! empty( $GLOBALS['rw_cron'] );
+		}
+	}
+	if ( ! function_exists( 'get_option' ) ) {
+		/**
+		 * @param string $key Key.
+		 * @param mixed  $default Default.
+		 * @return mixed
+		 */
+		function get_option( $key, $default = false ) { // phpcs:ignore
+			return array_key_exists( $key, $GLOBALS['rw_options'] ) ? $GLOBALS['rw_options'][ $key ] : $default;
+		}
+	}
+	if ( ! function_exists( 'update_option' ) ) {
+		/**
+		 * @param string $key Key.
+		 * @param mixed  $value Value.
+		 * @return bool
+		 */
+		function update_option( $key, $value ) { // phpcs:ignore
+			$GLOBALS['rw_options'][ $key ] = $value;
+			return true;
+		}
+	}
+	if ( ! function_exists( 'delete_option' ) ) {
+		/**
+		 * @param string $key Key.
+		 * @return bool
+		 */
+		function delete_option( $key ) { // phpcs:ignore
+			unset( $GLOBALS['rw_options'][ $key ] );
+			return true;
+		}
+	}
 	if ( ! class_exists( 'RWGCM_Settings', false ) ) {
 		/**
 		 * Licence stand-in. The real settings class is not loaded in this process.
@@ -1073,6 +1123,59 @@ function rwgcm_updater_assert_platform_client() {
 	rwgcm_updater_assert(
 		'get_bearer_for_updates passes the timeout through to login',
 		'jwt-from-login' === $bearer && 10 === (int) $GLOBALS['rw_posts'][ count( $GLOBALS['rw_posts'] ) - 1 ]['args']['timeout']
+	);
+
+	RWGCM_Platform_Client::clear_token_cache();
+	$GLOBALS['rw_is_admin'] = false;
+	$GLOBALS['rw_cron']     = false;
+	$posts_before           = count( $GLOBALS['rw_posts'] );
+	$skipped                = RWGCM_Platform_Client::get_access_token();
+	$skipped_again          = RWGCM_Platform_Client::get_bearer_for_updates();
+	rwgcm_updater_assert(
+		'an ordinary front-end request does not log in',
+		is_wp_error( $skipped )
+			&& 'rwgcm_login_skipped' === $skipped->get_error_code()
+			&& null === $skipped_again
+			&& count( $GLOBALS['rw_posts'] ) === $posts_before
+	);
+
+	$GLOBALS['rw_cron']          = true;
+	$GLOBALS['rw_post_response'] = array(
+		'response' => array( 'code' => 401 ),
+		'body'     => wp_json_encode( array( 'message' => 'Invalid licence key' ) ),
+	);
+	$posts_before = count( $GLOBALS['rw_posts'] );
+	$first        = RWGCM_Platform_Client::get_access_token();
+	$second       = RWGCM_Platform_Client::get_access_token();
+	$third        = RWGCM_Platform_Client::get_bearer_for_updates();
+	$login_posts  = 0;
+	foreach ( array_slice( $GLOBALS['rw_posts'], $posts_before ) as $post ) {
+		if ( false !== strpos( (string) $post['url'], '/api/v5/auth/login' ) ) {
+			++$login_posts;
+		}
+	}
+	$fail_ttls = array();
+	foreach ( $GLOBALS['rw_transients'] as $key => $row ) {
+		if ( 0 === strpos( (string) $key, 'rwgcm_login_fail_' ) ) {
+			$fail_ttls[] = (int) $row['ttl'];
+		}
+	}
+	$fail_option = get_option( 'rwgcm_login_fail', array() );
+	rwgcm_updater_assert(
+		'two runs with a bad key make at most one login',
+		is_wp_error( $first )
+			&& is_wp_error( $second )
+			&& null === $third
+			&& 1 === $login_posts
+			&& 10 === (int) $GLOBALS['rw_posts'][ $posts_before ]['args']['timeout']
+	);
+	rwgcm_updater_assert(
+		'a failed login is cached for 900 seconds',
+		array( 900 ) === $fail_ttls
+			&& is_array( $fail_option )
+			&& isset( $fail_option['until'] )
+			&& (int) $fail_option['until'] >= time() + 900 - 5
+			&& (int) $fail_option['until'] <= time() + 900
 	);
 }
 

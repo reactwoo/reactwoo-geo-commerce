@@ -17,6 +17,18 @@ class RWGCM_Platform_Client {
 	const PRODUCT_SLUG     = 'reactwoo-geo-commerce';
 
 	/**
+	 * How long a failed licence login is remembered. WordPress transient
+	 * expiration is seconds, so this is 900 — not 15.
+	 */
+	const LOGIN_FAIL_TTL = 900;
+
+	/**
+	 * Absolute expiry for a failed login. Survives a transient layer that
+	 * drops the flag after a few seconds.
+	 */
+	const LOGIN_FAIL_OPTION = 'rwgcm_login_fail';
+
+	/**
 	 * @return string
 	 */
 	public static function get_api_base() {
@@ -74,13 +86,14 @@ class RWGCM_Platform_Client {
 	 */
 	public static function clear_token_cache() {
 		delete_transient( self::TOKEN_TRANSIENT );
+		self::clear_login_failure();
 	}
 
 	/**
-	 * @param int $timeout Login HTTP timeout in seconds. The update path passes 10; other callers keep 30.
+	 * @param int|null $timeout Login HTTP timeout in seconds. Null uses 30 for an admin-triggered action and 10 otherwise. The update path passes 10.
 	 * @return string|null
 	 */
-	public static function get_bearer_for_updates( $timeout = 30 ) {
+	public static function get_bearer_for_updates( $timeout = null ) {
 		$token = self::get_access_token( $timeout );
 		if ( is_wp_error( $token ) || ! is_string( $token ) || '' === $token ) {
 			return null;
@@ -91,15 +104,15 @@ class RWGCM_Platform_Client {
 	/**
 	 * Bearer JWT for Authorization header, refreshed via login when needed.
 	 *
-	 * @param int $timeout Login HTTP timeout in seconds. The update path passes 10; other callers keep 30.
+	 * Every caller shares the success token cache and the 15-minute failed-login
+	 * cache. Ordinary front-end requests never start a login.
+	 *
+	 * @param int|null $timeout Login HTTP timeout in seconds. Null uses 30 for an admin-triggered action and 10 otherwise.
 	 * @return string|\WP_Error
 	 */
-	public static function get_access_token( $timeout = 30 ) {
-		$timeout = (int) $timeout;
-		if ( $timeout < 1 ) {
-			$timeout = 30;
-		}
-		$cached = get_transient( self::TOKEN_TRANSIENT );
+	public static function get_access_token( $timeout = null ) {
+		$timeout = self::resolve_login_timeout( $timeout );
+		$cached  = get_transient( self::TOKEN_TRANSIENT );
 		if ( is_array( $cached ) && ! empty( $cached['token'] ) && isset( $cached['expires'] ) && (int) $cached['expires'] > time() + 120 ) {
 			return (string) $cached['token'];
 		}
@@ -107,6 +120,14 @@ class RWGCM_Platform_Client {
 		$license = self::get_license_key();
 		if ( '' === $license ) {
 			return new WP_Error( 'rwgcm_no_license', __( 'Save a Geo Commerce license key before validating or updating this plugin.', 'reactwoo-geo-commerce' ) );
+		}
+
+		if ( self::login_failure_is_cached( $license ) ) {
+			return new WP_Error( 'rwgcm_login_failed', __( 'License login failed.', 'reactwoo-geo-commerce' ) );
+		}
+
+		if ( ! self::login_is_allowed() ) {
+			return new WP_Error( 'rwgcm_login_skipped', __( 'License login is not run on ordinary front-end requests.', 'reactwoo-geo-commerce' ) );
 		}
 
 		$domain = self::get_site_domain();
@@ -132,6 +153,7 @@ class RWGCM_Platform_Client {
 			)
 		);
 		if ( is_wp_error( $response ) ) {
+			self::remember_login_failure( $license );
 			return $response;
 		}
 
@@ -139,15 +161,18 @@ class RWGCM_Platform_Client {
 		$raw  = wp_remote_retrieve_body( $response );
 		$data = json_decode( $raw, true );
 		if ( $code < 200 || $code >= 300 || ! is_array( $data ) ) {
+			self::remember_login_failure( $license );
 			$msg = isset( $data['message'] ) ? (string) $data['message'] : __( 'License login failed.', 'reactwoo-geo-commerce' );
 			return new WP_Error( 'rwgcm_login_failed', $msg, array( 'status' => $code ) );
 		}
 
 		$token = isset( $data['access_token'] ) ? (string) $data['access_token'] : '';
 		if ( '' === $token ) {
+			self::remember_login_failure( $license );
 			return new WP_Error( 'rwgcm_login_no_token', __( 'License login response did not include a token.', 'reactwoo-geo-commerce' ) );
 		}
 
+		self::clear_login_failure();
 		$ttl = min( self::parse_expires_in( isset( $data['expires_in'] ) ? $data['expires_in'] : null ), 23 * HOUR_IN_SECONDS );
 		set_transient(
 			self::TOKEN_TRANSIENT,
@@ -158,6 +183,128 @@ class RWGCM_Platform_Client {
 			$ttl
 		);
 		return $token;
+	}
+
+	/**
+	 * @param int|null $timeout Requested timeout.
+	 * @return int
+	 */
+	private static function resolve_login_timeout( $timeout ) {
+		$timeout = null === $timeout ? 0 : (int) $timeout;
+		if ( $timeout >= 1 ) {
+			return $timeout;
+		}
+		return self::is_admin_triggered() ? 30 : 10;
+	}
+
+	/**
+	 * A person using wp-admin, not WP-CLI, cron, or a public page.
+	 *
+	 * @return bool
+	 */
+	private static function is_admin_triggered() {
+		if ( self::is_cli() || self::is_cron() ) {
+			return false;
+		}
+		return function_exists( 'is_admin' ) && is_admin();
+	}
+
+	/**
+	 * Public page views must not call the licence server. Admin, cron, CLI, and admin-ajax may.
+	 *
+	 * @return bool
+	 */
+	private static function login_is_allowed() {
+		if ( self::is_cli() || self::is_cron() ) {
+			return true;
+		}
+		if ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() ) {
+			return self::is_admin_triggered() || ( function_exists( 'is_admin' ) && is_admin() );
+		}
+		if ( ! function_exists( 'is_admin' ) ) {
+			return true;
+		}
+		return (bool) is_admin();
+	}
+
+	/**
+	 * @return bool
+	 */
+	private static function is_cli() {
+		return defined( 'WP_CLI' ) && WP_CLI;
+	}
+
+	/**
+	 * @return bool
+	 */
+	private static function is_cron() {
+		return function_exists( 'wp_doing_cron' ) && wp_doing_cron();
+	}
+
+	/**
+	 * @param string $license Saved licence key.
+	 * @return string
+	 */
+	private static function login_fail_key( $license ) {
+		return 'rwgcm_login_fail_' . md5( self::PRODUCT_SLUG . '|' . (string) $license );
+	}
+
+	/**
+	 * @param string $license Saved licence key.
+	 * @return bool
+	 */
+	private static function login_failure_is_cached( $license ) {
+		$now  = time();
+		$hash = md5( self::PRODUCT_SLUG . '|' . (string) $license );
+		if ( function_exists( 'get_transient' ) ) {
+			$raw = get_transient( self::login_fail_key( $license ) );
+			if ( is_numeric( $raw ) && (int) $raw > $now ) {
+				return true;
+			}
+		}
+		if ( ! function_exists( 'get_option' ) ) {
+			return false;
+		}
+		$stored = get_option( self::LOGIN_FAIL_OPTION, array() );
+		if ( ! is_array( $stored ) || ! isset( $stored['hash'], $stored['until'] ) ) {
+			return false;
+		}
+		return hash_equals( (string) $stored['hash'], $hash ) && (int) $stored['until'] > $now;
+	}
+
+	/**
+	 * @param string $license Saved licence key.
+	 * @return void
+	 */
+	private static function remember_login_failure( $license ) {
+		$until = time() + self::LOGIN_FAIL_TTL;
+		$hash  = md5( self::PRODUCT_SLUG . '|' . (string) $license );
+		if ( function_exists( 'set_transient' ) ) {
+			set_transient( self::login_fail_key( $license ), (string) $until, self::LOGIN_FAIL_TTL );
+		}
+		if ( function_exists( 'update_option' ) ) {
+			update_option(
+				self::LOGIN_FAIL_OPTION,
+				array(
+					'hash'  => $hash,
+					'until' => $until,
+				),
+				false
+			);
+		}
+	}
+
+	/**
+	 * @return void
+	 */
+	private static function clear_login_failure() {
+		$license = self::get_license_key();
+		if ( '' !== $license && function_exists( 'delete_transient' ) ) {
+			delete_transient( self::login_fail_key( $license ) );
+		}
+		if ( function_exists( 'delete_option' ) ) {
+			delete_option( self::LOGIN_FAIL_OPTION );
+		}
 	}
 
 	/**

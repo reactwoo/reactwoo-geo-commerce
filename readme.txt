@@ -56,6 +56,7 @@ Adapters run only when that plugin is active: LiteSpeed (`litespeed_purge_post`,
 = 0.10.1 =
 * **Plugin updates.** The Plugins screen stores a placeholder instead of the short-lived download link. A fresh link is requested when WordPress installs the update. A check that only refreshes the last-checked time does not call the API.
 * **Release package.** JavaScript is packed after the plugin file and the other files so the zip is not flagged by the Foxhole JS antivirus rules.
+* **Licence login.** A rejected licence key is remembered for 15 minutes, so later requests do not call the licence server again. Ordinary shop pages do not log in.
 
 = 0.10.0 =
 * **Shipping stays in the store currency until a manual amount exists.** An exchange rate can still convert a product price. It does not fill a blank shipping cost, shipping-class cost, or block local pickup amount, and it does not scale an amount the merchant typed. A cart that needs shipping stays in the store currency until every applicable rate has an amount in the visitor currency, as in 0.6.0. Zone locations and the store-currency costs are not rewritten.
