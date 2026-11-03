@@ -4,33 +4,27 @@
 
 done
 
-## Summary
-
-QA17: the Checkout notice was created for both the cart and checkout notice lists, and the status-region fallback was inserted into every matching block node, so the sentence showed up four times after ZA → GB → ZA. The country change also ran shipping twice because update-customer calculated totals in our hook and WooCommerce calculated them again. One notice context is used, the fallback is removed once that list shows the text, and the shipping decision is cached for the request. Draft only. Not tagged and not merged.
+Release zips no longer put a `.js` file on the ClamAV Foxhole entries, and Commerce's own updater no longer stores a ten-minute R2 URL in `update_plugins`. Versions were not bumped. Not tagged and not merged.
 
 ## Files changed
 
-| File | Why |
-|------|-----|
-| assets/js/shipping-currency-notice.js | Checkout uses only `wc/checkout` (cart block only `wc/cart`). One fallback node, removed when a notice banner shows the text. |
-| includes/class-rwgcm-price-book-currency.php | Per-request cache for `shipping_currency_state()`. Address changes drop cached rates and the memo, and do not call `calculate_totals()`. |
-| tests/test-checkout-country.php | Three reads of one destination calculate once. |
-| tests/test-shipping-prices.php, tests/test-geo-hints.php | Source checks. |
-| CHANGELOG.md | 0.10.0 note. |
+- `scripts/package_zip.py` — write `reactwoo-geo-commerce.php` and `readme.txt`, then other non-JS files, then `.js`, in a stable order. The zip is refused when a `.js` file would match `Sanesecurity.Foxhole.JS_Zip_1`, `_2`, `_4`, or `_11`–`_24`.
+- `tests/test-zip-js-order.py` — applies those rules to synthetic zips and to the built Commerce zip.
+- `includes/class-rwgcm-updater.php` — placeholder package, fresh signed URL in `upgrader_pre_download`, one-hour offer cache, 15-minute failed-login cache, skip when a save only changes `last_checked`. Check timeout 8s, install check 10s, login 10s.
+- `includes/class-rwgcm-platform-client.php` — `get_access_token()` and `get_bearer_for_updates()` accept a timeout. The default remains 30s.
+- `tests/test-updater.php` — covers the placeholder, caches, timeouts, and install-time URL, including the real platform client.
 
-## What was not changed
+## Not changed
 
-- The fallback rules, zone data, and the Shipping admin layout
-- No merge and no `v*` tag
+- Plugin version, readme stable tag, and changelog.
+- Geo Core's updater path. When Core's updater is real, Commerce still registers with it and does not install its own download hook.
+- Other platform calls still use the 30s login timeout.
 
-## Commands run
+## Commands
 
-```bash
-for f in tests/test-*.php; do php "$f" || exit 1; done
-```
-
-All passed. No WordPress site is running here.
+- `php tests/test-updater.php` — updater children passed (stub 65, real 9, wporg 7, inactive 7, missing 6, client 6).
+- `python3 tests/test-zip-js-order.py` — zip JS entry order checks passed, including the built zip.
 
 ## Remaining errors
 
-None.
+- None from these tests.

@@ -77,10 +77,11 @@ class RWGCM_Platform_Client {
 	}
 
 	/**
+	 * @param int $timeout Login HTTP timeout in seconds. The update path passes 10; other callers keep 30.
 	 * @return string|null
 	 */
-	public static function get_bearer_for_updates() {
-		$token = self::get_access_token();
+	public static function get_bearer_for_updates( $timeout = 30 ) {
+		$token = self::get_access_token( $timeout );
 		if ( is_wp_error( $token ) || ! is_string( $token ) || '' === $token ) {
 			return null;
 		}
@@ -88,9 +89,16 @@ class RWGCM_Platform_Client {
 	}
 
 	/**
+	 * Bearer JWT for Authorization header, refreshed via login when needed.
+	 *
+	 * @param int $timeout Login HTTP timeout in seconds. The update path passes 10; other callers keep 30.
 	 * @return string|\WP_Error
 	 */
-	public static function get_access_token() {
+	public static function get_access_token( $timeout = 30 ) {
+		$timeout = (int) $timeout;
+		if ( $timeout < 1 ) {
+			$timeout = 30;
+		}
 		$cached = get_transient( self::TOKEN_TRANSIENT );
 		if ( is_array( $cached ) && ! empty( $cached['token'] ) && isset( $cached['expires'] ) && (int) $cached['expires'] > time() + 120 ) {
 			return (string) $cached['token'];
@@ -118,7 +126,7 @@ class RWGCM_Platform_Client {
 		$response = wp_remote_post(
 			self::get_api_base() . self::LOGIN_PATH,
 			array(
-				'timeout' => 30,
+				'timeout' => $timeout,
 				'headers' => self::base_headers(),
 				'body'    => wp_json_encode( $body ),
 			)
