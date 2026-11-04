@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.10.0
+Stable tag: 0.10.1
 
 WooCommerce rules and personalization on ReactWoo Geo Core.
 
@@ -52,6 +52,11 @@ The product (with its parent and variations), the shop page, product category ar
 Adapters run only when that plugin is active: LiteSpeed (`litespeed_purge_post`, `litespeed_purge_url`), WP Rocket (`rocket_clean_post`, and `rocket_clean_files` for archive URLs), W3 Total Cache (`w3tc_flush_post`, and `w3tc_flush_url` for archive URLs), WP Super Cache (`wpsc_delete_post_cache`; archive URLs have no purge call), and Cloudflare APO (`cloudflare_purge_by_url`, `cloudflare_purge_url`, `cloudflare_purge_everything`) when those hooks are registered. Elementor CSS is regenerated for each affected Elementor post. The last purge time and counts are stored in `rwgcm_last_cache_purge`. Extensions can use the `rwgcm_cache_purged` action. The button requires the `manage_woocommerce` capability and a nonce.
 
 == Changelog ==
+
+= 0.10.1 =
+* **Plugin updates.** The Plugins screen stores a placeholder instead of the short-lived download link. A fresh link is requested when WordPress installs the update. A check that only refreshes the last-checked time does not call the API.
+* **Release package.** JavaScript is packed after the plugin file and the other files so the zip is not flagged by the Foxhole JS antivirus rules.
+* **Licence login.** A rejected licence key is remembered for 15 minutes, so later requests do not call the licence server again. Ordinary shop pages do not log in.
 
 = 0.10.0 =
 * **Shipping stays in the store currency until a manual amount exists.** An exchange rate can still convert a product price. It does not fill a blank shipping cost, shipping-class cost, or block local pickup amount, and it does not scale an amount the merchant typed. A cart that needs shipping stays in the store currency until every applicable rate has an amount in the visitor currency, as in 0.6.0. Zone locations and the store-currency costs are not rewritten.
