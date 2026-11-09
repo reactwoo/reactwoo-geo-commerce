@@ -32,13 +32,32 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      # Package the committed tree with scripts/package_zip.py.
+      # Do not install Composer or generate files before this step.
+      # Anything that rewrites the checkout makes the uploaded zip differ
+      # from a local package_zip.py of the same git tree.
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.x"
+          python-version: "3.12"
 
       - name: Create plugin zip
         run: python scripts/package_zip.py
+
+      - name: Assert zip matches a second package_zip.py run
+        shell: bash
+        run: |
+          set -euo pipefail
+          first="$(sha256sum "${PLUGIN_SLUG}.zip" | awk '{print $1}')"
+          python scripts/package_zip.py
+          second="$(sha256sum "${PLUGIN_SLUG}.zip" | awk '{print $1}')"
+          if [[ "${first}" != "${second}" ]]; then
+            echo "package_zip.py produced different zips for the same tree."
+            echo "${first}"
+            echo "${second}"
+            exit 1
+          fi
+          echo "Publish zip SHA-256 ${first}"
 
       - name: Resolve release metadata
         id: meta

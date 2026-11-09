@@ -4,26 +4,29 @@
 
 done
 
-Release zips no longer put a `.js` file on the ClamAV Foxhole entries, and Commerce's own updater no longer stores a ten-minute R2 URL in `update_plugins`. Version is 0.10.1 for QA. Not tagged and not merged.
+A local `python scripts/package_zip.py` of this tree is byte-identical to the zip `publish-update.yml` builds. Version stays 0.10.1. Not tagged and not published.
 
 ## Files changed
 
-- `scripts/package_zip.py` — write `reactwoo-geo-commerce.php` and `readme.txt`, then other non-JS files, then `.js`, in a stable order. The zip is refused when a `.js` file would match `Sanesecurity.Foxhole.JS_Zip_1`, `_2`, `_4`, or `_11`–`_24`.
-- `tests/test-zip-js-order.py` — applies those rules to synthetic zips and to the built Commerce zip.
-- `includes/class-rwgcm-updater.php` — placeholder package, fresh signed URL in `upgrader_pre_download`, one-hour offer cache, 15-minute failed-login cache, skip when a save only changes `last_checked`. Check timeout 8s, install check 10s, login 10s.
-- `includes/class-rwgcm-platform-client.php` — every login caller shares the success token cache and a 900-second failed-login cache. Ordinary front-end requests do not log in. Non-admin callers use a 10s timeout.
-- `tests/test-updater.php` — covers the placeholder, caches, timeouts, install-time URL, a front-end skip, and two bad-key runs making one login.
+- `scripts/package_zip.py` — write members with `ZipInfo` + `writestr` instead of `ZipFile.write()`. Timestamp is `SOURCE_DATE_EPOCH` when that value is 1980-01-01 or later, otherwise 1980-01-01 00:00:00. Mode is 0644, creator is Unix, compression level is 9. Entry order and the `reactwoo-geo-commerce/` folder name are unchanged.
+- `.github/workflows/publish-update.yml` — pin CPython 3.12, do not install Composer before packaging, and fail the job when a second `package_zip.py` run hashes differently. Upload paths are unchanged.
+- `tests/test-rwgcm-zip-reproducible.py` — checks that workflow contract and packages `git archive HEAD` twice with `CI=true` and twice without it.
 
 ## Not changed
 
-- Geo Core's updater path. When Core's updater is real, Commerce still registers with it and does not install its own download hook.
-- An admin screen that does not pass its own timeout still uses 30 seconds. Cron, WP-CLI, and other non-admin callers use 10 seconds. Ordinary front-end requests do not log in.
+- Plugin version, readme Stable tag, and `RWGCM_VERSION`.
+- Zip entry order and the top-level folder name.
+- R2 object keys and the unversioned `reactwoo-geo-commerce.zip` name used when `CI=true`.
+
+## Cause
+
+`ZipFile.write()` stored each file's filesystem mtime. Touching `reactwoo-geo-commerce.php` changed the zip from `46b66d93ba1019f204b9cd49fb1c13a6bc52d0502b00bb1774773f0d792945eb` to `9a13391b491d83b6478468df073fb144d8a4a7ee052e7b9280c1e10d538b809e`. The publish workflow also used `python-version: "3.x"`. It does not run Composer.
 
 ## Commands
 
-- `php tests/test-updater.php` — updater children passed (stub 65, real 9, wporg 7, inactive 7, missing 6, client 9).
-- `python3 tests/test-zip-js-order.py` — zip JS entry order checks passed, including the built zip.
-- `for f in tests/test-*.php; do php "$f"; done` and the zip test — all passed. Version remains 0.10.1.
+- `python3 tests/test-zip-js-order.py` — zip JS entry order checks passed.
+- `python3 tests/test-rwgcm-zip-reproducible.py` — publish zip reproducibility checks passed.
+- Two consecutive local builds, with and without `CI=true`, share one SHA-256. `SOURCE_DATE_EPOCH` was unset. The local filename is `reactwoo-geo-commerce-0.10.1.zip`; CI writes `reactwoo-geo-commerce.zip`.
 
 ## Remaining errors
 
