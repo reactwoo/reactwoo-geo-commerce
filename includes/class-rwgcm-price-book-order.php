@@ -61,7 +61,7 @@ class RWGCM_Price_Book_Order {
 
 	/**
 	 * Block checkout does not fire woocommerce_checkout_create_order.
-	 * The order currency is already the price-book currency; this stores the same meta.
+	 * The order currency is set to the cart currency, then the same meta is stored.
 	 *
 	 * @param WC_Order $order Order.
 	 * @return void
@@ -77,7 +77,13 @@ class RWGCM_Price_Book_Order {
 		} elseif ( method_exists( $order, 'get_currency' ) ) {
 			$active = (string) $order->get_currency();
 		}
-		self::write_meta( $order, self::checkout_meta( $billing, $active ) );
+		$meta = self::checkout_meta( $billing, $active );
+		// The Checkout block builds the order from the cart currency. Set the
+		// same code here so the stored order matches the cart the shopper saw.
+		if ( method_exists( $order, 'set_currency' ) ) {
+			$order->set_currency( $meta['currency'] );
+		}
+		self::write_meta( $order, $meta );
 		self::record_exchange_rate( $order );
 		if ( method_exists( $order, 'get_id' ) && (int) $order->get_id() > 0 && method_exists( $order, 'save' ) ) {
 			$order->save();

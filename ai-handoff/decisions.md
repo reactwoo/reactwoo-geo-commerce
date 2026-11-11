@@ -8,6 +8,7 @@
 | — | File handoff for cross-tool debug | `ai-handoff/` + `reactwoo-geocore/docs/ai-handoff-workflow.md` |
 | 2026-10-29 | Convert only when a rate exists | Mode defaults to Auto and the source to Manual with an empty table, so 0.8.0 behaviour stays until a rate is saved or a provider fetch succeeds. Off forces the store-currency fallback. |
 | 2026-11-02 | Shipping is not converted | Phase 1 manual amounts only. A blank per-currency shipping field keeps the store-currency cost. Product exchange rates do not fill or scale shipping. |
+| 2026-11-11 | ZA stays on GBP until a price exists | v1 does not switch the cart to ZAR just because the country map says ZAR. An empty cart uses the visitor currency only when a price book has an amount in it or an enabled exchange path can produce it. A cart with lines uses it only when every line can be priced in it. Otherwise the cart, checkout, and order stay in the store currency. |
 
 ## AI handoff defaults
 

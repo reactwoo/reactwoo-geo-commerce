@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-11-11
+
+### Fixed
+- A visitor whose country maps to a currency with no price-book amount and no enabled exchange rate no longer sees that currency on an empty cart. The mini-cart, Store API cart, product price, and checkout stay in the store currency together. Example: a first ZA visit with no ZAR prices shows GBP on the cart, the product, and the order, not R0.00 next to a £ price.
+- A cart uses the visitor currency only when every line has a book price or an exchange price in it. A mixed cart, and its checkout, stay in the store currency. Line totals and the order currency are that same code.
+- Checkout block orders store that currency (`set_currency` on `woocommerce_store_api_checkout_update_order_meta`), matching classic checkout. `_rwgcm_visitor_country_iso2` is still the Geo Core country.
+
+### Added
+- `rwgcm_currency_is_priceable` — whether an empty cart may use a currency. Default: the store currency, a price book with an amount in that currency, or an enabled exchange-rate path.
+- `rwgcm_cart_currency_fallback` — replaces the resolved cart currency. Return the store currency to force the fallback, or the visitor currency to keep it.
+
 ## [0.10.2] - 2026-11-11
 
 ### Fixed
