@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-11-11
+
+### Fixed
+- Orders placed with the WooCommerce Checkout block (Store API) store `_rwgcm_visitor_country_iso2` and `_rwgcm_geo_captured_at_gmt`. `woocommerce_store_api_checkout_update_order_meta` and `woocommerce_store_api_checkout_order_processed` use the same writer as classic `woocommerce_checkout_order_processed`. The country comes from Geo Core (`rwgc_get_visitor_country`, then visitor `country_code`), including on the Store API REST request. Meta is written with `$order->update_meta_data()` and `$order->save()`. A value that is already stored is left as it is when both hooks run or the shopper retries checkout.
+
 ## [0.10.1] - 2026-11-03
 
 ### Fixed
