@@ -465,11 +465,11 @@ assert_true(
 		&& false !== strpos( $readme, 'woocommerce_available_variation' )
 		&& false !== strpos( $readme, 'Store API' )
 		&& false !== strpos( $readme, 'Cache-Control: no-store' )
-		&& false !== strpos( $readme, 'Stable tag: 0.10.2' )
+		&& false !== strpos( $readme, 'Stable tag: 0.10.3' )
 );
 assert_true(
-	'plugin header and constant are 0.10.2',
-	is_string( $plugin ) && false !== strpos( $plugin, 'Version: 0.10.2' ) && false !== strpos( $plugin, "define( 'RWGCM_VERSION', '0.10.2' )" )
+	'plugin header and constant are 0.10.3',
+	is_string( $plugin ) && false !== strpos( $plugin, 'Version: 0.10.3' ) && false !== strpos( $plugin, "define( 'RWGCM_VERSION', '0.10.3' )" )
 );
 
 echo "\n{$passed} passed, {$failed} failed\n";

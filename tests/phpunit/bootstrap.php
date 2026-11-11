@@ -9,10 +9,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 	define( 'ABSPATH', __DIR__ . '/' );
 }
 
-if ( ! defined( 'REST_REQUEST' ) ) {
-	define( 'REST_REQUEST', true );
-}
-
 $GLOBALS['rw_actions']          = array();
 $GLOBALS['rw_filters']          = array();
 $GLOBALS['rw_orders']           = array();
@@ -137,8 +133,12 @@ function delete_post_meta() {
  * @return mixed
  */
 function get_post_meta( $post_id = 0, $key = '', $single = false ) {
-	unset( $post_id, $key );
+	unset( $key );
 	++$GLOBALS['rw_postmeta_calls'];
+	$id = (int) $post_id;
+	if ( isset( $GLOBALS['rw_books'] ) && is_array( $GLOBALS['rw_books'] ) && array_key_exists( $id, $GLOBALS['rw_books'] ) ) {
+		return $GLOBALS['rw_books'][ $id ];
+	}
 	return $single ? '' : array();
 }
 
@@ -183,10 +183,75 @@ class WC_Order {
 	public $saves = 0;
 
 	/**
+	 * @var string
+	 */
+	private $currency = '';
+
+	/**
+	 * @var string
+	 */
+	private $billing_country = '';
+
+	/**
+	 * @var array<int, object>
+	 */
+	private $items = array();
+
+	/**
 	 * @param int $id Order ID.
 	 */
 	public function __construct( $id ) {
 		$this->id = (int) $id;
+	}
+
+	/**
+	 * @param string $currency Currency code.
+	 * @return void
+	 */
+	public function set_currency( $currency ) {
+		$this->currency = (string) $currency;
+	}
+
+	/**
+	 * @return string
+	 */
+	public function get_currency() {
+		return $this->currency;
+	}
+
+	/**
+	 * @param string $country Billing ISO2.
+	 * @return void
+	 */
+	public function set_billing_country( $country ) {
+		$this->billing_country = (string) $country;
+	}
+
+	/**
+	 * @return string
+	 */
+	public function get_billing_country() {
+		return $this->billing_country;
+	}
+
+	/**
+	 * @param array<int, object> $items Line items.
+	 * @return void
+	 */
+	public function set_line_items( array $items ) {
+		$this->items = $items;
+	}
+
+	/**
+	 * @param string $type Item type.
+	 * @return array<int, object>
+	 */
+	public function get_items( $type = 'line_item' ) {
+		if ( 'shipping' === $type ) {
+			return array();
+		}
+		unset( $type );
+		return $this->items;
 	}
 
 	/**

@@ -99,6 +99,14 @@ class RWGCM_Price_Book_Currency {
 	private static $state_cache = null;
 
 	/**
+	 * Price-book currencies confirmed in the catalog this request.
+	 * False means the catalog was read and that currency has no amount.
+	 *
+	 * @var array<string, bool>
+	 */
+	private static $book_currency_hits = array();
+
+	/**
 	 * @var string
 	 */
 	private static $state_cache_key = '';
@@ -750,8 +758,9 @@ class RWGCM_Price_Book_Currency {
 	 * @return void
 	 */
 	public static function reset_shipping_state_cache() {
-		self::$state_cache     = null;
-		self::$state_cache_key = '';
+		self::$state_cache         = null;
+		self::$state_cache_key     = '';
+		self::$book_currency_hits  = array();
 	}
 
 	/**
@@ -803,10 +812,14 @@ class RWGCM_Price_Book_Currency {
 			}
 		}
 		if ( ! self::cart_is_ready() ) {
-			return array(
-				'active'  => $preferred,
-				'wanted'  => '',
-				'country' => '',
+			return self::finish_currency_state(
+				array(
+					'active'  => self::empty_cart_currency( $preferred, $base ),
+					'wanted'  => '',
+					'country' => '',
+				),
+				$preferred,
+				$base
 			);
 		}
 		$country = self::customer_shipping_country();
@@ -830,34 +843,236 @@ class RWGCM_Price_Book_Currency {
 			$preferred = $base;
 		}
 		if ( $preferred === $base ) {
-			return array(
-				'active'  => $base,
-				'wanted'  => '',
-				'country' => $country,
+			return self::finish_currency_state(
+				array(
+					'active'  => $base,
+					'wanted'  => '',
+					'country' => $country,
+				),
+				$preferred,
+				$base
 			);
 		}
-		$items       = self::cart_item_flags( $preferred );
-		$items_ok    = ! empty( $items ) && ! in_array( false, $items, true );
+		$items = self::cart_item_flags( $preferred );
+		// No lines yet: the visitor currency is only shown when something on
+		// the store can actually be charged in it. Otherwise the empty cart
+		// would say ZAR while every unpriced product still says GBP.
+		if ( empty( $items ) ) {
+			return self::finish_currency_state(
+				array(
+					'active'  => self::empty_cart_currency( $preferred, $base ),
+					'wanted'  => '',
+					'country' => $country,
+				),
+				$preferred,
+				$base
+			);
+		}
+		$items_ok    = ! in_array( false, $items, true );
 		$shipping_ok = RWGCM_Price_Book::shipping_supports_currency(
 			$preferred,
 			$base,
 			$needs,
 			$needs ? self::shipping_priced( $preferred ) : false
 		);
-		$supports    = $items;
-		if ( ! empty( $items ) ) {
-			$supports[] = $shipping_ok;
-		}
-		$active = RWGCM_Price_Book::currency_for_lines( $preferred, $base, $supports );
-		$wanted = ( $items_ok && ! $shipping_ok ) ? $preferred : '';
+		$supports   = $items;
+		$supports[] = $shipping_ok;
+		$active     = RWGCM_Price_Book::currency_for_lines( $preferred, $base, $supports );
+		$wanted     = ( $items_ok && ! $shipping_ok ) ? $preferred : '';
 		if ( $wanted === $base ) {
 			$wanted = '';
 		}
-		return array(
-			'active'  => $active,
-			'wanted'  => $wanted,
-			'country' => $country,
+		return self::finish_currency_state(
+			array(
+				'active'  => $active,
+				'wanted'  => $wanted,
+				'country' => $country,
+			),
+			$preferred,
+			$base
 		);
+	}
+
+	/**
+	 * Currency for a cart with no lines. The visitor currency is used only
+	 * when it is priceable; otherwise the store currency, so the mini-cart
+	 * and the product page cannot disagree.
+	 *
+	 * @param string $preferred Visitor currency.
+	 * @param string $base      Store currency.
+	 * @return string
+	 */
+	private static function empty_cart_currency( $preferred, $base ) {
+		$preferred = RWGCM_Price_Book::normalize_currency( $preferred );
+		$base      = RWGCM_Price_Book::normalize_currency( $base );
+		if ( '' === $base ) {
+			$base = 'GBP';
+		}
+		if ( '' === $preferred || $preferred === $base ) {
+			return $base;
+		}
+		return self::currency_is_priceable( $preferred ) ? $preferred : $base;
+	}
+
+	/**
+	 * Whether a cart with no lines may use $currency.
+	 *
+	 * True for the store currency, when a price book has an amount in
+	 * $currency, or when an enabled exchange-rate path can produce it.
+	 * A catalog that cannot be read keeps the previous empty-cart behaviour
+	 * (the visitor currency) unless the filter says otherwise.
+	 *
+	 * @param string $currency Currency code.
+	 * @return bool
+	 */
+	public static function currency_is_priceable( $currency ) {
+		$currency = RWGCM_Price_Book::normalize_currency( $currency );
+		$base     = self::base_currency();
+		if ( '' === $currency || $currency === $base ) {
+			$priceable = true;
+		} else {
+			$books    = self::catalog_has_book_currency( $currency );
+			$exchange = self::exchange_path_for_currency( $currency );
+			if ( true === $books || true === $exchange ) {
+				$priceable = true;
+			} elseif ( false === $books && false === $exchange ) {
+				$priceable = false;
+			} elseif ( false === $books && null === $exchange ) {
+				$priceable = false;
+			} else {
+				$priceable = true;
+			}
+		}
+		if ( function_exists( 'apply_filters' ) ) {
+			/**
+			 * Whether an empty cart may use $currency.
+			 *
+			 * @param bool   $priceable Default decision.
+			 * @param string $currency  Visitor currency.
+			 * @param string $base      Store currency.
+			 */
+			$priceable = (bool) apply_filters( 'rwgcm_currency_is_priceable', $priceable, $currency, $base );
+		}
+		return $priceable;
+	}
+
+	/**
+	 * Apply `rwgcm_cart_currency_fallback` to the resolved cart currency.
+	 *
+	 * @param array{active: string, wanted: string, country: string} $state     Decision.
+	 * @param string                                                  $preferred Visitor currency.
+	 * @param string                                                  $base      Store currency.
+	 * @return array{active: string, wanted: string, country: string}
+	 */
+	private static function finish_currency_state( array $state, $preferred, $base ) {
+		if ( ! function_exists( 'apply_filters' ) ) {
+			return $state;
+		}
+		/**
+		 * Cart currency after price-book, exchange, and shipping checks.
+		 *
+		 * Return the store currency to keep the visitor currency off the cart.
+		 * Return the visitor currency to use it even when nothing is priced in it.
+		 *
+		 * @param string                                               $active    Resolved currency.
+		 * @param string                                               $preferred Visitor currency before the fallback.
+		 * @param string                                               $base      Store currency.
+		 * @param array{active: string, wanted: string, country: string} $state   Decision before this filter.
+		 */
+		$filtered = apply_filters( 'rwgcm_cart_currency_fallback', $state['active'], $preferred, $base, $state );
+		$code     = RWGCM_Price_Book::normalize_currency( is_scalar( $filtered ) ? (string) $filtered : '' );
+		if ( '' !== $code ) {
+			$state['active'] = $code;
+		}
+		return $state;
+	}
+
+	/**
+	 * True when a stored price book has an amount in $currency.
+	 * Null when the catalog cannot be read.
+	 *
+	 * @param string $currency Currency code.
+	 * @return bool|null
+	 */
+	private static function catalog_has_book_currency( $currency ) {
+		$currency = RWGCM_Price_Book::normalize_currency( $currency );
+		if ( '' === $currency ) {
+			return false;
+		}
+		if ( array_key_exists( $currency, self::$book_currency_hits ) ) {
+			return self::$book_currency_hits[ $currency ];
+		}
+		$found = self::query_book_currency( $currency );
+		if ( null === $found ) {
+			return null;
+		}
+		self::$book_currency_hits[ $currency ] = $found;
+		return $found;
+	}
+
+	/**
+	 * @param string $currency Currency code.
+	 * @return bool|null
+	 */
+	private static function query_book_currency( $currency ) {
+		global $wpdb;
+		if ( ! isset( $wpdb ) || ! is_object( $wpdb ) || ! method_exists( $wpdb, 'get_var' ) || ! method_exists( $wpdb, 'prepare' ) || ! isset( $wpdb->postmeta ) ) {
+			return null;
+		}
+		$needle = 's:' . strlen( $currency ) . ':"' . $currency . '"';
+		$like   = '%' . ( method_exists( $wpdb, 'esc_like' ) ? $wpdb->esc_like( $needle ) : addcslashes( $needle, '_%\\' ) ) . '%';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$sql  = $wpdb->prepare(
+			"SELECT meta_value FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value LIKE %s LIMIT 1",
+			RWGCM_Price_Book::META_KEY,
+			$like
+		);
+		$raw  = $wpdb->get_var( $sql );
+		if ( ! is_string( $raw ) || '' === $raw ) {
+			return false;
+		}
+		$book = self::decode_book_meta( $raw );
+		return is_array( $book ) && RWGCM_Price_Book::has_price( $book, $currency );
+	}
+
+	/**
+	 * @param string $raw Stored meta.
+	 * @return array<string, mixed>|null
+	 */
+	private static function decode_book_meta( $raw ) {
+		if ( ! is_string( $raw ) || '' === $raw ) {
+			return null;
+		}
+		if ( function_exists( 'maybe_unserialize' ) ) {
+			$decoded = maybe_unserialize( $raw );
+		} elseif ( 'a:' !== substr( $raw, 0, 2 ) ) {
+			return null;
+		} else {
+			$decoded = unserialize( $raw ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_unserialize
+		}
+		return is_array( $decoded ) ? $decoded : null;
+	}
+
+	/**
+	 * True when conversion can price $currency. False when exchange is loaded
+	 * and cannot. Null when exchange is not available to ask.
+	 *
+	 * @param string $currency Visitor currency.
+	 * @return bool|null
+	 */
+	private static function exchange_path_for_currency( $currency ) {
+		if ( ! class_exists( 'RWGCM_Exchange', false ) ) {
+			return null;
+		}
+		if ( ! method_exists( 'RWGCM_Exchange', 'settings' ) || ! method_exists( 'RWGCM_Exchange', 'quote' ) ) {
+			return null;
+		}
+		$settings = RWGCM_Exchange::settings();
+		if ( ! is_array( $settings ) || ( isset( $settings['mode'] ) && 'off' === $settings['mode'] ) ) {
+			return false;
+		}
+		$quote = RWGCM_Exchange::quote( self::base_currency(), $currency );
+		return is_array( $quote );
 	}
 
 	/**
