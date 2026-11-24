@@ -132,9 +132,22 @@ $extended = RWGCM_Price_Book::sanitize_book(
 assert_true( 'currency list extension accepts CAD', isset( $extended['CAD']['regular'] ) && '55.00' === $extended['CAD']['regular'] );
 
 assert_true(
-	'default currency list is ZAR GBP EUR USD',
-	array( 'ZAR', 'GBP', 'EUR', 'USD' ) === RWGCM_Price_Book::currencies()
+	'default currency list is ZAR GBP EUR USD AUD',
+	array( 'ZAR', 'GBP', 'EUR', 'USD', 'AUD' ) === RWGCM_Price_Book::currencies()
 );
+
+$aud_book = RWGCM_Price_Book::sanitize_book(
+	array(
+		'AUD' => array( 'regular' => '12.79' ),
+	)
+);
+assert_true( 'AUD price is kept on save by default', isset( $aud_book['AUD']['regular'] ) && '12.79' === $aud_book['AUD']['regular'] );
+
+$au = RWGCM_Price_Book::resolve_context( 'AU', 'GB', 'GBP' );
+assert_true( 'Australia billing selects AUD', 'AUD' === $au['currency'] && 'billing' === $au['source'] );
+
+$au_geo = RWGCM_Price_Book::resolve_context( '', 'au', 'GBP' );
+assert_true( 'Australian geo IP selects AUD when billing is empty', 'AUD' === $au_geo['currency'] && 'geo' === $au_geo['source'] );
 
 $za = RWGCM_Price_Book::resolve_context( 'ZA', 'US', 'GBP' );
 assert_true( 'South Africa billing selects ZAR over a US IP', 'ZAR' === $za['currency'] && 'billing' === $za['source'] );
@@ -214,6 +227,7 @@ $defaults = RWGCM_Price_Book::map_from_storage( null );
 assert_true( 'missing map uses ZA ZAR', isset( $defaults['ZA'] ) && 'ZAR' === $defaults['ZA'] );
 assert_true( 'missing map uses GB GBP', isset( $defaults['GB'] ) && 'GBP' === $defaults['GB'] );
 assert_true( 'missing map uses US USD', isset( $defaults['US'] ) && 'USD' === $defaults['US'] );
+assert_true( 'missing map uses AU AUD', isset( $defaults['AU'] ) && 'AUD' === $defaults['AU'] );
 assert_true( 'missing map uses DE EUR', isset( $defaults['DE'] ) && 'EUR' === $defaults['DE'] );
 assert_true( 'saved empty map is not the defaults', array() === RWGCM_Price_Book::map_from_storage( array() ) );
 assert_true(

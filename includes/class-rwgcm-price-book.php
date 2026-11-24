@@ -32,7 +32,7 @@ class RWGCM_Price_Book {
 	 * @return array<int, string>
 	 */
 	public static function default_currencies() {
-		return array( 'ZAR', 'GBP', 'EUR', 'USD' );
+		return array( 'ZAR', 'GBP', 'EUR', 'USD', 'AUD' );
 	}
 
 	/**
@@ -69,6 +69,7 @@ class RWGCM_Price_Book {
 			'ZA' => 'ZAR',
 			'GB' => 'GBP',
 			'US' => 'USD',
+			'AU' => 'AUD',
 		);
 		$euro = array(
 			'AT',

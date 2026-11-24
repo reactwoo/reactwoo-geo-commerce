@@ -579,7 +579,7 @@ class RWGCM_Exchange {
 		$base  = self::store_currency();
 		$rates = array();
 		if ( is_array( $raw ) ) {
-			$allowed = class_exists( 'RWGCM_Price_Book', false ) ? RWGCM_Price_Book::currencies() : array( 'ZAR', 'GBP', 'EUR', 'USD' );
+			$allowed = class_exists( 'RWGCM_Price_Book', false ) ? RWGCM_Price_Book::currencies() : array( 'ZAR', 'GBP', 'EUR', 'USD', 'AUD' );
 			foreach ( $raw as $code => $amount ) {
 				$code = self::currency_code( $code );
 				if ( '' === $code || $code === $base || ! in_array( $code, $allowed, true ) ) {
