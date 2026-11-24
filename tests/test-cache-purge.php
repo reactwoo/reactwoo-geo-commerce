@@ -14,6 +14,9 @@ namespace Elementor\Core\Files\CSS {
 		/** @var int[] */
 		public static $updated = array();
 
+		/** @var string '' | 'error' | 'type' | 'exception' */
+		public static $throw = '';
+
 		/** @var int */
 		public $id;
 
@@ -28,6 +31,15 @@ namespace Elementor\Core\Files\CSS {
 		 * @return void
 		 */
 		public function update() {
+			if ( 'error' === self::$throw ) {
+				throw new \Error( 'Elementor stand-in Error during CSS update' );
+			}
+			if ( 'type' === self::$throw ) {
+				throw new \TypeError( 'Elementor stand-in TypeError during CSS update' );
+			}
+			if ( 'exception' === self::$throw ) {
+				throw new \RuntimeException( 'Elementor stand-in exception during CSS update' );
+			}
 			self::$updated[] = $this->id;
 		}
 	}
@@ -202,6 +214,9 @@ namespace {
 		throw new RuntimeException( 'wp_die' );
 	}
 	function rocket_clean_post( $id ) { // phpcs:ignore
+		if ( ! empty( $GLOBALS['rw_rocket_throw'] ) ) {
+			throw new \Error( 'WP Rocket stand-in Error' );
+		}
 		$GLOBALS['rw_calls']['rocket_clean_post'][] = (int) $id;
 	}
 	function rocket_clean_files( $urls ) { // phpcs:ignore
@@ -450,6 +465,81 @@ namespace {
 	assert_true( 'Elementor CSS is regenerated for the price-element post', in_array( 50, \Elementor\Core\Files\CSS\Post::$updated, true ) && (int) $css_purge['counts']['elementor_css'] >= 1 );
 	assert_true( 'Elementor CSS is not regenerated for a product without Elementor data', ! in_array( 11, \Elementor\Core\Files\CSS\Post::$updated, true ) );
 
+	// An Elementor \Error (not an Exception) during a price-book purge is logged and the save carries on.
+	foreach ( array( 'error' => 'Error', 'type' => 'TypeError', 'exception' => 'RuntimeException' ) as $mode => $class_name ) {
+		\Elementor\Core\Files\CSS\Post::$throw   = $mode;
+		\Elementor\Core\Files\CSS\Post::$updated = array();
+		$before_errors = count( RWGCM_Cache_Purge::logged_errors() );
+		$before_events = isset( $GLOBALS['rw_did']['rwgcm_cache_purged'] ) ? count( $GLOBALS['rw_did']['rwgcm_cache_purged'] ) : 0;
+		$threw         = null;
+		$result        = null;
+		try {
+			$result = RWGCM_Cache_Purge::purge_product( 11, 'price_book' );
+		} catch ( \Throwable $t ) {
+			$threw = $t;
+		}
+		$new_errors = array_slice( RWGCM_Cache_Purge::logged_errors(), $before_errors );
+		$joined     = implode( "\n", $new_errors );
+		$after_events = isset( $GLOBALS['rw_did']['rwgcm_cache_purged'] ) ? count( $GLOBALS['rw_did']['rwgcm_cache_purged'] ) : 0;
+		assert_true( "an Elementor {$class_name} during a price-book purge is not fatal", null === $threw && is_array( $result ) && empty( $result['skipped'] ) );
+		assert_true( "an Elementor {$class_name} is logged with its message and post id", false !== strpos( $joined, $class_name . ': Elementor stand-in' ) && false !== strpos( $joined, 'elementor_css' ) && false !== strpos( $joined, 'for post 50' ) );
+		assert_true( "an Elementor {$class_name} counts no CSS regeneration but the purge still finishes", is_array( $result ) && 0 === (int) $result['counts']['elementor_css'] && $after_events === $before_events + 1 );
+	}
+	\Elementor\Core\Files\CSS\Post::$throw = '';
+
+	// The real save path: writing the price-book meta fires updated_post_meta, which purges.
+	\Elementor\Core\Files\CSS\Post::$throw = 'error';
+	$save_threw = null;
+	try {
+		RWGCM_Cache_Purge::on_post_meta( 1, 11, '_rwgcm_price_book', array( 'AUD' => array( 'regular' => '12.79' ) ) );
+	} catch ( \Throwable $t ) {
+		$save_threw = $t;
+	}
+	\Elementor\Core\Files\CSS\Post::$throw = '';
+	assert_true( 'saving a price book survives an Elementor Error from the meta hook', null === $save_threw && 'price_book' === RWGCM_Cache_Purge::last_purge()['reason'] );
+	$again = RWGCM_Cache_Purge::purge_product( 11, 'price_book' );
+	assert_true( 'a purge after an Elementor Error is not left busy', is_array( $again ) && empty( $again['skipped'] ) && in_array( 50, \Elementor\Core\Files\CSS\Post::$updated, true ) );
+
+	// A cache plugin that throws an \Error is logged and the purge carries on.
+	$saved_flags  = $GLOBALS['rw_plugin_flags'];
+	$GLOBALS['rw_plugin_flags'] = array( 'rocket' => true );
+	$GLOBALS['rw_rocket_throw'] = true;
+	$before_errors = count( RWGCM_Cache_Purge::logged_errors() );
+	$rocket_threw  = null;
+	$rocket_result = null;
+	try {
+		$rocket_result = RWGCM_Cache_Purge::purge_product( 11, 'price_book' );
+	} catch ( \Throwable $t ) {
+		$rocket_threw = $t;
+	}
+	$GLOBALS['rw_rocket_throw'] = false;
+	$GLOBALS['rw_plugin_flags'] = $saved_flags;
+	$rocket_log = implode( "\n", array_slice( RWGCM_Cache_Purge::logged_errors(), $before_errors ) );
+	assert_true( 'a cache plugin Error during a purge is not fatal', null === $rocket_threw && is_array( $rocket_result ) && empty( $rocket_result['skipped'] ) );
+	assert_true( 'a cache plugin Error is logged with its step and message', false !== strpos( $rocket_log, 'cache_posts' ) && false !== strpos( $rocket_log, 'Error: WP Rocket stand-in Error' ) );
+	assert_true( 'Elementor CSS still regenerates after a cache plugin Error', in_array( 50, \Elementor\Core\Files\CSS\Post::$updated, true ) );
+
+	// A listener on rwgcm_cache_purged that throws does not break the save.
+	$bad_listener = static function () {
+		throw new \Error( 'listener stand-in Error' );
+	};
+	add_action( 'rwgcm_cache_purged', $bad_listener );
+	$listener_threw = null;
+	try {
+		RWGCM_Cache_Purge::purge_product( 11, 'price_book' );
+	} catch ( \Throwable $t ) {
+		$listener_threw = $t;
+	}
+	assert_true( 'a throwing rwgcm_cache_purged listener is not fatal', null === $listener_threw );
+	$GLOBALS['rw_actions']['rwgcm_cache_purged'] = array_values(
+		array_filter(
+			$GLOBALS['rw_actions']['rwgcm_cache_purged'],
+			static function ( $cb ) use ( $bad_listener ) {
+				return $cb !== $bad_listener;
+			}
+		)
+	);
+
 	$detected = RWGCM_Cache_Purge::detect_usage(
 		'[rwgcm_price product_id="10"] <!-- wp:rwgcm/product-price {"product_id":11} /-->',
 		'{"widgetType":"rwgcm-product-price"} {"widgetType":"rwgcm-product-price-atomic"}'
@@ -543,6 +633,7 @@ namespace {
 			&& false !== strpos( $adapters, 'cloudflare_purge_by_url' )
 			&& false !== strpos( $adapters, 'plugin_active' )
 	);
+	assert_true( 'the purge service catches Throwable, not only Exception', is_string( $purge ) && false === strpos( $purge, 'catch ( Exception' ) && false !== strpos( $purge, 'catch ( \\Throwable $e )' ) );
 	assert_true( 'the purge service fires rwgcm_cache_purged', is_string( $purge ) && false !== strpos( $purge, "do_action( 'rwgcm_cache_purged'" ) && false !== strpos( $purge, 'manage_woocommerce' ) );
 	assert_true( 'the plugin boots the purge service', is_string( $boot ) && false !== strpos( $boot, 'RWGCM_Cache_Purge::init' ) );
 	assert_true(

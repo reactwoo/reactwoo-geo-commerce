@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.5] - 2026-11-24
+
+### Fixed
+- Price book saves (and every other cache purge) no longer fatal when Elementor throws a PHP `Error` during CSS regeneration. `RWGCM_Cache_Purge::regenerate_elementor_css()` caught only `Exception`; it now catches `\Throwable`.
+- Cache-plugin purge calls (LiteSpeed, WP Rocket, W3 Total Cache, WP Super Cache, Cloudflare) and `rwgcm_cache_purged` listeners run behind a `\Throwable` guard. A failure is logged and that step is skipped; the rest of the purge and the save carry on.
+
+### Added
+- `rwgcm_cache_purge_error` action ( `$step`, `$error`, `$post_id` ) and an error-log line `[ReactWoo Geo Commerce] Cache purge step "…" failed and was skipped: Class: message`. No stack trace is logged.
+
 ## [0.10.4] - 2026-11-24
 
 ### Added

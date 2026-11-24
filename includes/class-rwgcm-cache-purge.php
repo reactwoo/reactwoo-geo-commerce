@@ -33,6 +33,13 @@ class RWGCM_Cache_Purge {
 	private static $busy = false;
 
 	/**
+	 * Third-party purge failures logged this request.
+	 *
+	 * @var string[]
+	 */
+	private static $errors = array();
+
+	/**
 	 * Exchange-rate saves update several options and fire an action. One request purges once.
 	 *
 	 * @var bool
@@ -463,9 +470,66 @@ class RWGCM_Cache_Purge {
 			}
 			$css->update();
 			return true;
-		} catch ( Exception $e ) {
-			unset( $e );
+		} catch ( \Throwable $e ) {
+			self::log_error( 'elementor_css', $e, $post_id );
 			return false;
+		}
+	}
+
+	/**
+	 * Log a third-party failure during a purge and keep the request going.
+	 *
+	 * The message, class, and the post id are logged. The stack trace is not.
+	 *
+	 * @param string     $step    Purge step.
+	 * @param \Throwable $error   What was thrown.
+	 * @param int        $post_id Post id, or 0.
+	 * @return void
+	 */
+	public static function log_error( $step, $error, $post_id = 0 ) {
+		$line = sprintf(
+			'[ReactWoo Geo Commerce] Cache purge step "%s"%s failed and was skipped: %s: %s',
+			(string) $step,
+			(int) $post_id > 0 ? ' for post ' . (int) $post_id : '',
+			is_object( $error ) ? get_class( $error ) : 'Error',
+			is_object( $error ) && method_exists( $error, 'getMessage' ) ? (string) $error->getMessage() : ''
+		);
+		self::$errors[] = $line;
+		if ( function_exists( 'do_action' ) ) {
+			try {
+				do_action( 'rwgcm_cache_purge_error', $step, $error, (int) $post_id );
+			} catch ( \Throwable $ignored ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+				unset( $ignored );
+			}
+		}
+		if ( function_exists( 'error_log' ) ) {
+			error_log( $line ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+		}
+	}
+
+	/**
+	 * Errors logged since the request started (for tests and diagnostics).
+	 *
+	 * @return string[]
+	 */
+	public static function logged_errors() {
+		return self::$errors;
+	}
+
+	/**
+	 * Run one third-party purge call and turn any Throwable into a log line.
+	 *
+	 * @param string   $step     Purge step.
+	 * @param callable $callback Call.
+	 * @param mixed    $fallback Value when it throws.
+	 * @return mixed
+	 */
+	private static function guarded( $step, $callback, $fallback ) {
+		try {
+			return call_user_func( $callback );
+		} catch ( \Throwable $e ) {
+			self::log_error( $step, $e );
+			return $fallback;
 		}
 	}
 
@@ -693,10 +757,22 @@ class RWGCM_Cache_Purge {
 		self::$busy = true;
 		try {
 			$post_result = class_exists( 'RWGCM_Cache_Adapters', false )
-				? RWGCM_Cache_Adapters::purge_posts( $posts )
+				? self::guarded(
+					'cache_posts',
+					function () use ( $posts ) {
+						return RWGCM_Cache_Adapters::purge_posts( $posts );
+					},
+					array( array(), self::id_list( $posts ) )
+				)
 				: array( array(), self::id_list( $posts ) );
 			$url_result  = class_exists( 'RWGCM_Cache_Adapters', false )
-				? RWGCM_Cache_Adapters::purge_urls( $urls )
+				? self::guarded(
+					'cache_urls',
+					function () use ( $urls ) {
+						return RWGCM_Cache_Adapters::purge_urls( $urls );
+					},
+					array( array(), array() )
+				)
 				: array( array(), array() );
 			$post_ids    = isset( $post_result[1] ) ? $post_result[1] : array();
 			$urls        = isset( $url_result[1] ) ? $url_result[1] : array();
@@ -714,13 +790,20 @@ class RWGCM_Cache_Purge {
 			}
 			if ( class_exists( 'RWGCM_Cache_Adapters', false ) ) {
 				$used_everything = false;
-				if ( $allow_everything && RWGCM_Cache_Adapters::purge_cloudflare_everything() ) {
+				if ( $allow_everything && self::guarded( 'cloudflare_everything', array( 'RWGCM_Cache_Adapters', 'purge_cloudflare_everything' ), false ) ) {
 					$counts['cloudflare']++;
 					$used_everything = true;
 				}
 				if ( ! $used_everything ) {
 					foreach ( $urls as $url ) {
-						if ( RWGCM_Cache_Adapters::purge_cloudflare_url( $url ) ) {
+						$fired = self::guarded(
+							'cloudflare_url',
+							function () use ( $url ) {
+								return RWGCM_Cache_Adapters::purge_cloudflare_url( $url );
+							},
+							false
+						);
+						if ( $fired ) {
 							$counts['cloudflare']++;
 						}
 					}
@@ -745,7 +828,13 @@ class RWGCM_Cache_Purge {
 				),
 				false
 			);
-			do_action( 'rwgcm_cache_purged', $context );
+			self::guarded(
+				'rwgcm_cache_purged',
+				function () use ( $context ) {
+					do_action( 'rwgcm_cache_purged', $context );
+				},
+				null
+			);
 			return $context;
 		} finally {
 			self::$busy = false;
