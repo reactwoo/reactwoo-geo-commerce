@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.4] - 2026-11-24
+
+### Added
+- Added Australian Dollar (`AUD`) to the default price book currencies (`RWGCM_Price_Book::default_currencies()`) and mapped Australia (`AU` => `AUD`) in the default country map.
+- Added `AUD` to the exchange-rate fallback allowed currency list and updated Price Book admin help text.
+
 ## [0.10.3] - 2026-11-11
 
 ### Fixed
