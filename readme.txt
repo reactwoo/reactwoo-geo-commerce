@@ -4,7 +4,7 @@ Requires at least: 6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Stable tag: 0.10.5
+Stable tag: 0.10.6
 
 WooCommerce rules and personalization on ReactWoo Geo Core.
 
@@ -52,6 +52,9 @@ The product (with its parent and variations), the shop page, product category ar
 Adapters run only when that plugin is active: LiteSpeed (`litespeed_purge_post`, `litespeed_purge_url`), WP Rocket (`rocket_clean_post`, and `rocket_clean_files` for archive URLs), W3 Total Cache (`w3tc_flush_post`, and `w3tc_flush_url` for archive URLs), WP Super Cache (`wpsc_delete_post_cache`; archive URLs have no purge call), and Cloudflare APO (`cloudflare_purge_by_url`, `cloudflare_purge_url`, `cloudflare_purge_everything`) when those hooks are registered. Elementor CSS is regenerated for each affected Elementor post. The last purge time and counts are stored in `rwgcm_last_cache_purge`. Extensions can use the `rwgcm_cache_purged` action. The button requires the `manage_woocommerce` capability and a nonce.
 
 == Changelog ==
+
+= 0.10.6 =
+* **Faster product and shop pages.** Rule table checks, rule counts, the rule list, and the resolved price adjustment are memoised for the rest of the request. A product page that used to run `SHOW TABLES` and rule queries thousands of times now does that work once. Saving, deleting, or changing a rule, and a table install or upgrade, clear the memo. Prices are unchanged.
 
 = 0.10.5 =
 * **Price book saves no longer stop on an Elementor or cache-plugin error.** Saving a price book clears caches and regenerates Elementor CSS. A PHP `Error` (not only an `Exception`) thrown by Elementor or a cache plugin during that step is now caught, written to the PHP error log with its message, and skipped, so the save completes. Action `rwgcm_cache_purge_error` reports each failure.

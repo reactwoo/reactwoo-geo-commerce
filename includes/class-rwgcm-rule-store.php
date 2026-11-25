@@ -20,24 +20,63 @@ class RWGCM_Rule_Store {
 	private static $purge_on_write = true;
 
 	/**
+	 * Memoised get_all_rules() result for this request. null = not loaded.
+	 *
+	 * @var list<array<string, mixed>>|null
+	 */
+	private static $all_rules = null;
+
+	/**
+	 * Count-by-status memo derived from {@see get_all_rules()}.
+	 *
+	 * @var array<string, int>
+	 */
+	private static $counts_by_status = array();
+
+	/**
+	 * Clear every per-request memo used for rule lookups and pricing resolution.
+	 * Called after a rule is saved, deleted, or changes status, and after table
+	 * install or upgrade.
+	 *
+	 * @return void
+	 */
+	public static function flush() {
+		self::$all_rules         = null;
+		self::$counts_by_status  = array();
+		if ( class_exists( 'RWGCM_DB', false ) ) {
+			RWGCM_DB::flush_existence_cache();
+		}
+		if ( class_exists( 'RWGCM_Diagnostics', false ) && method_exists( 'RWGCM_Diagnostics', 'flush_request_cache' ) ) {
+			RWGCM_Diagnostics::flush_request_cache();
+		}
+		if ( class_exists( 'RWGCM_Pricing_Resolution', false ) && method_exists( 'RWGCM_Pricing_Resolution', 'flush_request_cache' ) ) {
+			RWGCM_Pricing_Resolution::flush_request_cache();
+		}
+	}
+
+	/**
 	 * @return list<array<string, mixed>>
 	 */
 	public static function get_all_rules() {
+		if ( is_array( self::$all_rules ) ) {
+			return self::$all_rules;
+		}
 		if ( ! RWGCM_DB::rules_table_exists() ) {
-			return array();
+			self::$all_rules = array();
+			return self::$all_rules;
 		}
 		global $wpdb;
 		$table = RWGCM_DB::rules_table();
 		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$rows = $wpdb->get_results( "SELECT * FROM {$table} ORDER BY priority DESC, id ASC", ARRAY_A );
-		if ( ! is_array( $rows ) ) {
-			return array();
+		$out  = array();
+		if ( is_array( $rows ) ) {
+			foreach ( $rows as $row ) {
+				$out[] = self::row_to_rule( $row );
+			}
 		}
-		$out = array();
-		foreach ( $rows as $row ) {
-			$out[] = self::row_to_rule( $row );
-		}
-		return $out;
+		self::$all_rules = $out;
+		return self::$all_rules;
 	}
 
 	/**
@@ -45,14 +84,18 @@ class RWGCM_Rule_Store {
 	 * @return int
 	 */
 	public static function count_by_status( $status = 'active' ) {
-		if ( ! RWGCM_DB::rules_table_exists() ) {
-			return 0;
+		$status = (string) $status;
+		if ( array_key_exists( $status, self::$counts_by_status ) ) {
+			return self::$counts_by_status[ $status ];
 		}
-		global $wpdb;
-		$table = RWGCM_DB::rules_table();
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$n = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE status = %s", $status ) );
-		return absint( $n );
+		$n = 0;
+		foreach ( self::get_all_rules() as $rule ) {
+			if ( isset( $rule['status'] ) && (string) $rule['status'] === $status ) {
+				++$n;
+			}
+		}
+		self::$counts_by_status[ $status ] = $n;
+		return $n;
 	}
 
 	/**
@@ -229,6 +272,7 @@ class RWGCM_Rule_Store {
 	 * @return void
 	 */
 	private static function purge_after_write( $rule, $previous ) {
+		self::flush();
 		if ( ! self::$purge_on_write || ! class_exists( 'RWGCM_Cache_Purge', false ) ) {
 			return;
 		}
