@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.6] - 2026-11-25
+
+### Changed
+- Per-request memoisation for `RWGCM_DB::rules_table_exists()` / `overlays_table_exists()`, `RWGCM_Rule_Store::count_by_status()`, `get_all_rules()`, and `RWGCM_Pricing_Resolution::find_price_adjustment()`. A current `rwgcm_db_version` option is treated as a positive table-exists flag and skips `SHOW TABLES`. A negative probe is stored only in the request static so a later install can recover. `RWGCM_Rule_Store::flush()` clears every memo and is called after a rule save, delete, or status change, and after table install or upgrade. Pricing results are unchanged.
+
 ## [0.10.5] - 2026-11-24
 
 ### Fixed

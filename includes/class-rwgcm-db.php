@@ -80,28 +80,103 @@ class RWGCM_DB {
 		dbDelta( $overlays_sql );
 
 		update_option( self::VERSION_OPTION, self::SCHEMA_VERSION, false );
+		if ( class_exists( 'RWGCM_Rule_Store', false ) ) {
+			RWGCM_Rule_Store::flush();
+		} else {
+			self::flush_existence_cache();
+		}
+		self::mark_tables_ready();
 	}
+
+	/**
+	 * Persist a positive “tables exist” flag. Never stores a negative result.
+	 *
+	 * @return void
+	 */
+	private static function mark_tables_ready() {
+		self::$rules_table_exists    = true;
+		self::$overlays_table_exists = true;
+	}
+
+	/**
+	 * Clear the per-request table-existence memo. A missing table is never
+	 * written to the schema-version option, so the next request can recover.
+	 *
+	 * @return void
+	 */
+	public static function flush_existence_cache() {
+		self::$rules_table_exists    = null;
+		self::$overlays_table_exists = null;
+	}
+
+	/**
+	 * @return bool Whether install (or a later upgrade) has recorded this schema version.
+	 */
+	public static function schema_is_current() {
+		if ( ! function_exists( 'get_option' ) ) {
+			return false;
+		}
+		return (string) get_option( self::VERSION_OPTION, '' ) === self::SCHEMA_VERSION;
+	}
+
+	/**
+	 * Per-request memo: null = unknown, true/false = already probed this request.
+	 *
+	 * @var bool|null
+	 */
+	private static $rules_table_exists = null;
+
+	/**
+	 * @var bool|null
+	 */
+	private static $overlays_table_exists = null;
 
 	/**
 	 * Whether rules table appears to exist.
 	 *
+	 * A current schema-version option (set on install or upgrade) is treated as
+	 * a positive flag and skips SHOW TABLES. A negative probe is stored only in
+	 * the request static so a later install can recover.
+	 *
 	 * @return bool
 	 */
 	public static function rules_table_exists() {
-		global $wpdb;
-		$table = self::rules_table();
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from trusted prefix.
-		$found = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
-		return $table === $found;
+		if ( null !== self::$rules_table_exists ) {
+			return self::$rules_table_exists;
+		}
+		if ( self::schema_is_current() ) {
+			self::$rules_table_exists = true;
+			return true;
+		}
+		self::$rules_table_exists = self::probe_table( self::rules_table() );
+		return self::$rules_table_exists;
 	}
 
 	/**
 	 * @return bool
 	 */
 	public static function overlays_table_exists() {
+		if ( null !== self::$overlays_table_exists ) {
+			return self::$overlays_table_exists;
+		}
+		if ( self::schema_is_current() ) {
+			self::$overlays_table_exists = true;
+			return true;
+		}
+		self::$overlays_table_exists = self::probe_table( self::overlays_table() );
+		return self::$overlays_table_exists;
+	}
+
+	/**
+	 * @param string $table Table name with prefix.
+	 * @return bool
+	 */
+	private static function probe_table( $table ) {
 		global $wpdb;
-		$table = self::overlays_table();
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		if ( ! isset( $wpdb ) || ! is_object( $wpdb ) || ! method_exists( $wpdb, 'get_var' ) ) {
+			return false;
+		}
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from trusted prefix.
 		$found = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
 		return $table === $found;
 	}

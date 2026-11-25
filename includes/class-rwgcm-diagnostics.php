@@ -59,16 +59,33 @@ class RWGCM_Diagnostics {
 	}
 
 	/**
+	 * Memo of “table exists and has active rules” for this request. The
+	 * rwgcm_use_generic_pricing_rules filter still runs on every call.
+	 *
+	 * @var bool|null
+	 */
+	private static $generic_default = null;
+
+	/**
 	 * @return bool
 	 */
 	public static function uses_generic_pricing_rules() {
+		if ( null === self::$generic_default ) {
+			self::$generic_default = RWGCM_DB::rules_table_exists() && RWGCM_Rule_Store::count_by_status( 'active' ) > 0;
+		}
 		/**
 		 * Whether to evaluate cart pricing from generic rules (custom table) instead of legacy rows.
 		 *
 		 * @param bool|null $use Default: true when active generic rules exist.
 		 */
-		$default = RWGCM_DB::rules_table_exists() && RWGCM_Rule_Store::count_by_status( 'active' ) > 0;
-		$filtered = apply_filters( 'rwgcm_use_generic_pricing_rules', $default );
+		$filtered = apply_filters( 'rwgcm_use_generic_pricing_rules', self::$generic_default );
 		return (bool) $filtered;
+	}
+
+	/**
+	 * @return void
+	 */
+	public static function flush_request_cache() {
+		self::$generic_default = null;
 	}
 }
